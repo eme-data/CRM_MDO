@@ -128,7 +128,11 @@ export default function ContractsPage() {
                     <td className="p-3">
                       <div className="flex items-center gap-1">
                         {formatDate(c.endDate)}
-                        {warning && <AlertTriangle size={14} className="text-amber-500" title={days + ' jours restants'} />}
+                        {warning && (
+                          <span title={days + ' jours restants'}>
+                            <AlertTriangle size={14} className="text-amber-500" />
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="p-3">
