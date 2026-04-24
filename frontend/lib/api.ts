@@ -1,9 +1,6 @@
-// Priorite : var injectee au build via NEXT_PUBLIC_API_URL.
-// Fallback browser : /api (meme origine, route par Caddy vers le backend).
-// Fallback SSR : http://localhost:4000/api (jamais cense servir en runtime).
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  (typeof window !== 'undefined' ? '/api' : 'http://localhost:4000/api');
+// Toujours relatif. En prod, Caddy route /api/* vers le backend.
+// En dev, next.config.js 'rewrites' reroute /api/* vers http://backend:4000.
+const API_URL = '/api';
 const STORAGE_TOKEN = 'crm_mdo_access_token';
 const STORAGE_REFRESH = 'crm_mdo_refresh_token';
 
