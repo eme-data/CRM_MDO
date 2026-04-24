@@ -5,12 +5,12 @@
 {$DOMAIN} {
     encode zstd gzip
 
-    # API backend - strip /api prefix et proxy vers le backend
-    handle_path /api/* {
+    # API backend - on conserve le prefixe /api (NestJS a setGlobalPrefix('api'))
+    handle /api/* {
         reverse_proxy backend:4000
     }
 
-    # Health check direct (sans /api)
+    # Health check direct (route publique du backend, exclue du globalPrefix)
     handle /health {
         reverse_proxy backend:4000
     }
