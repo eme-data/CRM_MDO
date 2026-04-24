@@ -87,8 +87,9 @@ ufw --force reset >/dev/null
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp comment "SSH"
-ufw allow 80/tcp comment "HTTP (Traefik)"
-ufw allow 443/tcp comment "HTTPS (Traefik)"
+ufw allow 80/tcp comment "HTTP (Caddy)"
+ufw allow 443/tcp comment "HTTPS (Caddy)"
+ufw allow 443/udp comment "HTTP/3 (Caddy)"
 ufw --force enable
 ok "UFW actif"
 

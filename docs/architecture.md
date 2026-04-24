@@ -3,7 +3,7 @@
 ## Composants
 
 ```
-Internet --443/80--> Traefik (reverse proxy + HTTPS Let's Encrypt)
+Internet --443/80--> Caddy (reverse proxy + HTTPS Let's Encrypt)
   |
   +-- / ------> Frontend Next.js (3000)
   +-- /api/* -> Backend NestJS (4000) --> Postgres 16
@@ -15,7 +15,7 @@ Internet --443/80--> Traefik (reverse proxy + HTTPS Let's Encrypt)
 
 - Backend NestJS + Prisma
 - Frontend Next.js 14 (App Router) + Tailwind
-- PostgreSQL 16, Redis 7, Traefik v3
+- PostgreSQL 16, Redis 7, Caddy 2
 - Cron NestJS pour les alertes contrats (8h00) et marquage expiration (horaire)
 
 ## Flux alerte de renouvellement

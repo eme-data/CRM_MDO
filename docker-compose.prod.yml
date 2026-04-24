@@ -1,34 +1,25 @@
-# Override prod : ajoute Traefik + HTTPS + ferme les ports exposés
+# Override prod : ajoute Caddy + HTTPS auto + ferme les ports exposes
 # Usage : docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 services:
-  traefik:
-    image: traefik:v3.5
-    container_name: crm_mdo_traefik
+  caddy:
+    image: caddy:2-alpine
+    container_name: crm_mdo_caddy
     restart: unless-stopped
     environment:
-      # Docker Engine 29+ refuse l'API 1.24 que Traefik utilise en fallback.
-      # On force la negociation sur l'API exacte du daemon.
-      DOCKER_API_VERSION: "1.54"
-    command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:80
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entrypoints.web.http.redirections.entrypoint.scheme=https
-      - --entrypoints.websecure.address=:443
-      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
-      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
-      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
-      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
-      - --log.level=INFO
-      - --accesslog=true
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
     ports:
       - "80:80"
       - "443:443"
+      - "443:443/udp"  # HTTP/3
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - letsencrypt:/letsencrypt
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - backend
+      - frontend
 
   postgres:
     ports: []
@@ -38,23 +29,10 @@ services:
 
   backend:
     ports: []
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.backend.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)
-      - traefik.http.routers.backend.entrypoints=websecure
-      - traefik.http.routers.backend.tls.certresolver=letsencrypt
-      - traefik.http.services.backend.loadbalancer.server.port=4000
-      - traefik.http.middlewares.strip-api.stripprefix.prefixes=/api
-      - traefik.http.routers.backend.middlewares=strip-api
 
   frontend:
     ports: []
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.frontend.rule=Host(`${DOMAIN}`)
-      - traefik.http.routers.frontend.entrypoints=websecure
-      - traefik.http.routers.frontend.tls.certresolver=letsencrypt
-      - traefik.http.services.frontend.loadbalancer.server.port=3000
 
 volumes:
-  letsencrypt:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,22 @@
+{
+    email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+    encode zstd gzip
+
+    # API backend - strip /api prefix et proxy vers le backend
+    handle_path /api/* {
+        reverse_proxy backend:4000
+    }
+
+    # Health check direct (sans /api)
+    handle /health {
+        reverse_proxy backend:4000
+    }
+
+    # Tout le reste vers le frontend Next.js
+    handle {
+        reverse_proxy frontend:3000
+    }
+}

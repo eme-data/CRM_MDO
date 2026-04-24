@@ -46,7 +46,7 @@ sudo bash scripts/install-ubuntu.sh
 5. Clone / met a jour les sources dans `/opt/crm-mdo`
 6. Genere un `.env` avec des mots de passe forts (OpenSSL)
 7. Verifie que le DNS pointe bien vers le serveur
-8. Build et demarre la stack avec Traefik + HTTPS Let's Encrypt automatique
+8. Build et demarre la stack avec Caddy + HTTPS Let's Encrypt automatique
 9. Demande interactive les infos du compte admin et le cree
 10. Installe un cron de backup quotidien vers `/var/backups/crm-mdo`
 
@@ -77,7 +77,7 @@ sudo bash scripts/restore.sh /var/backups/crm-mdo/crm_mdo_20260424_030000.sql.gz
 - Healthcheck : `https://crm.mdoservices.fr/health`
 - Logs : `docker compose logs`
 - Backups : `/var/backups/crm-mdo/` (retention 30j)
-- Certificats : geres automatiquement par Traefik
+- Certificats : geres automatiquement par Caddy (stockes dans le volume `caddy-data`)
 
 ## Securite
 

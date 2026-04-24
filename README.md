@@ -13,7 +13,7 @@ Le besoin specifique : gerer finement les **contrats** (abonnements mensuels Ess
 | Auth            | JWT + refresh tokens + bcrypt + RBAC (4 roles)      |
 | Jobs planifies  | @nestjs/schedule (cron) + BullMQ/Redis              |
 | Emails          | Nodemailer (SMTP)                                   |
-| Reverse proxy   | Traefik v3 (HTTPS Let's Encrypt auto)               |
+| Reverse proxy   | Caddy 2 (HTTPS Let's Encrypt auto)                  |
 | Orchestration   | Docker Compose                                      |
 
 ## Fonctionnalites
@@ -59,7 +59,7 @@ Le script :
 - Configure UFW + fail2ban
 - Genere un `.env` avec mots de passe aleatoires
 - Verifie que `crm.mdoservices.fr` pointe bien vers le serveur
-- Deploie la stack avec Traefik + HTTPS Let's Encrypt automatique
+- Deploie la stack avec Caddy + HTTPS Let's Encrypt automatique
 - Cree le 1er compte admin (interactif)
 - Configure un backup quotidien cron
 
@@ -74,7 +74,7 @@ docker/         Init Postgres
 scripts/        install-ubuntu.sh, backup.sh, restore.sh
 docs/           deploy.md, data-model.md, architecture.md
 docker-compose.yml         Stack de dev
-docker-compose.prod.yml    Override prod (Traefik + HTTPS)
+docker-compose.prod.yml    Override prod (Caddy + HTTPS)
 .env.example               Variables d'environnement
 ```
 
