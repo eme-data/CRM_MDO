@@ -3,9 +3,12 @@
 
 services:
   traefik:
-    image: traefik:v3.1
+    image: traefik:v3.3
     container_name: crm_mdo_traefik
     restart: unless-stopped
+    environment:
+      # Force une version d'API Docker compatible (defaut 1.24 trop vieux pour Docker Engine 29+)
+      DOCKER_API_VERSION: "1.44"
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
