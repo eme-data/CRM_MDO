@@ -24,8 +24,8 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/package*.json ./
 EXPOSE 4000
-# Applique les migrations puis démarre
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+# Synchronise le schema (db push si pas de migrations, sinon migrate deploy) puis demarre
+CMD ["sh", "-c", "(ls prisma/migrations/*/migration.sql >/dev/null 2>&1 && npx prisma migrate deploy || npx prisma db push --skip-generate --accept-data-loss) && node dist/main.js"]
 
 # -------- development --------
 FROM deps AS development
