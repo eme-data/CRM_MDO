@@ -7,7 +7,7 @@ RUN apk add --no-cache openssl
 FROM base AS deps
 COPY package*.json ./
 COPY prisma ./prisma
-RUN npm ci
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # -------- build --------
 FROM deps AS build
