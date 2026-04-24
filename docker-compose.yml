@@ -44,6 +44,11 @@ services:
       target: ${BUILD_TARGET:-production}
     container_name: crm_mdo_backend
     restart: unless-stopped
+    # DNS publics pour resolver les services externes (SMTP, etc.)
+    # contourne le probleme systemd-resolved / 127.0.0.53 d'Ubuntu 24.04
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     depends_on:
       postgres:
         condition: service_healthy

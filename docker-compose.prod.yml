@@ -6,6 +6,11 @@ services:
     image: caddy:2-alpine
     container_name: crm_mdo_caddy
     restart: unless-stopped
+    # DNS publics pour resolver acme-v02.api.letsencrypt.org lors de l'emission du certificat.
+    # Contourne le probleme systemd-resolved / 127.0.0.53 d'Ubuntu 24.04.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     environment:
       DOMAIN: ${DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
