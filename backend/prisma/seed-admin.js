@@ -1,13 +1,13 @@
-// Script interactif de creation du 1er compte admin.
+// Script de creation du 1er compte admin (JS pur pour tourner en prod sans ts-node).
 // Usage :
-//   npm run seed:admin
-// ou non interactif (variables env) :
-//   ADMIN_EMAIL=x@y.fr ADMIN_PASSWORD=secret ADMIN_FIRST=Jean ADMIN_LAST=Dupont npm run seed:admin
+//   docker compose exec backend npm run seed:admin
+// ou non interactif :
+//   docker compose exec -e ADMIN_EMAIL=x@y.fr -e ADMIN_PASSWORD=... -e ADMIN_FIRST=... -e ADMIN_LAST=... backend npm run seed:admin
 
-import { PrismaClient } from '@prisma/client';
-import * as bcrypt from 'bcryptjs';
-import * as readline from 'readline/promises';
-import { stdin as input, stdout as output } from 'process';
+const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
+const readline = require('readline/promises');
+const { stdin: input, stdout: output } = require('process');
 
 const prisma = new PrismaClient();
 
@@ -20,10 +20,10 @@ async function main() {
   if (!email || !password || !firstName || !lastName) {
     const rl = readline.createInterface({ input, output });
     console.log('=== Creation du compte administrateur ===');
-    email = email || (await rl.question('Email : ')).toLowerCase().trim();
-    firstName = firstName || (await rl.question('Prenom : ')).trim();
-    lastName = lastName || (await rl.question('Nom : ')).trim();
-    password = password || (await rl.question('Mot de passe (min 8 caracteres) : ')).trim();
+    if (!email) email = (await rl.question('Email : ')).trim().toLowerCase();
+    if (!firstName) firstName = (await rl.question('Prenom : ')).trim();
+    if (!lastName) lastName = (await rl.question('Nom : ')).trim();
+    if (!password) password = (await rl.question('Mot de passe (min 8 caracteres) : ')).trim();
     rl.close();
   }
 
@@ -34,7 +34,7 @@ async function main() {
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    console.log('Un compte existe deja avec cet email (' + email + ') : ' + existing.role);
+    console.log('Un compte existe deja avec cet email (' + email + ') : role=' + existing.role);
     await prisma.$disconnect();
     process.exit(0);
   }
@@ -44,8 +44,8 @@ async function main() {
     data: {
       email,
       passwordHash,
-      firstName: firstName!,
-      lastName: lastName!,
+      firstName,
+      lastName,
       role: 'ADMIN',
     },
   });
