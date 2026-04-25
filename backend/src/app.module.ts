@@ -12,6 +12,7 @@ import { ContactsModule } from './contacts/contacts.module';
 import { OpportunitiesModule } from './opportunities/opportunities.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { InterventionsModule } from './interventions/interventions.module';
+import { TicketsModule } from './tickets/tickets.module';
 import { TasksModule } from './tasks/tasks.module';
 import { NotesModule } from './notes/notes.module';
 import { ActivitiesModule } from './activities/activities.module';
@@ -45,6 +46,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     OpportunitiesModule,
     ContractsModule,
     InterventionsModule,
+    TicketsModule,
     TasksModule,
     NotesModule,
     ActivitiesModule,

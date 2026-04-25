@@ -39,6 +39,9 @@ model User {
   ownedContracts     Contract[]     @relation("ContractOwner")
   assignedTasks      Task[]         @relation("TaskAssignee")
   createdTasks       Task[]         @relation("TaskCreator")
+  assignedTickets    Ticket[]       @relation("TicketAssignee")
+  createdTickets     Ticket[]       @relation("TicketCreator")
+  ticketMessages     TicketMessage[]
   notes              Note[]
   activities         Activity[]
   refreshTokens      RefreshToken[]
@@ -112,6 +115,7 @@ model Company {
   tasks          Task[]
   notesRel       Note[]
   interventions  Intervention[]
+  tickets        Ticket[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -140,6 +144,7 @@ model Contact {
 
   tasks       Task[]
   notesRel    Note[]
+  tickets     Ticket[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -255,6 +260,7 @@ model Contract {
   tasks              Task[]
   notesRel           Note[]
   interventions      Intervention[]
+  tickets            Ticket[]
 
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
@@ -311,6 +317,9 @@ model Intervention {
 
   contractId   String?
   contract     Contract?          @relation(fields: [contractId], references: [id], onDelete: SetNull)
+
+  ticketId     String?
+  ticket       Ticket?            @relation(fields: [ticketId], references: [id], onDelete: SetNull)
 
   technicianId String?
   technician   User?              @relation("InterventionTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
@@ -441,4 +450,96 @@ model EmailLog {
 
   @@index([status])
   @@index([toEmail])
+}
+
+// =================== TICKETS (support client) ===================
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TicketCategory {
+  INCIDENT
+  REQUEST
+  QUESTION
+  BUG
+  OTHER
+}
+
+enum TicketChannel {
+  PORTAL
+  EMAIL
+  PHONE
+  ONSITE
+  INTERNAL
+}
+
+model Ticket {
+  id              String         @id @default(uuid())
+  reference       String         @unique
+  title           String
+  description     String
+  status          TicketStatus   @default(OPEN)
+  priority        TicketPriority @default(NORMAL)
+  category        TicketCategory @default(INCIDENT)
+  channel         TicketChannel  @default(INTERNAL)
+
+  firstResponseAt DateTime?
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  dueDate         DateTime?
+
+  companyId       String
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  contactId       String?
+  contact         Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  contractId      String?
+  contract        Contract?      @relation(fields: [contractId], references: [id], onDelete: SetNull)
+
+  assigneeId      String?
+  assignee        User?          @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  createdById     String
+  createdBy       User           @relation("TicketCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  messages        TicketMessage[]
+  interventions   Intervention[]
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([companyId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([priority])
+  @@index([reference])
+}
+
+model TicketMessage {
+  id          String   @id @default(uuid())
+  ticketId    String
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId    String?
+  author      User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorName  String?
+  authorEmail String?
+  content     String
+  isInternal  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([ticketId])
 }

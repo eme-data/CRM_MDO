@@ -89,3 +89,51 @@ export const stageLabel: Record<string, string> = {
   GAGNE: 'Gagne',
   PERDU: 'Perdu',
 };
+
+export const ticketStatusLabel: Record<string, string> = {
+  OPEN: 'Ouvert',
+  IN_PROGRESS: 'En cours',
+  WAITING_CUSTOMER: 'Attente client',
+  RESOLVED: 'Resolu',
+  CLOSED: 'Clos',
+  CANCELLED: 'Annule',
+};
+
+export const ticketStatusColor: Record<string, string> = {
+  OPEN: 'bg-blue-100 text-blue-700',
+  IN_PROGRESS: 'bg-amber-100 text-amber-700',
+  WAITING_CUSTOMER: 'bg-purple-100 text-purple-700',
+  RESOLVED: 'bg-emerald-100 text-emerald-700',
+  CLOSED: 'bg-slate-100 text-slate-700',
+  CANCELLED: 'bg-slate-100 text-slate-500',
+};
+
+export const ticketPriorityLabel: Record<string, string> = {
+  LOW: 'Basse',
+  NORMAL: 'Normale',
+  HIGH: 'Haute',
+  URGENT: 'Urgente',
+};
+
+export const ticketPriorityColor: Record<string, string> = {
+  LOW: 'bg-slate-100 text-slate-700',
+  NORMAL: 'bg-blue-100 text-blue-700',
+  HIGH: 'bg-amber-100 text-amber-700',
+  URGENT: 'bg-red-100 text-red-700',
+};
+
+export const ticketCategoryLabel: Record<string, string> = {
+  INCIDENT: 'Incident',
+  REQUEST: 'Demande',
+  QUESTION: 'Question',
+  BUG: 'Bug',
+  OTHER: 'Autre',
+};
+
+export const ticketChannelLabel: Record<string, string> = {
+  PORTAL: 'Portail',
+  EMAIL: 'Email',
+  PHONE: 'Telephone',
+  ONSITE: 'Sur site',
+  INTERNAL: 'Interne',
+};

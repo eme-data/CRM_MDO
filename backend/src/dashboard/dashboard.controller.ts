@@ -4,6 +4,7 @@ import { addDays } from 'date-fns';
 import { PrismaService } from '../database/prisma.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ContractsService } from '../contracts/contracts.service';
+import { TicketsService } from '../tickets/tickets.service';
 
 @ApiTags('Dashboard')
 @ApiBearerAuth()
@@ -13,6 +14,7 @@ export class DashboardController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly contractsService: ContractsService,
+    private readonly ticketsService: TicketsService,
   ) {}
 
   @Get()
@@ -27,6 +29,7 @@ export class DashboardController {
       tasksDueToday,
       contractsStats,
       expiringSoon,
+      ticketsStats,
       recentActivities,
     ] = await Promise.all([
       this.prisma.company.count(),
@@ -45,6 +48,7 @@ export class DashboardController {
       }),
       this.contractsService.stats(),
       this.contractsService.expiringSoon(90),
+      this.ticketsService.stats(),
       this.prisma.activity.findMany({
         take: 15,
         orderBy: { createdAt: 'desc' },
@@ -60,6 +64,7 @@ export class DashboardController {
       },
       tasks: { dueToday: tasksDueToday },
       contracts: contractsStats,
+      tickets: ticketsStats,
       expiringSoon,
       recentActivities,
     };

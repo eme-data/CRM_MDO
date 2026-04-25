@@ -9,6 +9,7 @@ import {
   FileText,
   Wrench,
   CheckSquare,
+  LifeBuoy,
   Settings,
   LogOut,
 } from 'lucide-react';
@@ -22,6 +23,7 @@ const nav = [
   { href: '/contacts', label: 'Contacts', icon: UsersIcon },
   { href: '/opportunities', label: 'Opportunites', icon: Target },
   { href: '/contracts', label: 'Contrats', icon: FileText },
+  { href: '/tickets', label: 'Support', icon: LifeBuoy },
   { href: '/interventions', label: 'Interventions', icon: Wrench },
   { href: '/tasks', label: 'Taches', icon: CheckSquare },
 ];

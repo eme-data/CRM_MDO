@@ -9,6 +9,7 @@ import {
   TrendingUp,
   AlertTriangle,
   Clock,
+  LifeBuoy,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatEuro, formatDate, daysUntil, contractOfferLabel } from '@/lib/utils';
@@ -23,6 +24,13 @@ interface Dashboard {
     expiringIn30: number;
     expiringIn60: number;
     expiringIn90: number;
+  };
+  tickets: {
+    open: number;
+    inProgress: number;
+    waiting: number;
+    overdue: number;
+    resolvedThisMonth: number;
   };
   expiringSoon: Array<{
     id: string;
@@ -116,6 +124,39 @@ export default function DashboardPage() {
           sub={data.contracts.expiringIn60 + ' en < 60j, ' + data.contracts.expiringIn90 + ' en < 90j'}
           href="/contracts?expiringInDays=30"
           color="text-red-500"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Stat
+          icon={LifeBuoy}
+          label="Tickets ouverts"
+          value={data.tickets.open + data.tickets.inProgress}
+          sub={data.tickets.open + ' nouveaux, ' + data.tickets.inProgress + ' en cours'}
+          href="/tickets?status=OPEN"
+          color="text-blue-500"
+        />
+        <Stat
+          icon={Clock}
+          label="Attente client"
+          value={data.tickets.waiting}
+          sub="A relancer"
+          href="/tickets?status=WAITING_CUSTOMER"
+          color="text-purple-500"
+        />
+        <Stat
+          icon={AlertTriangle}
+          label="Tickets en retard"
+          value={data.tickets.overdue}
+          sub="SLA depasse"
+          href="/tickets"
+          color="text-red-500"
+        />
+        <Stat
+          icon={LifeBuoy}
+          label="Resolus ce mois"
+          value={data.tickets.resolvedThisMonth}
+          color="text-emerald-500"
         />
       </div>
 
