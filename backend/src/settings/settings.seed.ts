@@ -145,6 +145,48 @@ export const SETTINGS_DEFS: SettingDef[] = [
     description: 'Optionnel - vide = juste flag \\Seen',
     envVar: 'IMAP_PROCESSED_FOLDER',
   },
+
+  // ---------- SLA par offre (en heures) ----------
+  // Delai de reponse cible avant resolution attendue
+  {
+    key: 'sla.essentiel.responseHours',
+    category: 'sla',
+    label: 'SLA Essentiel - delai de reponse (heures)',
+    description: 'Heures avant echeance pour les tickets clients sur offre Essentiel',
+    defaultValue: '24',
+  },
+  {
+    key: 'sla.pro.responseHours',
+    category: 'sla',
+    label: 'SLA Pro - delai de reponse (heures)',
+    defaultValue: '8',
+  },
+  {
+    key: 'sla.souverain.responseHours',
+    category: 'sla',
+    label: 'SLA Souverain - delai de reponse (heures)',
+    defaultValue: '4',
+  },
+  {
+    key: 'sla.default.responseHours',
+    category: 'sla',
+    label: 'SLA par defaut (sans contrat actif) - delai en heures',
+    defaultValue: '48',
+  },
+  // Multiplicateurs par priorite
+  {
+    key: 'sla.priority.urgent',
+    category: 'sla',
+    label: 'Multiplicateur priorite URGENT',
+    description: 'ex: 0.25 = SLA divise par 4 si ticket urgent (1h Souverain devient 15min)',
+    defaultValue: '0.25',
+  },
+  {
+    key: 'sla.priority.high',
+    category: 'sla',
+    label: 'Multiplicateur priorite HIGH',
+    defaultValue: '0.5',
+  },
 ];
 
 export function findSettingDef(key: string): SettingDef | undefined {

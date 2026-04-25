@@ -6,6 +6,8 @@ import { PrismaService } from '../database/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { SettingsService } from '../settings/settings.service';
+import { SlaService } from '../tickets/sla.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const TICKET_REF_RE = /\[(TKT-\d{4}-\d{4,6})\]/i;
 
@@ -32,6 +34,8 @@ export class MailInboundService {
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly sla: SlaService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private async loadConfig(): Promise<InboundConfig> {
@@ -136,12 +140,16 @@ export class MailInboundService {
         : [];
 
     // 1. Ticket existant via In-Reply-To / References (le plus fiable)
-    let existingTicket = null as null | { id: string; reference: string; status: string };
+    let existingTicket = null as null | { id: string; reference: string; status: string; assigneeId: string | null; title: string };
     const refIds = [inReplyTo, ...references].filter(Boolean) as string[];
     if (refIds.length > 0) {
       const matched = await this.prisma.ticketMessage.findFirst({
         where: { messageId: { in: refIds } },
-        select: { ticket: { select: { id: true, reference: true, status: true } } },
+        select: {
+          ticket: {
+            select: { id: true, reference: true, status: true, assigneeId: true, title: true },
+          },
+        },
       });
       if (matched?.ticket) existingTicket = matched.ticket;
     }
@@ -153,7 +161,7 @@ export class MailInboundService {
         const reference = refMatch[1].toUpperCase();
         const t = await this.prisma.ticket.findUnique({
           where: { reference },
-          select: { id: true, reference: true, status: true },
+          select: { id: true, reference: true, status: true, assigneeId: true, title: true },
         });
         if (t) existingTicket = t;
       }
@@ -184,6 +192,18 @@ export class MailInboundService {
           data: { status: 'IN_PROGRESS' },
         });
       }
+      // Notifier l'assignee qu'un nouveau message client est arrive
+      if (existingTicket.assigneeId) {
+        await this.notifications.push({
+          userId: existingTicket.assigneeId,
+          type: 'TICKET_NEW_MESSAGE',
+          title: 'Nouveau message sur ' + existingTicket.reference,
+          body: senderName || senderEmail,
+          entity: 'Ticket',
+          entityId: existingTicket.id,
+          url: '/tickets/' + existingTicket.id,
+        });
+      }
       this.logger.log('Message ajoute au ticket ' + existingTicket.reference + ' depuis ' + senderEmail);
       return;
     }
@@ -200,6 +220,7 @@ export class MailInboundService {
     // 4. Creer le ticket + premier message + (optionnel) accuse de reception
     const reference = await this.generateReference();
     const cleanTitle = this.cleanSubject(subject);
+    const dueDate = await this.sla.computeDueDate(companyId, 'NORMAL');
     const { ticket, firstMessage } = await this.prisma.$transaction(async (tx) => {
       const created = await tx.ticket.create({
         data: {
@@ -210,6 +231,7 @@ export class MailInboundService {
           priority: 'NORMAL',
           category: 'INCIDENT',
           channel: 'EMAIL',
+          dueDate,
           companyId,
           contactId,
           createdById: await this.systemUserId(),

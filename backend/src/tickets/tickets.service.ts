@@ -8,6 +8,8 @@ import {
 import { PrismaService } from '../database/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { SlaService } from './sla.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { AddMessageDto } from './dto/add-message.dto';
@@ -20,6 +22,8 @@ export class TicketsService {
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly attachments: AttachmentsService,
+    private readonly sla: SlaService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async generateReference(): Promise<string> {
@@ -128,6 +132,12 @@ export class TicketsService {
 
   async create(dto: CreateTicketDto, userId: string) {
     const reference = await this.generateReference();
+    const priority = dto.priority ?? 'NORMAL';
+    // SLA : si pas de dueDate fournie, on calcule selon contrat actif + priorite
+    let dueDate: Date | null = dto.dueDate ? new Date(dto.dueDate) : null;
+    if (!dueDate) {
+      dueDate = await this.sla.computeDueDate(dto.companyId, priority);
+    }
     const ticket = await this.prisma.$transaction(async (tx) => {
       const created = await tx.ticket.create({
         data: {
@@ -135,10 +145,10 @@ export class TicketsService {
           title: dto.title,
           description: dto.description,
           status: dto.status ?? 'OPEN',
-          priority: dto.priority ?? 'NORMAL',
+          priority,
           category: dto.category ?? 'INCIDENT',
           channel: dto.channel ?? 'INTERNAL',
-          dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+          dueDate,
           companyId: dto.companyId,
           contactId: dto.contactId,
           contractId: dto.contractId,
@@ -157,6 +167,20 @@ export class TicketsService {
       });
       return created;
     });
+
+    // Notifier le technicien assigne (si different du createur)
+    if (ticket.assigneeId && ticket.assigneeId !== userId) {
+      await this.notifications.push({
+        userId: ticket.assigneeId,
+        type: 'TICKET_ASSIGNED',
+        title: 'Nouveau ticket assigne : ' + ticket.reference,
+        body: ticket.title,
+        entity: 'Ticket',
+        entityId: ticket.id,
+        url: '/tickets/' + ticket.id,
+      });
+    }
+
     return ticket;
   }
 
@@ -183,6 +207,24 @@ export class TicketsService {
     await this.prisma.activity.create({
       data: { userId, action: 'UPDATE', entity: 'Ticket', entityId: id },
     });
+
+    // Notification : changement d'assignee
+    if (
+      dto.assigneeId &&
+      dto.assigneeId !== existing.assigneeId &&
+      dto.assigneeId !== userId
+    ) {
+      await this.notifications.push({
+        userId: dto.assigneeId,
+        type: 'TICKET_ASSIGNED',
+        title: 'Ticket ' + existing.reference + ' vous a ete assigne',
+        body: existing.title,
+        entity: 'Ticket',
+        entityId: id,
+        url: '/tickets/' + id,
+      });
+    }
+
     return updated;
   }
 

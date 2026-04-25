@@ -45,6 +45,9 @@ model User {
   createdTickets     Ticket[]       @relation("TicketCreator")
   ticketMessages     TicketMessage[]
   uploadedAttachments Attachment[]  @relation("AttachmentUploader")
+  timeEntries        TimeEntry[]
+  notifications      Notification[]
+  responseTemplates  ResponseTemplate[]
   notes              Note[]
   activities         Activity[]
   refreshTokens      RefreshToken[]
@@ -274,6 +277,7 @@ model Contract {
   notesRel           Note[]
   interventions      Intervention[]
   tickets            Ticket[]
+  timeEntries        TimeEntry[]
 
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
@@ -336,6 +340,8 @@ model Intervention {
 
   technicianId String?
   technician   User?              @relation("InterventionTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+
+  timeEntries  TimeEntry[]
 
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
@@ -545,6 +551,7 @@ model Ticket {
   messages        TicketMessage[]
   interventions   Intervention[]
   attachments     Attachment[]
+  timeEntries     TimeEntry[]
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -604,4 +611,77 @@ model Attachment {
 
   @@index([ticketId])
   @@index([ticketMessageId])
+}
+
+// =================== TIME TRACKING ===================
+
+model TimeEntry {
+  id            String        @id @default(uuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startedAt     DateTime
+  endedAt       DateTime?
+  durationMin   Int?
+  description   String?
+  billable      Boolean       @default(true)
+
+  ticketId       String?
+  ticket         Ticket?       @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  interventionId String?
+  intervention   Intervention? @relation(fields: [interventionId], references: [id], onDelete: SetNull)
+  contractId     String?
+  contract       Contract?     @relation(fields: [contractId], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([userId, startedAt])
+  @@index([ticketId])
+  @@index([interventionId])
+  @@index([contractId])
+}
+
+// =================== NOTIFICATIONS IN-APP ===================
+
+enum NotificationType {
+  TICKET_ASSIGNED
+  TICKET_NEW_MESSAGE
+  TICKET_OVERDUE
+  CONTRACT_EXPIRING
+  TASK_ASSIGNED
+  INTERVENTION_REMINDER
+  GENERIC
+}
+
+model Notification {
+  id         String           @id @default(uuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       NotificationType @default(GENERIC)
+  title      String
+  body       String?
+  entity     String?
+  entityId   String?
+  url        String?
+  readAt     DateTime?
+  createdAt  DateTime         @default(now())
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+}
+
+// =================== RESPONSE TEMPLATES ===================
+
+model ResponseTemplate {
+  id        String   @id @default(uuid())
+  name      String
+  category  String?
+  subject   String?
+  body      String
+  ownerId   String?  // null = partage avec tous
+  owner     User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
 }

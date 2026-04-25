@@ -6,6 +6,7 @@ import { BullModule } from '@nestjs/bullmq';
 import configuration from './config/configuration';
 import { PrismaModule } from './database/prisma.module';
 import { SettingsModule } from './settings/settings.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CompaniesModule } from './companies/companies.module';
@@ -16,6 +17,8 @@ import { ContractsModule } from './contracts/contracts.module';
 import { InterventionsModule } from './interventions/interventions.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { TasksModule } from './tasks/tasks.module';
+import { TimeEntriesModule } from './time-entries/time-entries.module';
+import { ResponseTemplatesModule } from './response-templates/response-templates.module';
 import { NotesModule } from './notes/notes.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -43,6 +46,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     }),
     PrismaModule,
     SettingsModule,
+    NotificationsModule,
     MailModule,
     MailInboundModule,
     AttachmentsModule,
@@ -56,6 +60,8 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     InterventionsModule,
     TicketsModule,
     TasksModule,
+    TimeEntriesModule,
+    ResponseTemplatesModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,

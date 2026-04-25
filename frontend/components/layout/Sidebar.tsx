@@ -10,12 +10,14 @@ import {
   Wrench,
   CheckSquare,
   LifeBuoy,
+  ClipboardList,
   Settings,
   LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logout } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import { NotificationBell } from './NotificationBell';
 
 const nav = [
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
@@ -26,6 +28,7 @@ const nav = [
   { href: '/tickets', label: 'Support', icon: LifeBuoy },
   { href: '/interventions', label: 'Interventions', icon: Wrench },
   { href: '/tasks', label: 'Taches', icon: CheckSquare },
+  { href: '/templates', label: 'Templates', icon: ClipboardList },
 ];
 
 export function Sidebar({ user }: { user?: { firstName: string; lastName: string; role: string } }) {
@@ -69,6 +72,13 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
             <div className="text-xs text-slate-400">{user.role}</div>
           </div>
         )}
+        <NotificationBell />
+        <Link
+          href="/time"
+          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+        >
+          <Settings size={18} /> Mon temps
+        </Link>
         <Link
           href="/settings"
           className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
@@ -88,6 +98,12 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
               className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
             >
               <Settings size={18} /> Admin (cles, SMTP, IMAP)
+            </Link>
+            <Link
+              href="/admin/activity"
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+            >
+              <Settings size={18} /> Journal d'activite
             </Link>
           </>
         )}

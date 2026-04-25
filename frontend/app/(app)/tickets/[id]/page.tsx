@@ -13,8 +13,10 @@ import {
   Paperclip,
   Download,
   X,
+  FileText,
 } from 'lucide-react';
 import { api, apiUpload, downloadAttachment } from '@/lib/api';
+import { TicketTimerButton } from '@/components/TicketTimerButton';
 import {
   formatDate,
   formatDateTime,
@@ -47,6 +49,8 @@ export default function TicketDetailPage() {
   const [bcc, setBcc] = useState('');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [posting, setPosting] = useState(false);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   async function load() {
     setTicket(await api.get('/tickets/' + id));
@@ -55,7 +59,28 @@ export default function TicketDetailPage() {
   useEffect(() => {
     load();
     api.get('/users').then(setUsers);
+    api.get('/response-templates').then(setTemplates).catch(() => {});
   }, [id]);
+
+  function applyTemplate(t: any) {
+    if (!ticket) return;
+    // Substitution simple cote client (le backend gere aussi mais on prefait l'apercu)
+    const ctx: any = {
+      ticket: {
+        reference: ticket.reference,
+        title: ticket.title,
+        company: { name: ticket.company.name },
+        contact: ticket.contact ? { firstName: ticket.contact.firstName, lastName: ticket.contact.lastName } : {},
+      },
+      user: {},
+    };
+    const rendered = t.body.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (m: string, p: string) => {
+      const v = p.split('.').reduce((acc: any, k: string) => acc?.[k], ctx);
+      return v != null ? String(v) : m;
+    });
+    setNewMessage((prev) => (prev ? prev + '\n\n' + rendered : rendered));
+    setShowTemplates(false);
+  }
 
   async function changeStatus(status: string) {
     await api.patch('/tickets/' + id, { status });
@@ -163,9 +188,12 @@ export default function TicketDetailPage() {
             {ticket.company.name}
           </Link>
         </div>
-        <button onClick={handleDelete} className="btn btn-danger">
-          <Trash2 size={16} className="mr-1" /> Supprimer
-        </button>
+        <div className="flex gap-2">
+          <TicketTimerButton ticketId={id} />
+          <button onClick={handleDelete} className="btn btn-danger">
+            <Trash2 size={16} className="mr-1" /> Supprimer
+          </button>
+        </div>
       </div>
 
       {overdue && (
@@ -261,6 +289,32 @@ export default function TicketDetailPage() {
                       {showCcBcc ? 'Masquer Cc/Bcc' : 'Cc / Bcc'}
                     </button>
                   )}
+                  {templates.length > 0 && (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowTemplates(!showTemplates)}
+                        className="btn btn-secondary text-xs py-1"
+                      >
+                        <FileText size={14} className="mr-1" /> Template
+                      </button>
+                      {showTemplates && (
+                        <div className="absolute bottom-full left-0 mb-2 w-72 max-h-72 overflow-y-auto rounded-md bg-white shadow-lg border border-slate-200 z-10">
+                          {templates.map((t) => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => applyTemplate(t)}
+                              className="block w-full text-left px-3 py-2 hover:bg-slate-50 border-b last:border-b-0 border-slate-100"
+                            >
+                              <div className="text-sm font-medium">{t.name}</div>
+                              {t.category && <div className="text-xs text-slate-400">{t.category}</div>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <button
                   type="submit"
@@ -319,6 +373,8 @@ export default function TicketDetailPage() {
               {users.map((u) => (<option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>))}
             </select>
           </div>
+
+          <TimeSummaryCard ticketId={ticket.id} />
 
           <div className="card p-4 text-sm space-y-2">
             <h3 className="font-semibold">Informations</h3>
@@ -385,6 +441,27 @@ function Info({ label, value }: { label: string; value: any }) {
     <div className="flex justify-between gap-2">
       <span className="text-slate-500">{label}</span>
       <span className="text-right">{value ?? '-'}</span>
+    </div>
+  );
+}
+
+function TimeSummaryCard({ ticketId }: { ticketId: string }) {
+  const [entries, setEntries] = useState<any[]>([]);
+
+  useEffect(() => {
+    api.get('/time-entries?ticketId=' + ticketId).then(setEntries).catch(() => {});
+  }, [ticketId]);
+
+  const totalMin = entries.reduce((s, e) => s + (e.durationMin ?? 0), 0);
+  const billableMin = entries.filter((e) => e.billable).reduce((s, e) => s + (e.durationMin ?? 0), 0);
+  const fmt = (m: number) => (m === 0 ? '0h00' : Math.floor(m / 60) + 'h' + String(m % 60).padStart(2, '0'));
+
+  return (
+    <div className="card p-4 text-sm space-y-2">
+      <h3 className="font-semibold">Temps passe</h3>
+      <Info label="Total" value={fmt(totalMin)} />
+      <Info label="Facturable" value={fmt(billableMin)} />
+      <Info label="Saisies" value={entries.length} />
     </div>
   );
 }
