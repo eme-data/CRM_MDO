@@ -154,13 +154,24 @@ CONTRACT_ALERT_DAYS=90,60,30,7
 FRONTEND_PORT=3000
 NEXT_PUBLIC_API_URL=https://${DOMAIN}/api
 
-# --- SMTP (a completer manuellement plus tard dans ${ENV_FILE}) ---
+# --- SMTP sortant (a completer manuellement plus tard dans ${ENV_FILE}) ---
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_USER=
 SMTP_PASSWORD=
 SMTP_FROM="CRM MDO Services <no-reply@mdoservices.fr>"
 SMTP_SECURE=false
+
+# --- IMAP entrant : creation de tickets depuis support@mdoservices.fr ---
+# Mettre a true et completer IMAP_* pour activer
+INBOUND_EMAIL_ENABLED=false
+IMAP_HOST=
+IMAP_PORT=993
+IMAP_SECURE=true
+IMAP_USER=
+IMAP_PASSWORD=
+IMAP_FOLDER=INBOX
+IMAP_PROCESSED_FOLDER=Processed
 
 # --- Timezone ---
 TZ=${TZ_NAME}

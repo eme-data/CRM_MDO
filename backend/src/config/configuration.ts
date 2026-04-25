@@ -30,4 +30,14 @@ export default () => ({
     from: process.env.SMTP_FROM ?? 'no-reply@mdoservices.fr',
     secure: process.env.SMTP_SECURE === 'true',
   },
+  inbound: {
+    enabled: process.env.INBOUND_EMAIL_ENABLED ?? 'false',
+    host: process.env.IMAP_HOST,
+    port: process.env.IMAP_PORT ?? '993',
+    secure: process.env.IMAP_SECURE ?? 'true',
+    user: process.env.IMAP_USER,
+    password: process.env.IMAP_PASSWORD,
+    folder: process.env.IMAP_FOLDER ?? 'INBOX',
+    processedFolder: process.env.IMAP_PROCESSED_FOLDER,
+  },
 });

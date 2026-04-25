@@ -18,6 +18,7 @@ import { NotesModule } from './notes/notes.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { MailModule } from './mail/mail.module';
+import { MailInboundModule } from './mail-inbound/mail-inbound.module';
 import { HealthController } from './health/health.controller';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
@@ -39,6 +40,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     }),
     PrismaModule,
     MailModule,
+    MailInboundModule,
     AuthModule,
     UsersModule,
     CompaniesModule,
