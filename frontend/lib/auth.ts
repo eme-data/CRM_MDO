@@ -8,8 +8,8 @@ export interface User {
   role: 'ADMIN' | 'MANAGER' | 'SALES' | 'READONLY';
 }
 
-export async function login(email: string, password: string) {
-  const data = await api.post('/auth/login', { email, password });
+export async function login(email: string, password: string, totpCode?: string) {
+  const data = await api.post('/auth/login', { email, password, totpCode });
   setTokens(data.accessToken, data.refreshToken);
   return data;
 }

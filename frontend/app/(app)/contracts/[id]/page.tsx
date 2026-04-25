@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Edit, Trash2, RefreshCw, XCircle, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, RefreshCw, XCircle, AlertTriangle, Download } from 'lucide-react';
 import { api } from '@/lib/api';
 import { ContractForm } from '@/components/ContractForm';
 import {
@@ -86,6 +86,20 @@ export default function ContractDetailPage() {
           </Link>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              const token = localStorage.getItem('crm_mdo_access_token');
+              const r = await fetch('/api/contracts/' + id + '/pdf', { headers: token ? { Authorization: 'Bearer ' + token } : {} });
+              const blob = await r.blob();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = contract.reference + '.pdf'; a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="btn btn-secondary"
+          >
+            <Download size={16} className="mr-1" /> PDF
+          </button>
           {!editing && contract.status === 'ACTIVE' && (
             <>
               <button onClick={() => setRenewing(!renewing)} className="btn btn-secondary">

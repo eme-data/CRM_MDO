@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Edit, Trash2, ArrowLeft, Plus, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { CompanyForm } from '@/components/CompanyForm';
+import { ClientDocsSection } from '@/components/ClientDocsSection';
 import {
   formatEuro,
   formatDate,
@@ -181,6 +182,8 @@ export default function CompanyDetailPage() {
           </div>
         )}
       </div>
+
+      <ClientDocsSection companyId={id} />
 
       {company.opportunities.length > 0 && (
         <div className="card p-6">

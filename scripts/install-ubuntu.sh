@@ -123,6 +123,7 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   REDIS_PASS=$(openssl rand -hex 24)
   JWT_SECRET=$(openssl rand -hex 48)
   JWT_REFRESH=$(openssl rand -hex 48)
+  SECRETS_KEY=$(openssl rand -hex 48)
 
   cat > "${ENV_FILE}" <<ENVFILE_EOF
 # --- Domaines ---
@@ -145,6 +146,7 @@ NODE_ENV=production
 BACKEND_PORT=4000
 JWT_SECRET=${JWT_SECRET}
 JWT_REFRESH_SECRET=${JWT_REFRESH}
+SECRETS_MASTER_KEY=${SECRETS_KEY}
 JWT_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 CORS_ORIGIN=https://${DOMAIN}

@@ -5,7 +5,11 @@
 :root {
   --bg: #f8fafc;
   --fg: #0f172a;
-  --border: #e2e8f0;
+}
+
+.dark {
+  --bg: #0f172a;
+  --fg: #e2e8f0;
 }
 
 body {
@@ -20,22 +24,23 @@ body {
   @apply bg-mdo-500 text-white hover:bg-mdo-600;
 }
 .btn-secondary {
-  @apply border border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+  @apply border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700;
 }
 .btn-danger {
   @apply bg-red-600 text-white hover:bg-red-700;
 }
 
 .input {
-  @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-mdo-500 focus:outline-none focus:ring-1 focus:ring-mdo-500;
+  @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-mdo-500 focus:outline-none focus:ring-1 focus:ring-mdo-500
+    dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100;
 }
 
 .label {
-  @apply mb-1 block text-sm font-medium text-slate-700;
+  @apply mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300;
 }
 
 .card {
-  @apply rounded-lg border border-slate-200 bg-white shadow-sm;
+  @apply rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100;
 }
 
 .badge {
