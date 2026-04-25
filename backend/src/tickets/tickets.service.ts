@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   Prisma,
   TicketStatus,
@@ -6,13 +6,19 @@ import {
   TicketCategory,
 } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { AddMessageDto } from './dto/add-message.dto';
 
 @Injectable()
 export class TicketsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(TicketsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mail: MailService,
+  ) {}
 
   async generateReference(): Promise<string> {
     const year = new Date().getFullYear();
@@ -188,12 +194,14 @@ export class TicketsService {
 
   async addMessage(ticketId: string, dto: AddMessageDto, userId: string) {
     const ticket = await this.findOne(ticketId);
+    const isInternal = dto.isInternal ?? false;
+
     const message = await this.prisma.ticketMessage.create({
       data: {
         ticketId,
         authorId: userId,
         content: dto.content,
-        isInternal: dto.isInternal ?? false,
+        isInternal,
       },
       include: {
         author: { select: { id: true, firstName: true, lastName: true } },
@@ -201,7 +209,7 @@ export class TicketsService {
     });
 
     // Premier message non-interne d'un agent : marquer firstResponseAt
-    if (!ticket.firstResponseAt && !dto.isInternal) {
+    if (!ticket.firstResponseAt && !isInternal) {
       await this.prisma.ticket.update({
         where: { id: ticketId },
         data: { firstResponseAt: new Date() },
@@ -217,7 +225,73 @@ export class TicketsService {
     await this.prisma.activity.create({
       data: { userId, action: 'COMMENT', entity: 'Ticket', entityId: ticketId },
     });
+
+    // Si non-interne et ticket lie a un destinataire => envoi email
+    if (!isInternal) {
+      await this.sendOutgoingEmail(ticket as any, message as any).catch((err) => {
+        this.logger.error('Erreur envoi email reply ticket ' + ticket.reference + ': ' + err.message);
+      });
+    }
+
     return message;
+  }
+
+  private async sendOutgoingEmail(
+    ticket: any,
+    message: { id: string; content: string; author: { firstName: string; lastName: string } | null },
+  ) {
+    // Determiner le destinataire : contact email > dernier message externe authorEmail
+    let to = ticket.contact?.email as string | undefined;
+    if (!to) {
+      const lastExternal = await this.prisma.ticketMessage.findFirst({
+        where: { ticketId: ticket.id, authorId: null, authorEmail: { not: null } },
+        orderBy: { createdAt: 'desc' },
+        select: { authorEmail: true },
+      });
+      to = lastExternal?.authorEmail ?? undefined;
+    }
+    if (!to) {
+      this.logger.warn('Ticket ' + ticket.reference + ' : pas de destinataire email, message non envoye');
+      return;
+    }
+
+    // Threading : on prend le messageId du dernier message du ticket avec un messageId
+    const lastWithMsgId = await this.prisma.ticketMessage.findFirst({
+      where: {
+        ticketId: ticket.id,
+        messageId: { not: null },
+        id: { not: message.id },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { messageId: true },
+    });
+    const allMessageIds = await this.prisma.ticketMessage.findMany({
+      where: { ticketId: ticket.id, messageId: { not: null }, id: { not: message.id } },
+      select: { messageId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const authorName = message.author
+      ? message.author.firstName + ' ' + message.author.lastName
+      : 'MDO Services';
+
+    const result = await this.mail.sendTicketReply({
+      to,
+      ticketReference: ticket.reference,
+      ticketTitle: ticket.title,
+      body: message.content,
+      authorName,
+      inReplyTo: lastWithMsgId?.messageId ?? null,
+      references: allMessageIds.map((m) => m.messageId!).filter(Boolean),
+      relatedEntityId: ticket.id,
+    });
+
+    if (result.status === 'SENT' && result.messageId) {
+      await this.prisma.ticketMessage.update({
+        where: { id: message.id },
+        data: { messageId: result.messageId, viaEmail: true },
+      });
+    }
   }
 
   async stats() {

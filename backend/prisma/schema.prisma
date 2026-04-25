@@ -539,7 +539,12 @@ model TicketMessage {
   authorEmail String?
   content     String
   isInternal  Boolean  @default(false)
+  // Email threading
+  messageId   String?  @unique  // Message-ID pour les emails (entrants ou sortants)
+  inReplyTo   String?  // In-Reply-To header (chaining)
+  viaEmail    Boolean  @default(false)  // true si message issu d'un email
   createdAt   DateTime @default(now())
 
   @@index([ticketId])
+  @@index([inReplyTo])
 }

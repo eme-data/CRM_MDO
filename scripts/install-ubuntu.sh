@@ -163,8 +163,10 @@ SMTP_FROM="CRM MDO Services <no-reply@mdoservices.fr>"
 SMTP_SECURE=false
 
 # --- IMAP entrant : creation de tickets depuis support@mdoservices.fr ---
-# Mettre a true et completer IMAP_* pour activer
+# Mettre a true et completer IMAP_* pour activer.
+# Office 365 : IMAP_HOST=outlook.office365.com (SMTP_HOST=smtp.office365.com, port 587, SECURE=false).
 INBOUND_EMAIL_ENABLED=false
+INBOUND_AUTO_ACK=true
 IMAP_HOST=
 IMAP_PORT=993
 IMAP_SECURE=true

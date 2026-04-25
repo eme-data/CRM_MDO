@@ -4,6 +4,7 @@ import { Cron } from '@nestjs/schedule';
 import { ImapFlow, FetchMessageObject } from 'imapflow';
 import { simpleParser, ParsedMail } from 'mailparser';
 import { PrismaService } from '../database/prisma.service';
+import { MailService } from '../mail/mail.service';
 
 const TICKET_REF_RE = /\[(TKT-\d{4}-\d{4,6})\]/i;
 
@@ -22,9 +23,12 @@ export class MailInboundService implements OnModuleInit, OnModuleDestroy {
     processedFolder: string | null;
   };
 
+  private autoAck = false;
+
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly mail: MailService,
   ) {}
 
   onModuleInit() {
@@ -47,8 +51,10 @@ export class MailInboundService implements OnModuleInit, OnModuleDestroy {
       this.enabled = false;
       return;
     }
+    this.autoAck = this.configService.get<string>('inbound.autoAck') === 'true';
     this.logger.log(
-      'Inbound email actif sur ' + this.config.user + '@' + this.config.host + ':' + this.config.port,
+      'Inbound email actif sur ' + this.config.user + '@' + this.config.host + ':' + this.config.port +
+      ' (auto-ack=' + this.autoAck + ')',
     );
   }
 
@@ -131,56 +137,83 @@ export class MailInboundService implements OnModuleInit, OnModuleDestroy {
       parsed.text ||
       (parsed.html ? this.htmlToText(parsed.html) : '(corps vide)');
 
-    // 1. Ticket existant via reference dans le sujet ?
-    const refMatch = subject.match(TICKET_REF_RE);
-    if (refMatch) {
-      const reference = refMatch[1].toUpperCase();
-      const existing = await this.prisma.ticket.findUnique({ where: { reference } });
-      if (existing) {
-        await this.prisma.ticketMessage.create({
-          data: {
-            ticketId: existing.id,
-            authorId: null,
-            authorName: senderName || null,
-            authorEmail: senderEmail,
-            content: textBody,
-            isInternal: false,
-          },
-        });
-        // Si ticket etait CLOSED ou RESOLVED, on rouvre
-        if (existing.status === 'CLOSED' || existing.status === 'RESOLVED') {
-          await this.prisma.ticket.update({
-            where: { id: existing.id },
-            data: { status: 'IN_PROGRESS' },
-          });
-        } else if (existing.status === 'WAITING_CUSTOMER') {
-          await this.prisma.ticket.update({
-            where: { id: existing.id },
-            data: { status: 'IN_PROGRESS' },
-          });
-        }
-        this.logger.log('Message ajoute au ticket ' + reference + ' depuis ' + senderEmail);
-        return;
-      }
-      // reference inconnue → on tombe en creation classique
+    const incomingMessageId = (parsed.messageId || '').trim() || null;
+    const inReplyTo = (parsed.inReplyTo || '').trim() || null;
+    const references: string[] = Array.isArray(parsed.references)
+      ? parsed.references
+      : parsed.references
+        ? [parsed.references]
+        : [];
+
+    // 1. Ticket existant via In-Reply-To / References (le plus fiable)
+    let existingTicket = null as null | { id: string; reference: string; status: string };
+    const refIds = [inReplyTo, ...references].filter(Boolean) as string[];
+    if (refIds.length > 0) {
+      const matched = await this.prisma.ticketMessage.findFirst({
+        where: { messageId: { in: refIds } },
+        select: { ticket: { select: { id: true, reference: true, status: true } } },
+      });
+      if (matched?.ticket) existingTicket = matched.ticket;
     }
 
-    // 2. Resoudre Contact + Company
+    // 2. Fallback : reference dans le sujet
+    if (!existingTicket) {
+      const refMatch = subject.match(TICKET_REF_RE);
+      if (refMatch) {
+        const reference = refMatch[1].toUpperCase();
+        const t = await this.prisma.ticket.findUnique({
+          where: { reference },
+          select: { id: true, reference: true, status: true },
+        });
+        if (t) existingTicket = t;
+      }
+    }
+
+    if (existingTicket) {
+      await this.prisma.ticketMessage.create({
+        data: {
+          ticketId: existingTicket.id,
+          authorId: null,
+          authorName: senderName || null,
+          authorEmail: senderEmail,
+          content: textBody,
+          isInternal: false,
+          messageId: incomingMessageId,
+          inReplyTo,
+          viaEmail: true,
+        },
+      });
+      if (
+        existingTicket.status === 'CLOSED' ||
+        existingTicket.status === 'RESOLVED' ||
+        existingTicket.status === 'WAITING_CUSTOMER'
+      ) {
+        await this.prisma.ticket.update({
+          where: { id: existingTicket.id },
+          data: { status: 'IN_PROGRESS' },
+        });
+      }
+      this.logger.log('Message ajoute au ticket ' + existingTicket.reference + ' depuis ' + senderEmail);
+      return;
+    }
+
+    // 3. Resoudre Contact + Company
     const { companyId, contactId } = await this.resolveSender(senderEmail);
     if (!companyId) {
       this.logger.warn(
-        'Pas de Company correspondant a ' + senderEmail + ' - email ignore (creer la societe avant ou parametrer un domaine wildcard plus tard)',
+        'Pas de Company correspondant a ' + senderEmail + ' - email ignore (creer la societe avant)',
       );
       return;
     }
 
-    // 3. Creer le ticket + premier message
+    // 4. Creer le ticket + premier message + (optionnel) accuse de reception
     const reference = await this.generateReference();
+    const cleanTitle = this.cleanSubject(subject);
     const ticket = await this.prisma.$transaction(async (tx) => {
       const created = await tx.ticket.create({
         data: {
           reference,
-          title: this.cleanSubject(subject),
+          title: cleanTitle,
           description: textBody,
           status: 'OPEN',
           priority: 'NORMAL',
@@ -199,12 +232,47 @@ export class MailInboundService implements OnModuleInit, OnModuleDestroy {
           authorEmail: senderEmail,
           content: textBody,
           isInternal: false,
+          messageId: incomingMessageId,
+          inReplyTo,
+          viaEmail: true,
         },
       });
       return created;
     });
 
     this.logger.log('Ticket ' + ticket.reference + ' cree depuis ' + senderEmail);
+
+    // 5. Auto-acknowledgement
+    if (this.autoAck) {
+      try {
+        const ackRefs = [incomingMessageId, ...references].filter(Boolean) as string[];
+        const ackResult = await this.mail.sendTicketAcknowledgement({
+          to: senderEmail,
+          ticketReference: ticket.reference,
+          ticketTitle: cleanTitle,
+          inReplyTo: incomingMessageId,
+          references: ackRefs,
+          relatedEntityId: ticket.id,
+        });
+        if (ackResult.status === 'SENT' && ackResult.messageId) {
+          // On stocke le messageId de l'ack dans un message interne pour tracer le thread
+          await this.prisma.ticketMessage.create({
+            data: {
+              ticketId: ticket.id,
+              authorId: null,
+              authorName: 'Accuse automatique',
+              content: '(accuse de reception envoye a ' + senderEmail + ')',
+              isInternal: true,
+              messageId: ackResult.messageId,
+              inReplyTo: incomingMessageId,
+              viaEmail: true,
+            },
+          });
+        }
+      } catch (err: any) {
+        this.logger.error('Echec auto-ack ticket ' + ticket.reference + ' : ' + err.message);
+      }
+    }
   }
 
   private async resolveSender(

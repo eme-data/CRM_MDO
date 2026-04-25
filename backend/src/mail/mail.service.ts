@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
 
 interface ContractAlertParams {
@@ -18,11 +19,33 @@ interface ContractAlertParams {
   daysBefore: number;
 }
 
+interface SendOptions {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+  from?: string;
+  replyTo?: string;
+  messageId?: string;
+  inReplyTo?: string;
+  references?: string[];
+  relatedEntity?: string;
+  relatedEntityId?: string;
+}
+
+interface SendResult {
+  messageId: string;
+  status: 'SENT' | 'FAILED';
+  error?: string;
+}
+
 @Injectable()
 export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   private transporter?: nodemailer.Transporter;
   private from!: string;
+  private supportFrom!: string;
+  private domain!: string;
 
   constructor(
     private readonly configService: ConfigService,
@@ -45,16 +68,18 @@ export class MailService implements OnModuleInit {
       },
     });
     this.from = this.configService.get<string>('smtp.from') ?? 'no-reply@mdoservices.fr';
+    // L'adresse "support" sert pour les replies tickets - utilise IMAP_USER si dispo,
+    // sinon SMTP_FROM (l'IMAP poller pourra capter les reponses).
+    this.supportFrom =
+      this.configService.get<string>('inbound.user') ?? this.from;
+    this.domain = (this.supportFrom.match(/@([^>]+)>?$/)?.[1] ?? 'mdoservices.fr').trim();
   }
 
-  async send(params: {
-    to: string;
-    subject: string;
-    html: string;
-    text?: string;
-    relatedEntity?: string;
-    relatedEntityId?: string;
-  }) {
+  generateMessageId(): string {
+    return '<' + randomBytes(16).toString('hex') + '@' + this.domain + '>';
+  }
+
+  async send(params: SendOptions): Promise<SendResult> {
     const log = await this.prisma.emailLog.create({
       data: {
         toEmail: params.to,
@@ -66,35 +91,148 @@ export class MailService implements OnModuleInit {
     });
 
     if (!this.transporter) {
-      this.logger.warn('Email non envoye (SMTP down) - toEmail=' + params.to);
+      this.logger.warn('Email non envoye (SMTP non configure) - to=' + params.to);
       await this.prisma.emailLog.update({
         where: { id: log.id },
         data: { status: 'FAILED', error: 'SMTP non configure' },
       });
-      return;
+      return { messageId: '', status: 'FAILED', error: 'SMTP non configure' };
     }
+
+    const messageId = params.messageId ?? this.generateMessageId();
 
     try {
       await this.transporter.sendMail({
-        from: this.from,
+        from: params.from ?? this.from,
         to: params.to,
+        replyTo: params.replyTo,
         subject: params.subject,
         html: params.html,
         text: params.text,
+        messageId,
+        inReplyTo: params.inReplyTo,
+        references: params.references,
       });
       await this.prisma.emailLog.update({
         where: { id: log.id },
         data: { status: 'SENT', sentAt: new Date() },
       });
+      return { messageId, status: 'SENT' };
     } catch (err: any) {
-      this.logger.error('Echec envoi mail: ' + err.message);
+      this.logger.error('Echec envoi mail (' + params.to + ') : ' + err.message);
       await this.prisma.emailLog.update({
         where: { id: log.id },
         data: { status: 'FAILED', error: err.message },
       });
-      throw err;
+      return { messageId: '', status: 'FAILED', error: err.message };
     }
   }
+
+  // ============================================================
+  // Tickets : reply sortant + auto-acknowledgement
+  // ============================================================
+
+  async sendTicketReply(params: {
+    to: string;
+    ticketReference: string;
+    ticketTitle: string;
+    body: string;
+    authorName: string;
+    inReplyTo?: string | null;
+    references?: string[];
+    relatedEntityId?: string;
+  }): Promise<SendResult> {
+    const subject = '[' + params.ticketReference + '] ' + this.cleanSubject(params.ticketTitle);
+    const html = this.ticketReplyHtml({
+      authorName: params.authorName,
+      body: params.body,
+      ticketReference: params.ticketReference,
+    });
+
+    return this.send({
+      to: params.to,
+      from: this.supportFrom,
+      replyTo: this.supportFrom,
+      subject,
+      html,
+      text: params.body + '\n\n--\n' + params.authorName + ' - MDO Services\nReference : ' + params.ticketReference,
+      inReplyTo: params.inReplyTo ?? undefined,
+      references: params.references,
+      relatedEntity: 'Ticket',
+      relatedEntityId: params.relatedEntityId,
+    });
+  }
+
+  async sendTicketAcknowledgement(params: {
+    to: string;
+    ticketReference: string;
+    ticketTitle: string;
+    inReplyTo?: string | null;
+    references?: string[];
+    relatedEntityId?: string;
+  }): Promise<SendResult> {
+    const subject = '[' + params.ticketReference + '] ' + this.cleanSubject(params.ticketTitle);
+    const html = `
+<!DOCTYPE html>
+<html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; color: #1f2937;">
+  <p>Bonjour,</p>
+  <p>Nous avons bien recu votre demande, elle est enregistree sous la reference <strong>${params.ticketReference}</strong> et sera traitee dans les meilleurs delais par notre equipe.</p>
+  <p>Pour toute information complementaire, vous pouvez repondre a cet email en conservant la reference <code>[${params.ticketReference}]</code> dans le sujet.</p>
+  <p>Cordialement,<br/>L'equipe MDO Services</p>
+  <hr style="border: none; border-top: 1px solid #e5e7eb;"/>
+  <p style="color:#6b7280; font-size:12px;">Email automatique - ne pas modifier la reference dans le sujet.</p>
+</body></html>`;
+
+    return this.send({
+      to: params.to,
+      from: this.supportFrom,
+      replyTo: this.supportFrom,
+      subject,
+      html,
+      text:
+        'Bonjour,\n\nNous avons bien recu votre demande, enregistree sous la reference ' +
+        params.ticketReference +
+        '. Elle sera traitee dans les meilleurs delais.\n\nCordialement,\nL\'equipe MDO Services',
+      inReplyTo: params.inReplyTo ?? undefined,
+      references: params.references,
+      relatedEntity: 'Ticket',
+      relatedEntityId: params.relatedEntityId,
+    });
+  }
+
+  private cleanSubject(s: string): string {
+    return s.replace(/^(re|fw|fwd|tr)\s*:\s*/gi, '').trim() || '(sans sujet)';
+  }
+
+  private ticketReplyHtml(params: {
+    authorName: string;
+    body: string;
+    ticketReference: string;
+  }): string {
+    const safeBody = this.escapeHtml(params.body).replace(/\n/g, '<br/>');
+    return `
+<!DOCTYPE html>
+<html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; color: #1f2937;">
+  <div style="white-space: pre-wrap;">${safeBody}</div>
+  <hr style="border: none; border-top: 1px solid #e5e7eb; margin-top: 20px;"/>
+  <p style="color: #6b7280; font-size: 12px; margin: 8px 0 0 0;">
+    ${this.escapeHtml(params.authorName)} - MDO Services<br/>
+    Reference : <strong>${params.ticketReference}</strong>
+  </p>
+</body></html>`;
+  }
+
+  private escapeHtml(s: string): string {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ============================================================
+  // Contrats : alertes de renouvellement (existant)
+  // ============================================================
 
   async sendContractRenewalAlert(params: ContractAlertParams) {
     const endDateFr = format(params.contract.endDate, 'PPP', { locale: fr });

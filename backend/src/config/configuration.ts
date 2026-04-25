@@ -32,6 +32,7 @@ export default () => ({
   },
   inbound: {
     enabled: process.env.INBOUND_EMAIL_ENABLED ?? 'false',
+    autoAck: process.env.INBOUND_AUTO_ACK ?? 'true',
     host: process.env.IMAP_HOST,
     port: process.env.IMAP_PORT ?? '993',
     secure: process.env.IMAP_SECURE ?? 'true',
