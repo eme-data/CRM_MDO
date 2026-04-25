@@ -96,7 +96,16 @@ enum CompanySector {
 model Company {
   id          String        @id @default(uuid())
   name        String
+  // Identifiants legaux (sources : Pappers / INSEE Sirene)
   siret       String?       @unique
+  siren       String?       @unique
+  apeCode     String?       // ex: "62.02A"
+  apeLabel    String?       // ex: "Conseil en systemes et logiciels informatiques"
+  legalForm   String?       // ex: "SARL", "SAS", "SASU"
+  creationDate DateTime?    // date de creation entreprise
+  capitalSocial Decimal?    @db.Decimal(14, 2)
+  lastSyncedAt DateTime?    // derniere synchro avec annuaire externe
+  // Donnees CRM
   sector      CompanySector @default(PME)
   status      CompanyStatus @default(LEAD)
   employees   Int?
@@ -126,6 +135,7 @@ model Company {
   @@index([ownerId])
   @@index([status])
   @@index([name])
+  @@index([siren])
 }
 
 model Contact {

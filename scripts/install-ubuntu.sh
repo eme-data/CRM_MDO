@@ -168,6 +168,11 @@ SMTP_SECURE=false
 INBOUND_EMAIL_ENABLED=false
 INBOUND_AUTO_ACK=true
 MAX_UPLOAD_SIZE_MB=25
+
+# --- Lookup annuaire entreprises (Pappers / INSEE Sirene) ---
+# Au moins une cle pour activer la recherche d'entreprises sur le formulaire de creation.
+PAPPERS_API_KEY=
+SIRENE_API_KEY=
 IMAP_HOST=
 IMAP_PORT=993
 IMAP_SECURE=true

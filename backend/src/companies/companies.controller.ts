@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CompaniesService } from './companies.service';
+import { CompanyLookupService } from '../company-lookup/company-lookup.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { QueryCompaniesDto } from './dto/query-companies.dto';
@@ -24,7 +25,10 @@ import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorato
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('companies')
 export class CompaniesController {
-  constructor(private readonly service: CompaniesService) {}
+  constructor(
+    private readonly service: CompaniesService,
+    private readonly lookupService: CompanyLookupService,
+  ) {}
 
   @Get()
   findAll(@Query() query: QueryCompaniesDto) {
@@ -52,5 +56,11 @@ export class CompaniesController {
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.service.remove(id, user.id);
+  }
+
+  @Roles('ADMIN', 'MANAGER', 'SALES')
+  @Post(':id/refresh-from-registry')
+  refreshFromRegistry(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.lookupService.refreshCompany(id, user.id);
   }
 }

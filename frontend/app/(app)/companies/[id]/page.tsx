@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Edit, Trash2, ArrowLeft, Plus } from 'lucide-react';
+import { Edit, Trash2, ArrowLeft, Plus, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { CompanyForm } from '@/components/CompanyForm';
 import {
@@ -41,6 +41,16 @@ export default function CompanyDetailPage() {
     }
   }
 
+  async function handleRefreshFromRegistry() {
+    try {
+      await api.post('/companies/' + id + '/refresh-from-registry');
+      toast.success('Donnees mises a jour depuis le registre');
+      load();
+    } catch (err: any) {
+      toast.error(err.message ?? 'Erreur lors de la synchronisation');
+    }
+  }
+
   if (!company) return <div>Chargement...</div>;
 
   return (
@@ -58,6 +68,11 @@ export default function CompanyDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {(company.siren || company.siret) && (
+            <button onClick={handleRefreshFromRegistry} className="btn btn-secondary" title="Synchroniser depuis Pappers / INSEE Sirene">
+              <RefreshCw size={16} className="mr-1" /> Synchroniser
+            </button>
+          )}
           <button onClick={() => setEditing(!editing)} className="btn btn-secondary">
             <Edit size={16} className="mr-1" /> {editing ? 'Annuler' : 'Modifier'}
           </button>
@@ -73,13 +88,23 @@ export default function CompanyDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="card p-6 space-y-2">
             <h2 className="font-semibold mb-2">Informations</h2>
+            <Info label="SIREN" value={company.siren} />
             <Info label="SIRET" value={company.siret} />
+            <Info label="Forme juridique" value={company.legalForm} />
+            <Info label="Code APE" value={company.apeCode ? company.apeCode + (company.apeLabel ? ' - ' + company.apeLabel : '') : null} />
+            <Info label="Capital social" value={company.capitalSocial ? formatEuro(company.capitalSocial) : null} />
+            <Info label="Date de creation" value={company.creationDate ? formatDate(company.creationDate) : null} />
             <Info label="Nb employes" value={company.employees} />
             <Info label="Site web" value={company.website} />
             <Info label="Email" value={company.email} />
             <Info label="Telephone" value={company.phone} />
             <Info label="Adresse" value={[company.address, company.postalCode, company.city].filter(Boolean).join(' ')} />
             <Info label="Owner" value={company.owner ? company.owner.firstName + ' ' + company.owner.lastName : null} />
+            {company.lastSyncedAt && (
+              <p className="text-xs text-slate-400 italic pt-2 border-t mt-2">
+                Donnees registre synchronisees le {formatDate(company.lastSyncedAt)}
+              </p>
+            )}
           </div>
           <div className="card p-6">
             <h2 className="font-semibold mb-2">Notes</h2>

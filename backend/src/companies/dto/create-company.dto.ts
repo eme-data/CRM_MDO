@@ -1,8 +1,10 @@
 import {
+  IsDateString,
   IsEmail,
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   IsUrl,
@@ -18,6 +20,30 @@ export class CreateCompanyDto {
   @IsOptional()
   @IsString()
   siret?: string;
+
+  @IsOptional()
+  @IsString()
+  siren?: string;
+
+  @IsOptional()
+  @IsString()
+  apeCode?: string;
+
+  @IsOptional()
+  @IsString()
+  apeLabel?: string;
+
+  @IsOptional()
+  @IsString()
+  legalForm?: string;
+
+  @IsOptional()
+  @IsDateString()
+  creationDate?: string;
+
+  @IsOptional()
+  @IsNumber()
+  capitalSocial?: number;
 
   @IsOptional()
   @IsEnum(CompanySector)

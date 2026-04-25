@@ -34,6 +34,10 @@ export default () => ({
     dir: process.env.UPLOADS_DIR ?? '/app/uploads',
     maxMb: process.env.MAX_UPLOAD_SIZE_MB ?? '25',
   },
+  lookup: {
+    pappersKey: process.env.PAPPERS_API_KEY,
+    sireneKey: process.env.SIRENE_API_KEY,
+  },
   inbound: {
     enabled: process.env.INBOUND_EMAIL_ENABLED ?? 'false',
     autoAck: process.env.INBOUND_AUTO_ACK ?? 'true',

@@ -8,6 +8,7 @@ import { PrismaModule } from './database/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CompaniesModule } from './companies/companies.module';
+import { CompanyLookupModule } from './company-lookup/company-lookup.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { OpportunitiesModule } from './opportunities/opportunities.module';
 import { ContractsModule } from './contracts/contracts.module';
@@ -45,6 +46,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     AttachmentsModule,
     AuthModule,
     UsersModule,
+    CompanyLookupModule,
     CompaniesModule,
     ContactsModule,
     OpportunitiesModule,
