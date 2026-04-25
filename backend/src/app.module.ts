@@ -25,6 +25,13 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { MailModule } from './mail/mail.module';
 import { MailInboundModule } from './mail-inbound/mail-inbound.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { PdfModule } from './pdf/pdf.module';
+import { AssetsModule } from './assets/assets.module';
+import { ClientDocsModule } from './client-docs/client-docs.module';
+import { InvoicesModule } from './invoices/invoices.module';
+import { MfaModule } from './mfa/mfa.module';
+import { ImportsModule } from './imports/imports.module';
+import { SearchModule } from './search/search.module';
 import { HealthController } from './health/health.controller';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
@@ -47,9 +54,12 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     PrismaModule,
     SettingsModule,
     NotificationsModule,
+    PdfModule,
     MailModule,
     MailInboundModule,
     AttachmentsModule,
+    ClientDocsModule,
+    MfaModule,
     AuthModule,
     UsersModule,
     CompanyLookupModule,
@@ -62,6 +72,10 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     TasksModule,
     TimeEntriesModule,
     ResponseTemplatesModule,
+    AssetsModule,
+    InvoicesModule,
+    ImportsModule,
+    SearchModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,

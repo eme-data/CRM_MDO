@@ -7,11 +7,14 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Response } from 'express';
 import { ContractStatus } from '@prisma/client';
 import { ContractsService } from './contracts.service';
+import { PdfService } from '../pdf/pdf.service';
 import { CreateContractDto } from './dto/create-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { RenewContractDto } from './dto/renew-contract.dto';
@@ -25,7 +28,40 @@ import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorato
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('contracts')
 export class ContractsController {
-  constructor(private readonly service: ContractsService) {}
+  constructor(
+    private readonly service: ContractsService,
+    private readonly pdf: PdfService,
+  ) {}
+
+  @Get(':id/pdf')
+  async downloadPdf(@Param('id') id: string, @Res() res: Response) {
+    const c = await this.service.findOne(id);
+    const buffer = await this.pdf.contract({
+      contract: {
+        reference: c.reference,
+        title: c.title,
+        offer: c.offer,
+        startDate: c.startDate,
+        endDate: c.endDate,
+        engagementMonths: c.engagementMonths,
+        unitPriceHt: Number(c.unitPriceHt),
+        quantity: c.quantity,
+        monthlyAmountHt: Number(c.monthlyAmountHt),
+        vatRate: Number(c.vatRate),
+        description: c.description,
+      },
+      client: {
+        name: c.company.name,
+        address: c.company.address ?? undefined,
+        postalCode: c.company.postalCode ?? undefined,
+        city: c.company.city ?? undefined,
+        siret: c.company.siret ?? undefined,
+      },
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="' + c.reference + '.pdf"');
+    res.send(buffer);
+  }
 
   @Get()
   findAll(

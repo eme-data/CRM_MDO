@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
+import { MfaService } from '../mfa/mfa.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 
@@ -20,6 +21,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly mfa: MfaService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -30,6 +32,16 @@ export class AuthService {
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) {
       throw new UnauthorizedException('Identifiants invalides');
+    }
+
+    // 2FA : si active sur ce compte, exiger un code TOTP valide
+    const mfaEnabled = await this.mfa.isEnabledFor(user.id);
+    if (mfaEnabled) {
+      if (!dto.totpCode) {
+        throw new UnauthorizedException('TOTP_REQUIRED');
+      }
+      const ok = await this.mfa.verify(user.id, dto.totpCode);
+      if (!ok) throw new UnauthorizedException('Code TOTP invalide');
     }
 
     await this.prisma.user.update({
