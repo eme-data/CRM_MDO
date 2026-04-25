@@ -379,6 +379,47 @@ export class TicketsService {
     }
   }
 
+  async bulkUpdate(
+    ids: string[],
+    data: { status?: any; priority?: any; assigneeId?: string | null },
+    userId: string,
+  ) {
+    if (!ids || ids.length === 0) return { count: 0 };
+    const update: any = {};
+    if (data.status) update.status = data.status;
+    if (data.priority) update.priority = data.priority;
+    if (data.assigneeId !== undefined) update.assigneeId = data.assigneeId;
+    const result = await this.prisma.ticket.updateMany({
+      where: { id: { in: ids } },
+      data: update,
+    });
+    await this.prisma.activity.create({
+      data: {
+        userId,
+        action: 'BULK_UPDATE',
+        entity: 'Ticket',
+        metadata: { count: result.count, ...update },
+      },
+    });
+    return result;
+  }
+
+  async bulkDelete(ids: string[], userId: string) {
+    if (!ids || ids.length === 0) return { count: 0 };
+    const result = await this.prisma.ticket.deleteMany({
+      where: { id: { in: ids } },
+    });
+    await this.prisma.activity.create({
+      data: {
+        userId,
+        action: 'BULK_DELETE',
+        entity: 'Ticket',
+        metadata: { count: result.count, ids },
+      },
+    });
+    return result;
+  }
+
   async stats() {
     const now = new Date();
     const [open, inProgress, waiting, overdue, resolvedThisMonth] = await Promise.all([

@@ -99,4 +99,22 @@ export class TicketsController {
   remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.service.remove(id, user.id);
   }
+
+  @Roles('ADMIN', 'MANAGER', 'SALES')
+  @Post('bulk-update')
+  bulkUpdate(
+    @Body() body: { ids: string[]; status?: TicketStatus; priority?: TicketPriority; assigneeId?: string | null },
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.service.bulkUpdate(body.ids, body, user.id);
+  }
+
+  @Roles('ADMIN', 'MANAGER')
+  @Post('bulk-delete')
+  bulkDelete(
+    @Body() body: { ids: string[] },
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.service.bulkDelete(body.ids, user.id);
+  }
 }

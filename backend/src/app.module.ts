@@ -32,6 +32,8 @@ import { InvoicesModule } from './invoices/invoices.module';
 import { MfaModule } from './mfa/mfa.module';
 import { ImportsModule } from './imports/imports.module';
 import { SearchModule } from './search/search.module';
+import { SurveillanceModule } from './surveillance/surveillance.module';
+import { ReportsModule } from './reports/reports.module';
 import { HealthController } from './health/health.controller';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
@@ -76,6 +78,8 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     InvoicesModule,
     ImportsModule,
     SearchModule,
+    SurveillanceModule,
+    ReportsModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,

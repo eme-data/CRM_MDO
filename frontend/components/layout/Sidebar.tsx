@@ -14,6 +14,7 @@ import {
   Receipt,
   Server,
   Calendar,
+  BarChart3,
   Upload,
   Settings,
   LogOut,
@@ -26,6 +27,7 @@ import { ThemeToggle } from '../ThemeToggle';
 
 const nav = [
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
+  { href: '/reports', label: 'Reporting', icon: BarChart3 },
   { href: '/companies', label: 'Societes', icon: Building2 },
   { href: '/contacts', label: 'Contacts', icon: UsersIcon },
   { href: '/opportunities', label: 'Opportunites', icon: Target },
