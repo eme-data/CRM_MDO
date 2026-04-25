@@ -5,6 +5,7 @@ import { ImapFlow, FetchMessageObject } from 'imapflow';
 import { simpleParser, ParsedMail } from 'mailparser';
 import { PrismaService } from '../database/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { AttachmentsService } from '../attachments/attachments.service';
 
 const TICKET_REF_RE = /\[(TKT-\d{4}-\d{4,6})\]/i;
 
@@ -29,6 +30,7 @@ export class MailInboundService implements OnModuleInit, OnModuleDestroy {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
+    private readonly attachmentsService: AttachmentsService,
   ) {}
 
   onModuleInit() {
@@ -170,7 +172,7 @@ export class MailInboundService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (existingTicket) {
-      await this.prisma.ticketMessage.create({
+      const newMsg = await this.prisma.ticketMessage.create({
         data: {
           ticketId: existingTicket.id,
           authorId: null,
@@ -183,6 +185,7 @@ export class MailInboundService implements OnModuleInit, OnModuleDestroy {
           viaEmail: true,
         },
       });
+      await this.saveAttachments(parsed, existingTicket.id, newMsg.id);
       if (
         existingTicket.status === 'CLOSED' ||
         existingTicket.status === 'RESOLVED' ||
@@ -209,7 +212,7 @@ export class MailInboundService implements OnModuleInit, OnModuleDestroy {
     // 4. Creer le ticket + premier message + (optionnel) accuse de reception
     const reference = await this.generateReference();
     const cleanTitle = this.cleanSubject(subject);
-    const ticket = await this.prisma.$transaction(async (tx) => {
+    const { ticket, firstMessage } = await this.prisma.$transaction(async (tx) => {
       const created = await tx.ticket.create({
         data: {
           reference,
@@ -224,7 +227,7 @@ export class MailInboundService implements OnModuleInit, OnModuleDestroy {
           createdById: await this.systemUserId(),
         },
       });
-      await tx.ticketMessage.create({
+      const msg = await tx.ticketMessage.create({
         data: {
           ticketId: created.id,
           authorId: null,
@@ -237,8 +240,10 @@ export class MailInboundService implements OnModuleInit, OnModuleDestroy {
           viaEmail: true,
         },
       });
-      return created;
+      return { ticket: created, firstMessage: msg };
     });
+
+    await this.saveAttachments(parsed, ticket.id, firstMessage.id);
 
     this.logger.log('Ticket ' + ticket.reference + ' cree depuis ' + senderEmail);
 
@@ -271,6 +276,28 @@ export class MailInboundService implements OnModuleInit, OnModuleDestroy {
         }
       } catch (err: any) {
         this.logger.error('Echec auto-ack ticket ' + ticket.reference + ' : ' + err.message);
+      }
+    }
+  }
+
+  private async saveAttachments(parsed: ParsedMail, ticketId: string, messageId: string) {
+    if (!parsed.attachments || parsed.attachments.length === 0) return;
+    for (const att of parsed.attachments) {
+      // Skip les attachements inline (ex: images integrees, signatures)
+      if (att.contentDisposition === 'inline' && !att.filename) continue;
+      const filename = att.filename || 'attachment';
+      try {
+        await this.attachmentsService.saveBuffer(
+          {
+            originalname: filename,
+            mimetype: att.contentType || 'application/octet-stream',
+            size: att.size ?? att.content.length,
+            buffer: att.content,
+          },
+          { uploadedById: null, ticketId, ticketMessageId: messageId },
+        );
+      } catch (err: any) {
+        this.logger.warn('Echec sauvegarde attachment ' + filename + ' : ' + err.message);
       }
     }
   }

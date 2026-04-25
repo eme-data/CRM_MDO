@@ -30,6 +30,10 @@ export default () => ({
     from: process.env.SMTP_FROM ?? 'no-reply@mdoservices.fr',
     secure: process.env.SMTP_SECURE === 'true',
   },
+  uploads: {
+    dir: process.env.UPLOADS_DIR ?? '/app/uploads',
+    maxMb: process.env.MAX_UPLOAD_SIZE_MB ?? '25',
+  },
   inbound: {
     enabled: process.env.INBOUND_EMAIL_ENABLED ?? 'false',
     autoAck: process.env.INBOUND_AUTO_ACK ?? 'true',

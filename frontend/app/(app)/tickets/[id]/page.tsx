@@ -10,8 +10,11 @@ import {
   Send,
   AlertTriangle,
   CheckCircle2,
+  Paperclip,
+  Download,
+  X,
 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, apiUpload, downloadAttachment } from '@/lib/api';
 import {
   formatDate,
   formatDateTime,
@@ -25,6 +28,12 @@ import {
 
 const STATUS_FLOW = ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER', 'RESOLVED', 'CLOSED'];
 
+function formatBytes(n: number): string {
+  if (n < 1024) return n + ' o';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' Ko';
+  return (n / 1024 / 1024).toFixed(1) + ' Mo';
+}
+
 export default function TicketDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -33,6 +42,10 @@ export default function TicketDetailPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isInternal, setIsInternal] = useState(false);
+  const [showCcBcc, setShowCcBcc] = useState(false);
+  const [cc, setCc] = useState('');
+  const [bcc, setBcc] = useState('');
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [posting, setPosting] = useState(false);
 
   async function load() {
@@ -62,14 +75,41 @@ export default function TicketDetailPage() {
     load();
   }
 
+  function addFiles(list: FileList | null) {
+    if (!list) return;
+    const arr = Array.from(list);
+    setPendingFiles((prev) => [...prev, ...arr]);
+  }
+
+  function removePendingFile(idx: number) {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== idx));
+  }
+
   async function submitMessage(e: React.FormEvent) {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() && pendingFiles.length === 0) return;
     setPosting(true);
     try {
-      await api.post('/tickets/' + id + '/messages', { content: newMessage, isInternal });
+      // 1. Upload des fichiers d'abord (si presents) -> recupere les IDs
+      let attachmentIds: string[] = [];
+      if (pendingFiles.length > 0) {
+        const res = await apiUpload.upload('/attachments/upload', pendingFiles, { ticketId: id });
+        attachmentIds = res.items.map((a: any) => a.id);
+      }
+      // 2. Creation du message avec les IDs des attachments
+      await api.post('/tickets/' + id + '/messages', {
+        content: newMessage || '(piece(s) jointe(s))',
+        isInternal,
+        attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
+        cc: !isInternal && cc.trim() ? cc.trim() : undefined,
+        bcc: !isInternal && bcc.trim() ? bcc.trim() : undefined,
+      });
       setNewMessage('');
       setIsInternal(false);
+      setShowCcBcc(false);
+      setCc('');
+      setBcc('');
+      setPendingFiles([]);
       load();
     } catch (err: any) {
       toast.error(err.message);
@@ -83,6 +123,14 @@ export default function TicketDetailPage() {
     await api.delete('/tickets/' + id);
     toast.success('Ticket supprime');
     router.replace('/tickets');
+  }
+
+  async function dlAttachment(att: { id: string; filename: string }) {
+    try {
+      await downloadAttachment(att.id, att.filename);
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   }
 
   if (!ticket) return <div>Chargement...</div>;
@@ -142,23 +190,7 @@ export default function TicketDetailPage() {
               {ticket.messages.length === 0 ? (
                 <p className="text-slate-400 text-sm">Aucun message pour l'instant</p>
               ) : ticket.messages.map((m: any) => (
-                <div
-                  key={m.id}
-                  className={'rounded-lg p-4 border ' + (m.isInternal ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200')}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="text-sm font-medium">
-                      {m.author ? m.author.firstName + ' ' + m.author.lastName : (m.authorName ?? 'Externe')}
-                      {m.isInternal && (
-                        <span className="ml-2 inline-flex items-center gap-1 text-xs text-amber-700">
-                          <Lock size={12} /> Note interne
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-xs text-slate-500">{formatDateTime(m.createdAt)}</span>
-                  </div>
-                  <p className="text-sm text-slate-700 whitespace-pre-wrap">{m.content}</p>
-                </div>
+                <MessageBubble key={m.id} m={m} onDownload={dlAttachment} />
               ))}
             </div>
 
@@ -169,16 +201,72 @@ export default function TicketDetailPage() {
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
               />
-              <div className="flex justify-between items-center">
-                <label className="flex items-center gap-2 text-sm">
+
+              {!isInternal && showCcBcc && (
+                <div className="grid grid-cols-2 gap-2">
                   <input
-                    type="checkbox"
-                    checked={isInternal}
-                    onChange={(e) => setIsInternal(e.target.checked)}
+                    className="input"
+                    placeholder="Cc (separe par virgules)"
+                    value={cc}
+                    onChange={(e) => setCc(e.target.value)}
                   />
-                  Note interne (non visible client)
-                </label>
-                <button type="submit" disabled={posting || !newMessage.trim()} className="btn btn-primary">
+                  <input
+                    className="input"
+                    placeholder="Bcc (separe par virgules)"
+                    value={bcc}
+                    onChange={(e) => setBcc(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {pendingFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 p-2 border border-dashed border-slate-300 rounded-md">
+                  {pendingFiles.map((f, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 text-xs bg-slate-100 px-2 py-1 rounded">
+                      <Paperclip size={12} />
+                      {f.name} ({formatBytes(f.size)})
+                      <button type="button" onClick={() => removePendingFile(i)} className="hover:text-red-600">
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-wrap justify-between items-center gap-2">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={isInternal}
+                      onChange={(e) => setIsInternal(e.target.checked)}
+                    />
+                    Note interne (non visible client)
+                  </label>
+                  <label className="btn btn-secondary cursor-pointer text-xs py-1">
+                    <Paperclip size={14} className="mr-1" /> Joindre
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => addFiles(e.target.files)}
+                    />
+                  </label>
+                  {!isInternal && (
+                    <button
+                      type="button"
+                      onClick={() => setShowCcBcc(!showCcBcc)}
+                      className="text-xs text-mdo-600 hover:underline"
+                    >
+                      {showCcBcc ? 'Masquer Cc/Bcc' : 'Cc / Bcc'}
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  disabled={posting || (!newMessage.trim() && pendingFiles.length === 0)}
+                  className="btn btn-primary"
+                >
                   <Send size={14} className="mr-1" /> {posting ? 'Envoi...' : 'Envoyer'}
                 </button>
               </div>
@@ -245,6 +333,49 @@ export default function TicketDetailPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function MessageBubble({ m, onDownload }: { m: any; onDownload: (a: any) => void }) {
+  return (
+    <div
+      className={
+        'rounded-lg p-4 border ' +
+        (m.isInternal ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200')
+      }
+    >
+      <div className="flex justify-between items-start mb-2">
+        <div className="text-sm font-medium">
+          {m.author ? m.author.firstName + ' ' + m.author.lastName : (m.authorName ?? 'Externe')}
+          {m.isInternal && (
+            <span className="ml-2 inline-flex items-center gap-1 text-xs text-amber-700">
+              <Lock size={12} /> Note interne
+            </span>
+          )}
+          {m.viaEmail && (
+            <span className="ml-2 inline-flex items-center gap-1 text-xs text-blue-700">
+              via email
+            </span>
+          )}
+        </div>
+        <span className="text-xs text-slate-500">{formatDateTime(m.createdAt)}</span>
+      </div>
+      <p className="text-sm text-slate-700 whitespace-pre-wrap">{m.content}</p>
+      {Array.isArray(m.attachments) && m.attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-200">
+          {m.attachments.map((a: any) => (
+            <button
+              key={a.id}
+              onClick={() => onDownload(a)}
+              className="inline-flex items-center gap-1 text-xs bg-white border border-slate-200 hover:bg-slate-100 rounded px-2 py-1"
+            >
+              <Download size={12} /> {a.filename}
+              <span className="text-slate-400">({formatBytes(a.sizeBytes)})</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

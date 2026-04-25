@@ -15,6 +15,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -26,6 +27,20 @@ export class UsersController {
   @Get()
   list() {
     return this.usersService.list();
+  }
+
+  // Profil de l'utilisateur connecte (signature, prenom, nom)
+  @Get('me/profile')
+  myProfile(@CurrentUser() user: JwtUser) {
+    return this.usersService.findById(user.id);
+  }
+
+  @Patch('me/profile')
+  updateMyProfile(
+    @CurrentUser() user: JwtUser,
+    @Body() body: { firstName?: string; lastName?: string; signature?: string | null },
+  ) {
+    return this.usersService.updateMyProfile(user.id, body);
   }
 
   @Get(':id')

@@ -89,3 +89,48 @@ export const api = {
 };
 
 export { ApiError };
+
+export const apiUpload = {
+  // Upload de fichiers (multipart/form-data)
+  async upload(path: string, files: File[], extra: Record<string, string> = {}): Promise<any> {
+    const fd = new FormData();
+    for (const f of files) fd.append('files', f);
+    for (const [k, v] of Object.entries(extra)) fd.append(k, v);
+    const token =
+      typeof window !== 'undefined' ? localStorage.getItem('crm_mdo_access_token') : null;
+    const res = await fetch('/api' + path, {
+      method: 'POST',
+      headers: token ? { Authorization: 'Bearer ' + token } : {},
+      body: fd,
+    });
+    if (!res.ok) {
+      let body: any = null;
+      try { body = await res.json(); } catch {}
+      throw new ApiError(res.status, body?.message || res.statusText, body);
+    }
+    return res.json();
+  },
+};
+
+export function attachmentDownloadUrl(id: string): string {
+  // L'attachment endpoint exige un Bearer token via fetch ; on utilise donc un click handler.
+  return '/api/attachments/' + id;
+}
+
+export async function downloadAttachment(id: string, filename: string) {
+  const token =
+    typeof window !== 'undefined' ? localStorage.getItem('crm_mdo_access_token') : null;
+  const res = await fetch('/api/attachments/' + id, {
+    headers: token ? { Authorization: 'Bearer ' + token } : {},
+  });
+  if (!res.ok) throw new ApiError(res.status, 'Erreur telechargement');
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

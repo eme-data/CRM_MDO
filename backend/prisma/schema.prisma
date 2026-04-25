@@ -27,6 +27,8 @@ model User {
   role            Role      @default(SALES)
   isActive        Boolean   @default(true)
   lastLoginAt     DateTime?
+  // Signature email pour les replies tickets sortants (texte brut, format libre)
+  signature       String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -42,6 +44,7 @@ model User {
   assignedTickets    Ticket[]       @relation("TicketAssignee")
   createdTickets     Ticket[]       @relation("TicketCreator")
   ticketMessages     TicketMessage[]
+  uploadedAttachments Attachment[]  @relation("AttachmentUploader")
   notes              Note[]
   activities         Activity[]
   refreshTokens      RefreshToken[]
@@ -518,6 +521,7 @@ model Ticket {
 
   messages        TicketMessage[]
   interventions   Intervention[]
+  attachments     Attachment[]
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -543,8 +547,38 @@ model TicketMessage {
   messageId   String?  @unique  // Message-ID pour les emails (entrants ou sortants)
   inReplyTo   String?  // In-Reply-To header (chaining)
   viaEmail    Boolean  @default(false)  // true si message issu d'un email
+  // CC / BCC (texte simple separe par virgules)
+  cc          String?
+  bcc         String?
+  attachments Attachment[]
   createdAt   DateTime @default(now())
 
   @@index([ticketId])
   @@index([inReplyTo])
+}
+
+// =================== ATTACHMENTS ===================
+
+model Attachment {
+  id           String         @id @default(uuid())
+  filename     String         // nom de fichier original cote client
+  storageKey   String         @unique // chemin / UUID de stockage sur disque
+  mimeType     String
+  sizeBytes    Int
+
+  uploadedById String?
+  uploadedBy   User?          @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  // Liens polymorphes : un attachment peut etre attache a un ticket directement
+  // ou a un message specifique du ticket
+  ticketId     String?
+  ticket       Ticket?        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  ticketMessageId String?
+  ticketMessage   TicketMessage? @relation(fields: [ticketMessageId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime       @default(now())
+
+  @@index([ticketId])
+  @@index([ticketMessageId])
 }

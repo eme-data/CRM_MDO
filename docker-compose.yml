@@ -74,6 +74,8 @@ services:
       SMTP_SECURE: ${SMTP_SECURE}
       INBOUND_EMAIL_ENABLED: ${INBOUND_EMAIL_ENABLED:-false}
       INBOUND_AUTO_ACK: ${INBOUND_AUTO_ACK:-true}
+      UPLOADS_DIR: /app/uploads
+      MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-25}
       IMAP_HOST: ${IMAP_HOST}
       IMAP_PORT: ${IMAP_PORT:-993}
       IMAP_SECURE: ${IMAP_SECURE:-true}
@@ -83,6 +85,8 @@ services:
       IMAP_PROCESSED_FOLDER: ${IMAP_PROCESSED_FOLDER}
       TZ: ${TZ:-Europe/Paris}
       PORT: ${BACKEND_PORT:-4000}
+    volumes:
+      - attachments-data:/app/uploads
     ports:
       - "4000:4000"
 
@@ -106,3 +110,4 @@ services:
 volumes:
   postgres-data:
   redis-data:
+  attachments-data:

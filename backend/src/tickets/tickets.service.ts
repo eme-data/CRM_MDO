@@ -7,6 +7,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { AttachmentsService } from '../attachments/attachments.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { AddMessageDto } from './dto/add-message.dto';
@@ -18,6 +19,7 @@ export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
+    private readonly attachments: AttachmentsService,
   ) {}
 
   async generateReference(): Promise<string> {
@@ -108,6 +110,9 @@ export class TicketsService {
         messages: {
           include: {
             author: { select: { id: true, firstName: true, lastName: true } },
+            attachments: {
+              select: { id: true, filename: true, mimeType: true, sizeBytes: true },
+            },
           },
           orderBy: { createdAt: 'asc' },
         },
@@ -202,11 +207,21 @@ export class TicketsService {
         authorId: userId,
         content: dto.content,
         isInternal,
+        cc: !isInternal ? dto.cc?.trim() || null : null,
+        bcc: !isInternal ? dto.bcc?.trim() || null : null,
       },
       include: {
         author: { select: { id: true, firstName: true, lastName: true } },
       },
     });
+
+    // Lier les attachments au message
+    if (dto.attachmentIds && dto.attachmentIds.length > 0) {
+      await this.prisma.attachment.updateMany({
+        where: { id: { in: dto.attachmentIds }, uploadedById: userId },
+        data: { ticketMessageId: message.id, ticketId },
+      });
+    }
 
     // Premier message non-interne d'un agent : marquer firstResponseAt
     if (!ticket.firstResponseAt && !isInternal) {
@@ -228,7 +243,11 @@ export class TicketsService {
 
     // Si non-interne et ticket lie a un destinataire => envoi email
     if (!isInternal) {
-      await this.sendOutgoingEmail(ticket as any, message as any).catch((err) => {
+      await this.sendOutgoingEmail(ticket as any, message as any, userId, {
+        cc: dto.cc,
+        bcc: dto.bcc,
+        attachmentIds: dto.attachmentIds,
+      }).catch((err) => {
         this.logger.error('Erreur envoi email reply ticket ' + ticket.reference + ': ' + err.message);
       });
     }
@@ -239,6 +258,8 @@ export class TicketsService {
   private async sendOutgoingEmail(
     ticket: any,
     message: { id: string; content: string; author: { firstName: string; lastName: string } | null },
+    userId: string,
+    extras: { cc?: string; bcc?: string; attachmentIds?: string[] } = {},
   ) {
     // Determiner le destinataire : contact email > dernier message externe authorEmail
     let to = ticket.contact?.email as string | undefined;
@@ -271,18 +292,40 @@ export class TicketsService {
       orderBy: { createdAt: 'asc' },
     });
 
-    const authorName = message.author
-      ? message.author.firstName + ' ' + message.author.lastName
+    const author = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true, signature: true },
+    });
+    const authorName = author
+      ? author.firstName + ' ' + author.lastName
       : 'MDO Services';
+
+    // Charger les pieces jointes liees au message
+    const attachmentRecords = extras.attachmentIds && extras.attachmentIds.length > 0
+      ? await this.prisma.attachment.findMany({
+          where: { id: { in: extras.attachmentIds } },
+        })
+      : [];
+    const mailAttachments = await Promise.all(
+      attachmentRecords.map(async (a) => ({
+        filename: a.filename,
+        content: await this.attachments.readToBuffer(a.storageKey),
+        contentType: a.mimeType,
+      })),
+    );
 
     const result = await this.mail.sendTicketReply({
       to,
+      cc: extras.cc?.trim() || undefined,
+      bcc: extras.bcc?.trim() || undefined,
       ticketReference: ticket.reference,
       ticketTitle: ticket.title,
       body: message.content,
       authorName,
+      signature: author?.signature ?? null,
       inReplyTo: lastWithMsgId?.messageId ?? null,
       references: allMessageIds.map((m) => m.messageId!).filter(Boolean),
+      attachments: mailAttachments,
       relatedEntityId: ticket.id,
     });
 

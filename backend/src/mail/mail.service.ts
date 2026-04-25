@@ -19,6 +19,12 @@ interface ContractAlertParams {
   daysBefore: number;
 }
 
+interface MailAttachment {
+  filename: string;
+  content: Buffer | string;
+  contentType?: string;
+}
+
 interface SendOptions {
   to: string;
   subject: string;
@@ -26,9 +32,12 @@ interface SendOptions {
   text?: string;
   from?: string;
   replyTo?: string;
+  cc?: string;
+  bcc?: string;
   messageId?: string;
   inReplyTo?: string;
   references?: string[];
+  attachments?: MailAttachment[];
   relatedEntity?: string;
   relatedEntityId?: string;
 }
@@ -105,6 +114,8 @@ export class MailService implements OnModuleInit {
       await this.transporter.sendMail({
         from: params.from ?? this.from,
         to: params.to,
+        cc: params.cc,
+        bcc: params.bcc,
         replyTo: params.replyTo,
         subject: params.subject,
         html: params.html,
@@ -112,6 +123,7 @@ export class MailService implements OnModuleInit {
         messageId,
         inReplyTo: params.inReplyTo,
         references: params.references,
+        attachments: params.attachments,
       });
       await this.prisma.emailLog.update({
         where: { id: log.id },
@@ -134,30 +146,48 @@ export class MailService implements OnModuleInit {
 
   async sendTicketReply(params: {
     to: string;
+    cc?: string;
+    bcc?: string;
     ticketReference: string;
     ticketTitle: string;
     body: string;
     authorName: string;
+    signature?: string | null;
     inReplyTo?: string | null;
     references?: string[];
+    attachments?: MailAttachment[];
     relatedEntityId?: string;
   }): Promise<SendResult> {
     const subject = '[' + params.ticketReference + '] ' + this.cleanSubject(params.ticketTitle);
+    const signature = params.signature && params.signature.trim()
+      ? params.signature.trim()
+      : params.authorName + '\nMDO Services';
+
     const html = this.ticketReplyHtml({
-      authorName: params.authorName,
       body: params.body,
+      signature,
       ticketReference: params.ticketReference,
     });
 
+    const text =
+      params.body +
+      '\n\n--\n' +
+      signature +
+      '\n\nReference : ' +
+      params.ticketReference;
+
     return this.send({
       to: params.to,
+      cc: params.cc,
+      bcc: params.bcc,
       from: this.supportFrom,
       replyTo: this.supportFrom,
       subject,
       html,
-      text: params.body + '\n\n--\n' + params.authorName + ' - MDO Services\nReference : ' + params.ticketReference,
+      text,
       inReplyTo: params.inReplyTo ?? undefined,
       references: params.references,
+      attachments: params.attachments,
       relatedEntity: 'Ticket',
       relatedEntityId: params.relatedEntityId,
     });
@@ -205,18 +235,19 @@ export class MailService implements OnModuleInit {
   }
 
   private ticketReplyHtml(params: {
-    authorName: string;
     body: string;
+    signature: string;
     ticketReference: string;
   }): string {
     const safeBody = this.escapeHtml(params.body).replace(/\n/g, '<br/>');
+    const safeSig = this.escapeHtml(params.signature).replace(/\n/g, '<br/>');
     return `
 <!DOCTYPE html>
 <html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; color: #1f2937;">
   <div style="white-space: pre-wrap;">${safeBody}</div>
   <hr style="border: none; border-top: 1px solid #e5e7eb; margin-top: 20px;"/>
   <p style="color: #6b7280; font-size: 12px; margin: 8px 0 0 0;">
-    ${this.escapeHtml(params.authorName)} - MDO Services<br/>
+    ${safeSig}<br/>
     Reference : <strong>${params.ticketReference}</strong>
   </p>
 </body></html>`;

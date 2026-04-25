@@ -38,11 +38,26 @@ export class UsersService {
         lastLoginAt: true,
         teamId: true,
         team: true,
+        signature: true,
         createdAt: true,
       },
     });
     if (!user) throw new NotFoundException('Utilisateur introuvable');
     return user;
+  }
+
+  async updateMyProfile(userId: string, dto: { firstName?: string; lastName?: string; signature?: string | null }) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: dto,
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        signature: true,
+      },
+    });
   }
 
   async create(dto: CreateUserDto) {
