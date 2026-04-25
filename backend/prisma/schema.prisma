@@ -449,6 +449,19 @@ enum EmailStatus {
   FAILED
 }
 
+model Setting {
+  key         String   @id
+  value       String?
+  isSecret    Boolean  @default(false)
+  category    String   @default("general")
+  label       String?
+  description String?
+  updatedAt   DateTime @default(now()) @updatedAt
+  updatedById String?
+
+  @@index([category])
+}
+
 model EmailLog {
   id              String      @id @default(uuid())
   toEmail         String

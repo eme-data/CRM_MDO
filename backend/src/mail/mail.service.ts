@@ -1,10 +1,10 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 
 interface ContractAlertParams {
   to: string;
@@ -49,43 +49,42 @@ interface SendResult {
 }
 
 @Injectable()
-export class MailService implements OnModuleInit {
+export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private transporter?: nodemailer.Transporter;
-  private from!: string;
-  private supportFrom!: string;
-  private domain!: string;
 
   constructor(
-    private readonly configService: ConfigService,
+    private readonly settings: SettingsService,
     private readonly prisma: PrismaService,
   ) {}
 
-  onModuleInit() {
-    const host = this.configService.get<string>('smtp.host');
-    if (!host) {
-      this.logger.warn('SMTP non configure : envoi desactive');
-      return;
-    }
-    this.transporter = nodemailer.createTransport({
+  // Cree un transporter a la volee a chaque envoi (les settings peuvent changer en runtime)
+  private async buildTransporter(): Promise<nodemailer.Transporter | null> {
+    const host = await this.settings.get('smtp.host');
+    if (!host) return null;
+    return nodemailer.createTransport({
       host,
-      port: this.configService.get<number>('smtp.port'),
-      secure: this.configService.get<boolean>('smtp.secure'),
+      port: await this.settings.getInt('smtp.port', 587),
+      secure: await this.settings.getBool('smtp.secure'),
       auth: {
-        user: this.configService.get<string>('smtp.user'),
-        pass: this.configService.get<string>('smtp.password'),
+        user: (await this.settings.get('smtp.user')) ?? '',
+        pass: (await this.settings.get('smtp.password')) ?? '',
       },
     });
-    this.from = this.configService.get<string>('smtp.from') ?? 'no-reply@mdoservices.fr';
-    // L'adresse "support" sert pour les replies tickets - utilise IMAP_USER si dispo,
-    // sinon SMTP_FROM (l'IMAP poller pourra capter les reponses).
-    this.supportFrom =
-      this.configService.get<string>('inbound.user') ?? this.from;
-    this.domain = (this.supportFrom.match(/@([^>]+)>?$/)?.[1] ?? 'mdoservices.fr').trim();
   }
 
-  generateMessageId(): string {
-    return '<' + randomBytes(16).toString('hex') + '@' + this.domain + '>';
+  private async getFrom(): Promise<string> {
+    return (await this.settings.get('smtp.from')) ?? 'no-reply@mdoservices.fr';
+  }
+
+  private async getSupportFrom(): Promise<string> {
+    // Replies tickets : on prefere l'adresse IMAP (boite support@) si configuree
+    return (await this.settings.get('imap.user')) ?? (await this.getFrom());
+  }
+
+  async generateMessageId(): Promise<string> {
+    const supportFrom = await this.getSupportFrom();
+    const domain = (supportFrom.match(/@([^>]+)>?$/)?.[1] ?? 'mdoservices.fr').trim();
+    return '<' + randomBytes(16).toString('hex') + '@' + domain + '>';
   }
 
   async send(params: SendOptions): Promise<SendResult> {
@@ -99,7 +98,8 @@ export class MailService implements OnModuleInit {
       },
     });
 
-    if (!this.transporter) {
+    const transporter = await this.buildTransporter();
+    if (!transporter) {
       this.logger.warn('Email non envoye (SMTP non configure) - to=' + params.to);
       await this.prisma.emailLog.update({
         where: { id: log.id },
@@ -108,11 +108,12 @@ export class MailService implements OnModuleInit {
       return { messageId: '', status: 'FAILED', error: 'SMTP non configure' };
     }
 
-    const messageId = params.messageId ?? this.generateMessageId();
+    const messageId = params.messageId ?? (await this.generateMessageId());
+    const defaultFrom = await this.getFrom();
 
     try {
-      await this.transporter.sendMail({
-        from: params.from ?? this.from,
+      await transporter.sendMail({
+        from: params.from ?? defaultFrom,
         to: params.to,
         cc: params.cc,
         bcc: params.bcc,
@@ -176,12 +177,13 @@ export class MailService implements OnModuleInit {
       '\n\nReference : ' +
       params.ticketReference;
 
+    const supportFrom = await this.getSupportFrom();
     return this.send({
       to: params.to,
       cc: params.cc,
       bcc: params.bcc,
-      from: this.supportFrom,
-      replyTo: this.supportFrom,
+      from: supportFrom,
+      replyTo: supportFrom,
       subject,
       html,
       text,
@@ -213,10 +215,11 @@ export class MailService implements OnModuleInit {
   <p style="color:#6b7280; font-size:12px;">Email automatique - ne pas modifier la reference dans le sujet.</p>
 </body></html>`;
 
+    const supportFrom = await this.getSupportFrom();
     return this.send({
       to: params.to,
-      from: this.supportFrom,
-      replyTo: this.supportFrom,
+      from: supportFrom,
+      replyTo: supportFrom,
       subject,
       html,
       text:

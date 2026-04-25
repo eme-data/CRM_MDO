@@ -19,11 +19,9 @@ export class CompanyLookupController {
   constructor(private readonly service: CompanyLookupService) {}
 
   @Get()
-  search(@Query('q') q: string) {
-    return this.service.search(q ?? '').then((items) => ({
-      items,
-      providersAvailable: this.service.hasAnyProvider(),
-    }));
+  async search(@Query('q') q: string) {
+    const items = await this.service.search(q ?? '');
+    return { items, providersAvailable: await this.service.hasAnyProvider() };
   }
 
   @Get('siren/:siren')

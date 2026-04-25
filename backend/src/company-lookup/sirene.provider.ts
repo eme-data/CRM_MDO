@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { SettingsService } from '../settings/settings.service';
 import { CompanyLookupResult } from './pappers.provider';
 
 @Injectable()
@@ -8,14 +8,14 @@ export class SireneProvider {
   // INSEE Sirene V3.11 (recettes 2024+)
   private readonly base = 'https://api.insee.fr/api-sirene/3.11';
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly settings: SettingsService) {}
 
-  isEnabled(): boolean {
-    return Boolean(this.configService.get<string>('lookup.sireneKey'));
+  async isEnabled(): Promise<boolean> {
+    return Boolean(await this.settings.get('lookup.sireneApiKey'));
   }
 
   async search(query: string, limit = 10): Promise<CompanyLookupResult[]> {
-    const key = this.configService.get<string>('lookup.sireneKey');
+    const key = await this.settings.get('lookup.sireneApiKey');
     if (!key) return [];
     const isNumeric = /^\d{9,14}$/.test(query.replace(/\s/g, ''));
     const cleanedQuery = query.replace(/\s/g, '');

@@ -14,23 +14,22 @@ export class CompanyLookupService {
     private readonly prisma: PrismaService,
   ) {}
 
-  hasAnyProvider(): boolean {
-    return this.pappers.isEnabled() || this.sirene.isEnabled();
+  async hasAnyProvider(): Promise<boolean> {
+    return (await this.pappers.isEnabled()) || (await this.sirene.isEnabled());
   }
 
   async search(query: string): Promise<CompanyLookupResult[]> {
     if (!query || query.trim().length < 3) return [];
-    if (!this.hasAnyProvider()) {
+    if (!(await this.hasAnyProvider())) {
       throw new ServiceUnavailableException(
-        'Aucun provider configure : ajoutez PAPPERS_API_KEY ou SIRENE_API_KEY dans .env',
+        'Aucun provider configure : renseignez la cle Pappers ou Sirene dans Admin > Parametres',
       );
     }
-    // Pappers en priorite si configure, fallback Sirene
-    if (this.pappers.isEnabled()) {
+    if (await this.pappers.isEnabled()) {
       const results = await this.pappers.search(query.trim(), 10);
       if (results.length > 0) return results;
     }
-    if (this.sirene.isEnabled()) {
+    if (await this.sirene.isEnabled()) {
       return this.sirene.search(query.trim(), 10);
     }
     return [];
@@ -41,11 +40,11 @@ export class CompanyLookupService {
     if (!/^\d{9}$/.test(cleaned)) {
       throw new NotFoundException('SIREN invalide (9 chiffres attendus)');
     }
-    if (this.pappers.isEnabled()) {
+    if (await this.pappers.isEnabled()) {
       const r = await this.pappers.getBySiren(cleaned);
       if (r) return r;
     }
-    if (this.sirene.isEnabled()) {
+    if (await this.sirene.isEnabled()) {
       const r = await this.sirene.getBySiren(cleaned);
       if (r) return r;
     }

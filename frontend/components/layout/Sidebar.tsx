@@ -69,13 +69,27 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
             <div className="text-xs text-slate-400">{user.role}</div>
           </div>
         )}
+        <Link
+          href="/settings"
+          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+        >
+          <Settings size={18} /> Mon profil
+        </Link>
         {user?.role === 'ADMIN' && (
-          <Link
-            href="/settings"
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
-          >
-            <Settings size={18} /> Parametres
-          </Link>
+          <>
+            <Link
+              href="/users"
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+            >
+              <Settings size={18} /> Utilisateurs
+            </Link>
+            <Link
+              href="/admin/settings"
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+            >
+              <Settings size={18} /> Admin (cles, SMTP, IMAP)
+            </Link>
+          </>
         )}
         <button
           onClick={handleLogout}

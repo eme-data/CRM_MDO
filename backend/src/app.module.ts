@@ -5,6 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bullmq';
 import configuration from './config/configuration';
 import { PrismaModule } from './database/prisma.module';
+import { SettingsModule } from './settings/settings.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CompaniesModule } from './companies/companies.module';
@@ -41,6 +42,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
       }),
     }),
     PrismaModule,
+    SettingsModule,
     MailModule,
     MailInboundModule,
     AttachmentsModule,

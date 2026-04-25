@@ -1,76 +1,67 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { ImapFlow, FetchMessageObject } from 'imapflow';
 import { simpleParser, ParsedMail } from 'mailparser';
 import { PrismaService } from '../database/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { SettingsService } from '../settings/settings.service';
 
 const TICKET_REF_RE = /\[(TKT-\d{4}-\d{4,6})\]/i;
 
-@Injectable()
-export class MailInboundService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(MailInboundService.name);
-  private enabled = false;
-  private polling = false;
-  private config!: {
-    host: string;
-    port: number;
-    secure: boolean;
-    user: string;
-    password: string;
-    folder: string;
-    processedFolder: string | null;
-  };
+interface InboundConfig {
+  enabled: boolean;
+  autoAck: boolean;
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  password: string;
+  folder: string;
+  processedFolder: string | null;
+}
 
+@Injectable()
+export class MailInboundService {
+  private readonly logger = new Logger(MailInboundService.name);
+  private polling = false;
   private autoAck = false;
 
   constructor(
-    private readonly configService: ConfigService,
+    private readonly settings: SettingsService,
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly attachmentsService: AttachmentsService,
   ) {}
 
-  onModuleInit() {
-    this.enabled = this.configService.get<string>('inbound.enabled') === 'true';
-    if (!this.enabled) {
-      this.logger.log('Inbound email desactive (INBOUND_EMAIL_ENABLED != true)');
-      return;
-    }
-    this.config = {
-      host: this.configService.get<string>('inbound.host') ?? '',
-      port: parseInt(this.configService.get<string>('inbound.port') ?? '993', 10),
-      secure: this.configService.get<string>('inbound.secure') !== 'false',
-      user: this.configService.get<string>('inbound.user') ?? '',
-      password: this.configService.get<string>('inbound.password') ?? '',
-      folder: this.configService.get<string>('inbound.folder') ?? 'INBOX',
-      processedFolder: this.configService.get<string>('inbound.processedFolder') || null,
+  private async loadConfig(): Promise<InboundConfig> {
+    return {
+      enabled: await this.settings.getBool('imap.enabled'),
+      autoAck: await this.settings.getBool('imap.autoAck'),
+      host: (await this.settings.get('imap.host')) ?? '',
+      port: await this.settings.getInt('imap.port', 993),
+      secure: (await this.settings.get('imap.secure')) !== 'false',
+      user: (await this.settings.get('imap.user')) ?? '',
+      password: (await this.settings.get('imap.password')) ?? '',
+      folder: (await this.settings.get('imap.folder')) ?? 'INBOX',
+      processedFolder: (await this.settings.get('imap.processedFolder')) || null,
     };
-    if (!this.config.host || !this.config.user || !this.config.password) {
-      this.logger.warn('Inbound email active mais config incomplete (IMAP_HOST/USER/PASSWORD)');
-      this.enabled = false;
-      return;
-    }
-    this.autoAck = this.configService.get<string>('inbound.autoAck') === 'true';
-    this.logger.log(
-      'Inbound email actif sur ' + this.config.user + '@' + this.config.host + ':' + this.config.port +
-      ' (auto-ack=' + this.autoAck + ')',
-    );
-  }
-
-  onModuleDestroy() {
-    // rien a fermer, les connexions sont par poll
   }
 
   // Toutes les 2 minutes
   @Cron('*/2 * * * *')
   async poll() {
-    if (!this.enabled || this.polling) return;
+    if (this.polling) return;
+    const config = await this.loadConfig();
+    if (!config.enabled) return;
+    if (!config.host || !config.user || !config.password) {
+      this.logger.warn('IMAP active mais config incomplete (host/user/password)');
+      return;
+    }
+    this.autoAck = config.autoAck;
     this.polling = true;
     try {
-      await this.processMailbox();
+      await this.processMailbox(config);
     } catch (err: any) {
       this.logger.error('Erreur polling IMAP : ' + err.message);
     } finally {
@@ -78,20 +69,19 @@ export class MailInboundService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async processMailbox() {
+  private async processMailbox(config: InboundConfig) {
     const client = new ImapFlow({
-      host: this.config.host,
-      port: this.config.port,
-      secure: this.config.secure,
-      auth: { user: this.config.user, pass: this.config.password },
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      auth: { user: config.user, pass: config.password },
       logger: false,
     });
 
     await client.connect();
     try {
-      const lock = await client.getMailboxLock(this.config.folder);
+      const lock = await client.getMailboxLock(config.folder);
       try {
-        // Cherche les non-lus
         const uids = await client.search({ seen: false }, { uid: true });
         if (!uids || uids.length === 0) return;
         this.logger.log(uids.length + ' email(s) a traiter');
@@ -99,15 +89,13 @@ export class MailInboundService implements OnModuleInit, OnModuleDestroy {
         for await (const message of client.fetch(uids, { source: true, envelope: true, uid: true })) {
           try {
             await this.processMessage(message);
-            // Marquer comme lu
             await client.messageFlagsAdd(message.uid, ['\\Seen'], { uid: true });
-            // Deplacer si configure
-            if (this.config.processedFolder) {
+            if (config.processedFolder) {
               try {
-                await client.messageMove(message.uid, this.config.processedFolder, { uid: true });
+                await client.messageMove(message.uid, config.processedFolder, { uid: true });
               } catch (err: any) {
                 this.logger.warn(
-                  'Impossible de deplacer vers ' + this.config.processedFolder + ' : ' + err.message + ' (le dossier existe-t-il ?)',
+                  'Impossible de deplacer vers ' + config.processedFolder + ' : ' + err.message + ' (le dossier existe-t-il ?)',
                 );
               }
             }

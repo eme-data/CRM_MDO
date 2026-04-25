@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { SettingsService } from '../settings/settings.service';
 
 export interface CompanyLookupResult {
   source: 'pappers' | 'sirene';
@@ -22,14 +22,14 @@ export class PappersProvider {
   private readonly logger = new Logger(PappersProvider.name);
   private readonly base = 'https://api.pappers.fr/v2';
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly settings: SettingsService) {}
 
-  isEnabled(): boolean {
-    return Boolean(this.configService.get<string>('lookup.pappersKey'));
+  async isEnabled(): Promise<boolean> {
+    return Boolean(await this.settings.get('lookup.pappersApiKey'));
   }
 
   async search(query: string, limit = 10): Promise<CompanyLookupResult[]> {
-    const key = this.configService.get<string>('lookup.pappersKey');
+    const key = await this.settings.get('lookup.pappersApiKey');
     if (!key) return [];
     const url =
       this.base +
@@ -55,7 +55,7 @@ export class PappersProvider {
   }
 
   async getBySiren(siren: string): Promise<CompanyLookupResult | null> {
-    const key = this.configService.get<string>('lookup.pappersKey');
+    const key = await this.settings.get('lookup.pappersApiKey');
     if (!key) return null;
     const url =
       this.base + '/entreprise?api_token=' + encodeURIComponent(key) + '&siren=' + encodeURIComponent(siren);
