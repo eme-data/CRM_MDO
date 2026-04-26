@@ -7,7 +7,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 
 const ALERT_DAYS = [60, 30, 14, 7, 3, 1];
 
-interface ProbeResult {
+export interface ProbeResult {
   ok: boolean;
   expiresAt?: Date;
   daysRemaining?: number;

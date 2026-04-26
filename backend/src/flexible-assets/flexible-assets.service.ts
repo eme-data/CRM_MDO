@@ -108,8 +108,8 @@ export class FlexibleAssetsService {
         companyId: dto.companyId,
         locationId: dto.locationId ?? null,
         name: dto.name,
-        values: clear,
-        secretValues: ciphered,
+        values: clear as any,
+        secretValues: ciphered as any,
       },
       include: {
         type: { include: { fields: { orderBy: { position: 'asc' } } } },

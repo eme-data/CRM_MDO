@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 
-interface Hit {
+export interface Hit {
   type: 'company' | 'contact' | 'opportunity' | 'contract' | 'ticket';
   id: string;
   title: string;
