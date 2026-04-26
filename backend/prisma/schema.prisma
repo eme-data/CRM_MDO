@@ -807,6 +807,9 @@ model SecretEntry {
   username    String?
   // Les champs ciphered* contiennent { iv, authTag, data } encodes en base64
   cipheredValue String  // mot de passe / cle chiffre
+  // Secret TOTP (base32) chiffre, pour generer les codes 2FA partages
+  // (compte admin firewall, M365 break-glass, etc.). Optionnel.
+  cipheredTotp  String?
   url         String?
   category    String?
   notes       String?

@@ -36,12 +36,30 @@ export class ClientDocsController {
   }
 
   @Patch('doc-pages/:id')
-  update(@Param('id') id: string, @Body() dto: Partial<CreateDocPageDto>) {
-    return this.docs.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateDocPageDto> & { reason?: string },
+    @CurrentUser() user: JwtUser,
+  ) {
+    const { reason, ...rest } = dto as any;
+    return this.docs.update(id, rest, user.id, reason);
   }
 
   @Delete('doc-pages/:id')
   remove(@Param('id') id: string) { return this.docs.remove(id); }
+
+  // ----- Versioning -----
+  @Get('doc-pages/:id/versions')
+  versions(@Param('id') id: string) { return this.docs.listVersions(id); }
+
+  @Get('doc-pages/versions/:versionId')
+  version(@Param('versionId') versionId: string) { return this.docs.getVersion(versionId); }
+
+  @Roles('ADMIN', 'MANAGER', 'SALES')
+  @Post('doc-pages/versions/:versionId/restore')
+  restore(@Param('versionId') versionId: string, @CurrentUser() user: JwtUser) {
+    return this.docs.restoreVersion(versionId, user.id);
+  }
 
   // ----- Secrets -----
   @Get('secrets')
@@ -52,6 +70,19 @@ export class ClientDocsController {
   @Get('secrets/:id/reveal')
   reveal(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.secrets.reveal(id, user.id);
+  }
+
+  // Genere uniquement le code TOTP courant (sans reveler le mot de passe)
+  @Get('secrets/:id/totp')
+  totp(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.secrets.getTotp(id, user.id);
+  }
+
+  // Historique d'acces a ce secret (qui a vu / quand) - audit NIS2/RGPD
+  @Roles('ADMIN', 'MANAGER')
+  @Get('secrets/:id/access-log')
+  accessLog(@Param('id') id: string) {
+    return this.secrets.accessLog(id);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
