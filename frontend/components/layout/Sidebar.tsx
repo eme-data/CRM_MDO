@@ -13,6 +13,8 @@ import {
   ClipboardList,
   Receipt,
   Server,
+  Layers,
+  ListChecks,
   Calendar,
   BarChart3,
   Upload,
@@ -116,6 +118,18 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
               className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
             >
               <Settings size={18} /> Admin (cles, SMTP, IMAP)
+            </Link>
+            <Link
+              href="/admin/flexible-asset-types"
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+            >
+              <Layers size={18} /> Templates assets flexibles
+            </Link>
+            <Link
+              href="/admin/runbooks"
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+            >
+              <ListChecks size={18} /> Runbooks / procedures
             </Link>
             <Link
               href="/admin/activity"

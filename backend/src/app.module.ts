@@ -29,6 +29,13 @@ import { PdfModule } from './pdf/pdf.module';
 import { AssetsModule } from './assets/assets.module';
 import { ClientDocsModule } from './client-docs/client-docs.module';
 import { InvoicesModule } from './invoices/invoices.module';
+import { LocationsModule } from './locations/locations.module';
+import { NetworksModule } from './networks/networks.module';
+import { FlexibleAssetsModule } from './flexible-assets/flexible-assets.module';
+import { ItemLinksModule } from './item-links/item-links.module';
+import { QuickNotesModule } from './quick-notes/quick-notes.module';
+import { EmergencyPdfModule } from './emergency-pdf/emergency-pdf.module';
+import { RunbooksModule } from './runbooks/runbooks.module';
 import { MfaModule } from './mfa/mfa.module';
 import { ImportsModule } from './imports/imports.module';
 import { SearchModule } from './search/search.module';
@@ -76,6 +83,13 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     ResponseTemplatesModule,
     AssetsModule,
     InvoicesModule,
+    LocationsModule,
+    NetworksModule,
+    FlexibleAssetsModule,
+    ItemLinksModule,
+    QuickNotesModule,
+    EmergencyPdfModule,
+    RunbooksModule,
     ImportsModule,
     SearchModule,
     SurveillanceModule,

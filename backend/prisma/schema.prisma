@@ -138,6 +138,11 @@ model Company {
   docPages       DocPage[]
   secrets        SecretEntry[]
   invoices       Invoice[]
+  locations      Location[]
+  networks       Network[]
+  flexibleAssets FlexibleAsset[]
+  quickNotes     QuickNote[]
+  runbookRuns    RunbookRun[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -753,11 +758,28 @@ model DocPage {
   body        String   // markdown
   authorId    String?
   author      User?    @relation("DocPageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  versions    DocPageVersion[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([companyId])
   @@index([category])
+}
+
+// Snapshot d'une page de doc avant chaque modification.
+// Cree automatiquement au moment du PATCH pour permettre rollback.
+model DocPageVersion {
+  id          String   @id @default(uuid())
+  pageId      String
+  page        DocPage  @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  title       String
+  category    String?
+  body        String
+  authorId    String?  // qui a fait la modif qui a cree cette version (= valeur AVANT modif)
+  reason      String?  // commentaire optionnel ("avant refonte reseau")
+  createdAt   DateTime @default(now())
+
+  @@index([pageId, createdAt])
 }
 
 // Coffre-fort de secrets cote client (mots de passe, cles d'acces).
@@ -830,6 +852,244 @@ model InvoiceLine {
   totalHt     Decimal  @db.Decimal(12, 2)
 
   @@index([invoiceId])
+}
+
+// =================== DOCUMENTATION CLIENT - IT GLUE LIKE ===================
+
+// Sites physiques d'un client (multi-site).
+// Permet de localiser materiel, contacts, interventions par site.
+model Location {
+  id          String   @id @default(uuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String   // ex : "Siege Toulouse", "Agence Montpellier"
+  isPrimary   Boolean  @default(false)
+  address     String?
+  postalCode  String?
+  city        String?
+  country     String?  @default("France")
+  phone       String?
+  notes       String?
+  // Coordonnees GPS pour cartographie / planning intervention
+  latitude    Float?
+  longitude   Float?
+
+  networks    Network[]
+  flexibleAssets FlexibleAsset[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId])
+}
+
+enum NetworkKind {
+  LAN
+  WAN
+  WIFI
+  VPN
+  DMZ
+  GUEST
+  OTHER
+}
+
+// Reseaux d'un client : plages IP, VLANs, sous-reseaux, gateway, DNS.
+// Sert de doc reseau structuree (au lieu de markdown a la main).
+model Network {
+  id          String      @id @default(uuid())
+  companyId   String
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  locationId  String?
+  location    Location?   @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  name        String      // "LAN bureaux", "WIFI guest", "VPN site to site"
+  kind        NetworkKind @default(LAN)
+  cidr        String?     // ex : "10.0.0.0/24"
+  vlanId      Int?
+  gateway     String?
+  dnsServers  String?     // separes par virgule
+  dhcpStart   String?
+  dhcpEnd     String?
+  description String?
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([companyId])
+  @@index([locationId])
+}
+
+// ----- Flexible Assets (cle de voute IT Glue-like) -----
+// Permet de definir des templates de documentation custom par MSP :
+// "Tenant M365", "Firewall Fortinet", "Backup Veeam", "ISP", "AD config", etc.
+// Chaque template definit un schema de champs, et chaque instance stocke les valeurs.
+
+enum FlexibleFieldType {
+  TEXT
+  TEXTAREA
+  NUMBER
+  BOOLEAN
+  DATE
+  URL
+  EMAIL
+  PASSWORD       // valeur stockee chiffree dans FlexibleAsset.secretValues
+  IP_ADDRESS
+  SELECT
+  MULTISELECT
+  REFERENCE_COMPANY
+  REFERENCE_CONTACT
+  REFERENCE_ASSET
+}
+
+// Definition d'un type d'asset flexible (template).
+// Cree par l'admin, reutilise sur tous les clients.
+model FlexibleAssetType {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  icon        String?  // nom Lucide icon (ex: "Server", "Cloud", "Shield")
+  color       String?  // couleur hex pour affichage
+  description String?
+  fields      FlexibleAssetField[]
+  assets      FlexibleAsset[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Definition d'un champ d'un type flexible.
+model FlexibleAssetField {
+  id           String              @id @default(uuid())
+  typeId       String
+  type         FlexibleAssetType   @relation(fields: [typeId], references: [id], onDelete: Cascade)
+  key          String              // ex : "tenant_id", "contract_end"
+  label        String              // ex : "Identifiant tenant"
+  fieldType    FlexibleFieldType   @default(TEXT)
+  required     Boolean             @default(false)
+  position     Int                 @default(0)
+  // Pour SELECT / MULTISELECT : options separees par "|"
+  options      String?
+  // Pour les references : on stocke "Company" / "Contact" / "Asset" ici si besoin
+  refEntity    String?
+  // Aide affichee dans le formulaire
+  helpText     String?
+
+  @@unique([typeId, key])
+  @@index([typeId])
+}
+
+// Instance d'un type flexible pour un client donne.
+// Les valeurs des champs sont stockees en JSON ; les champs PASSWORD
+// dans secretValues (cipheredValues separes par cle).
+model FlexibleAsset {
+  id          String              @id @default(uuid())
+  typeId      String
+  type        FlexibleAssetType   @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  companyId   String
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  locationId  String?
+  location    Location?           @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  name        String              // libelle de l'instance, ex : "Tenant M365 prod"
+  // Valeurs en clair (texte/nombre/date/bool/etc.) ; key = field.key
+  values      Json                @default("{}")
+  // Valeurs chiffrees (champs PASSWORD) ; key = field.key, value = base64 cipher
+  secretValues Json               @default("{}")
+
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([companyId])
+  @@index([typeId])
+  @@index([locationId])
+}
+
+// Quick Notes : post-it epingles par societe pour les infos critiques rapides.
+// "Acces VPN -> exception sur l'IP X.X.X.X", "Contact urgence : 06...", etc.
+model QuickNote {
+  id          String   @id @default(uuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  content     String
+  color       String?  // jaune, rouge, vert (couleur post-it)
+  pinned      Boolean  @default(true)
+  authorId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId])
+}
+
+// =================== RUNBOOKS / PROCEDURES ===================
+
+enum RunbookCategory {
+  ONBOARDING
+  AUDIT
+  PATCHING
+  INCIDENT
+  OFFBOARDING
+  AUTRE
+}
+
+// Modele de procedure reutilisable (catalogue partage entre tous les clients).
+// Ex : "Onboarding nouveau client", "Audit trimestriel", "Patch management mensuel".
+model Runbook {
+  id          String           @id @default(uuid())
+  name        String
+  category    RunbookCategory  @default(AUTRE)
+  description String?
+  steps       RunbookStep[]
+  runs        RunbookRun[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+// Etape d'un runbook template.
+model RunbookStep {
+  id           String   @id @default(uuid())
+  runbookId    String
+  runbook      Runbook  @relation(fields: [runbookId], references: [id], onDelete: Cascade)
+  position     Int      @default(0)
+  title        String
+  details      String?  // markdown : explication, lien, snippet, etc.
+  estimatedMin Int?     // duree estimee en minutes
+  required     Boolean  @default(true)
+
+  @@index([runbookId, position])
+}
+
+// Instance executee d'un runbook pour un client donne.
+// Conserve la check-list cochee + qui a fait quoi quand.
+model RunbookRun {
+  id           String   @id @default(uuid())
+  runbookId    String
+  runbook      Runbook  @relation(fields: [runbookId], references: [id], onDelete: Restrict)
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  startedById  String?
+  startedAt    DateTime @default(now())
+  completedAt  DateTime?
+  // Etat des cases : { stepId: { done: bool, doneById: string, doneAt: iso, note: string } }
+  state        Json     @default("{}")
+
+  @@index([companyId])
+  @@index([runbookId])
+}
+
+// Relation polymorphe entre items du CRM (Asset, FlexibleAsset, DocPage,
+// SecretEntry, Network, Location, Contract, Contact, Ticket, ...).
+// Stockes par paire ordonnee (sourceEntity/sourceId, targetEntity/targetId).
+model ItemLink {
+  id            String   @id @default(uuid())
+  sourceEntity  String   // ex : "FlexibleAsset"
+  sourceId      String
+  targetEntity  String   // ex : "SecretEntry"
+  targetId      String
+  label         String?  // libelle libre, ex : "credentials admin"
+  createdById   String?
+  createdAt     DateTime @default(now())
+
+  @@unique([sourceEntity, sourceId, targetEntity, targetId])
+  @@index([sourceEntity, sourceId])
+  @@index([targetEntity, targetId])
 }
 
 // =================== 2FA ===================
