@@ -29,6 +29,7 @@ import { PdfModule } from './pdf/pdf.module';
 import { AssetsModule } from './assets/assets.module';
 import { ClientDocsModule } from './client-docs/client-docs.module';
 import { InvoicesModule } from './invoices/invoices.module';
+import { BillingModule } from './billing/billing.module';
 import { LocationsModule } from './locations/locations.module';
 import { NetworksModule } from './networks/networks.module';
 import { FlexibleAssetsModule } from './flexible-assets/flexible-assets.module';
@@ -83,6 +84,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     ResponseTemplatesModule,
     AssetsModule,
     InvoicesModule,
+    BillingModule,
     LocationsModule,
     NetworksModule,
     FlexibleAssetsModule,

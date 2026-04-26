@@ -120,6 +120,12 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
               <Settings size={18} /> Admin (cles, SMTP, IMAP)
             </Link>
             <Link
+              href="/admin/billing"
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+            >
+              <Receipt size={18} /> Facturation (Sellsy/Qonto)
+            </Link>
+            <Link
               href="/admin/flexible-asset-types"
               className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
             >

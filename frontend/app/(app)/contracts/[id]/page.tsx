@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Edit, Trash2, RefreshCw, XCircle, AlertTriangle, Download } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, RefreshCw, XCircle, AlertTriangle, Download, Send } from 'lucide-react';
 import { api } from '@/lib/api';
 import { ContractForm } from '@/components/ContractForm';
 import {
@@ -23,6 +23,8 @@ export default function ContractDetailPage() {
   const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([]);
   const [editing, setEditing] = useState(false);
   const [renewing, setRenewing] = useState(false);
+  const [pushingBilling, setPushingBilling] = useState(false);
+  const [billingStatus, setBillingStatus] = useState<{ provider: string; configured: boolean } | null>(null);
 
   async function load() {
     const c = await api.get('/contracts/' + id);
@@ -32,7 +34,21 @@ export default function ContractDetailPage() {
   useEffect(() => {
     load();
     api.get('/companies?pageSize=500').then((res) => setCompanies(res.items));
+    api.get('/billing/status').then(setBillingStatus).catch(() => setBillingStatus(null));
   }, [id]);
+
+  async function handlePushBilling() {
+    setPushingBilling(true);
+    try {
+      const res = await api.post('/billing/contracts/' + id + '/push');
+      toast.success('Pousse vers ' + res.provider + (res.sellsySubscriptionId ? ' (abonnement cree)' : ' (client cree)'));
+      load();
+    } catch (err: any) {
+      toast.error(err.message ?? 'Echec push');
+    } finally {
+      setPushingBilling(false);
+    }
+  }
 
   async function handleDelete() {
     if (!confirm('Supprimer ce contrat ?')) return;
@@ -108,6 +124,12 @@ export default function ContractDetailPage() {
               <button onClick={handleTerminate} className="btn btn-secondary">
                 <XCircle size={16} className="mr-1" /> Resilier
               </button>
+              {billingStatus?.configured && !contract.sellsySubscriptionId && (
+                <button onClick={handlePushBilling} disabled={pushingBilling} className="btn btn-secondary">
+                  <Send size={16} className="mr-1" />
+                  {pushingBilling ? 'Push...' : 'Pousser vers ' + billingStatus.provider}
+                </button>
+              )}
             </>
           )}
           <button onClick={() => setEditing(!editing)} className="btn btn-secondary">
@@ -168,6 +190,25 @@ export default function ContractDetailPage() {
             <h2 className="font-semibold mb-2">Description</h2>
             <p className="text-sm text-slate-600 whitespace-pre-wrap">{contract.description || 'Aucune description'}</p>
           </div>
+          {contract.sellsySubscriptionId && (
+            <div className="card p-6 md:col-span-2 border-purple-200 bg-purple-50/50">
+              <h2 className="font-semibold mb-2 flex items-center gap-2">
+                <Send size={16} /> Synchronisation Sellsy
+              </h2>
+              <Info label="Abonnement Sellsy" value={contract.sellsySubscriptionId} />
+              {contract.externalSyncedAt && (
+                <Info label="Derniere synchro" value={formatDate(contract.externalSyncedAt)} />
+              )}
+              <a
+                href={'https://app.sellsy.com/subscriptions/' + contract.sellsySubscriptionId}
+                target="_blank"
+                rel="noopener"
+                className="text-sm text-mdo-600 hover:underline mt-2 inline-block"
+              >
+                Ouvrir dans Sellsy
+              </a>
+            </div>
+          )}
           {contract.alerts && contract.alerts.length > 0 && (
             <div className="card p-6 md:col-span-2">
               <h2 className="font-semibold mb-2">Alertes de renouvellement</h2>

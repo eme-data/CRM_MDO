@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { FileText, Download, Play } from 'lucide-react';
+import { FileText, Download, Play, ExternalLink } from 'lucide-react';
 import { api, downloadAttachment } from '@/lib/api';
 import { formatDate, formatEuro } from '@/lib/utils';
 
@@ -91,7 +91,16 @@ export default function InvoicesPage() {
               <tr><td colSpan={8} className="p-6 text-center text-slate-400">Aucune facture</td></tr>
             ) : items.map((i) => (
               <tr key={i.id} className="border-t border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30">
-                <td className="p-3 font-mono">{i.number}</td>
+                <td className="p-3 font-mono">
+                  <div className="flex items-center gap-2">
+                    {i.number}
+                    {i.provider && i.provider !== 'INTERNAL' && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 uppercase">
+                        {i.provider}
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className="p-3">
                   <Link href={'/companies/' + i.company.id} className="text-mdo-600 hover:underline">{i.company.name}</Link>
                 </td>
@@ -104,14 +113,30 @@ export default function InvoicesPage() {
                     className="input text-xs py-1"
                     value={i.status}
                     onChange={(e) => setStatusForInvoice(i.id, e.target.value)}
+                    disabled={i.provider && i.provider !== 'INTERNAL'}
+                    title={i.provider && i.provider !== 'INTERNAL' ? 'Statut gere par ' + i.provider : ''}
                   >
                     {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </td>
                 <td className="p-3">
-                  <button onClick={() => downloadPdf(i.id, i.number)} className="text-mdo-600 hover:text-mdo-700">
-                    <Download size={16} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {i.externalUrl ? (
+                      <a
+                        href={i.externalUrl}
+                        target="_blank"
+                        rel="noopener"
+                        className="text-mdo-600 hover:text-mdo-700"
+                        title="Ouvrir dans le provider externe"
+                      >
+                        <ExternalLink size={16} />
+                      </a>
+                    ) : (
+                      <button onClick={() => downloadPdf(i.id, i.number)} className="text-mdo-600 hover:text-mdo-700">
+                        <Download size={16} />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
