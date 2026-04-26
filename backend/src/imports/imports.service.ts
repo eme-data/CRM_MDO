@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as Papa from 'papaparse';
 import { PrismaService } from '../database/prisma.service';
 
-interface ImportResult {
+export interface ImportResult {
   total: number;
   created: number;
   updated: number;
@@ -58,10 +58,10 @@ export class ImportsService {
 
       try {
         if (existing) {
-          await this.prisma.company.update({ where: { id: existing.id }, data });
+          await this.prisma.company.update({ where: { id: existing.id }, data: data as any });
           result.updated++;
         } else {
-          await this.prisma.company.create({ data: { ...data, ownerId } });
+          await this.prisma.company.create({ data: { ...data, ownerId } as any });
           result.created++;
         }
       } catch (err: any) {

@@ -1,6 +1,11 @@
 import * as tls from 'tls';
 import { URL } from 'url';
 
+function asString(v: string | string[] | undefined): string | undefined {
+  if (Array.isArray(v)) return v.join(', ');
+  return v;
+}
+
 export interface SslCheckResult {
   ok: boolean;
   validTo?: Date;
@@ -66,8 +71,8 @@ export function checkSslCertificate(target: string, timeoutMs = 10_000): Promise
           ok: true,
           validTo,
           validFrom,
-          issuer: cert.issuer?.O ?? cert.issuer?.CN,
-          subject: cert.subject?.CN,
+          issuer: asString(cert.issuer?.O ?? cert.issuer?.CN),
+          subject: asString(cert.subject?.CN),
           daysRemaining,
         });
       },
