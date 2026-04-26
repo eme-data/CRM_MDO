@@ -6,7 +6,9 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { cors: false });
+  // rawBody: true expose req.rawBody pour la verification de signature HMAC
+  // des webhooks (Sellsy, ...).
+  const app = await NestFactory.create(AppModule, { cors: false, rawBody: true });
   const logger = new Logger('Bootstrap');
 
   const corsOrigin = process.env.CORS_ORIGIN?.split(',').map((s) => s.trim()) ?? [

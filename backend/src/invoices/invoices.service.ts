@@ -3,12 +3,16 @@ import { Cron } from '@nestjs/schedule';
 import { Prisma, InvoiceStatus } from '@prisma/client';
 import { addDays, startOfMonth, endOfMonth, format } from 'date-fns';
 import { PrismaService } from '../database/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class InvoicesService {
   private readonly logger = new Logger(InvoicesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
+  ) {}
 
   async generateNumber(date: Date): Promise<string> {
     const ym = format(date, 'yyyy-MM');
@@ -116,8 +120,20 @@ export class InvoicesService {
   }
 
   // ============= Cron mensuel : generation auto a partir des contrats actifs =============
+  // Desactive automatiquement quand un provider externe (Sellsy/Qonto) est
+  // actif ET que billing.disableInternalCron est a true (defaut). Dans ce
+  // mode, c'est le provider externe qui est la source de verite des factures.
   @Cron('0 6 1 * *') // 1er du mois a 6h
   async generateMonthlyInvoicesAuto() {
+    const provider = (await this.settings.get('billing.provider')) ?? 'none';
+    const disableInternal = await this.settings.getBool('billing.disableInternalCron');
+    if (provider !== 'none' && disableInternal) {
+      this.logger.log(
+        'Cron interne ignore : provider externe "' + provider + '" actif (billing.disableInternalCron=true)',
+      );
+      return { created: 0, skipped: true, reason: 'external_provider_' + provider };
+    }
+
     const now = new Date();
     const issueDate = startOfMonth(now);
     this.logger.log('Generation mensuelle des factures pour ' + format(issueDate, 'yyyy-MM'));

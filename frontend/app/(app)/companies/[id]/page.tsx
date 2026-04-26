@@ -3,10 +3,12 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Edit, Trash2, ArrowLeft, Plus, RefreshCw } from 'lucide-react';
+import { Edit, Trash2, ArrowLeft, Plus, RefreshCw, Send, FileWarning } from 'lucide-react';
 import { api } from '@/lib/api';
 import { CompanyForm } from '@/components/CompanyForm';
 import { ClientDocsSection } from '@/components/ClientDocsSection';
+import { ITGlueSection } from '@/components/ITGlueSection';
+import { RunbookRunsSection } from '@/components/RunbookRunsSection';
 import {
   formatEuro,
   formatDate,
@@ -24,12 +26,54 @@ export default function CompanyDetailPage() {
   const id = params.id as string;
   const [company, setCompany] = useState<any>(null);
   const [editing, setEditing] = useState(false);
+  const [billingStatus, setBillingStatus] = useState<{ provider: string; configured: boolean } | null>(null);
+  const [pushingBilling, setPushingBilling] = useState(false);
 
   async function load() {
     const c = await api.get('/companies/' + id);
     setCompany(c);
   }
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => {
+    load();
+    api.get('/billing/status').then(setBillingStatus).catch(() => setBillingStatus(null));
+  }, [id]);
+
+  async function handlePushBilling() {
+    setPushingBilling(true);
+    try {
+      const res = await api.post('/billing/companies/' + id + '/push');
+      toast.success('Pousse vers ' + res.provider + ' (id ' + res.externalId + ')');
+      load();
+    } catch (err: any) {
+      toast.error(err.message ?? 'Echec push');
+    } finally {
+      setPushingBilling(false);
+    }
+  }
+
+  async function handleEmergencyPdf() {
+    try {
+      const token = localStorage.getItem('crm_mdo_access_token');
+      const r = await fetch('/api/companies/' + id + '/emergency-pdf', {
+        headers: token ? { Authorization: 'Bearer ' + token } : {},
+      });
+      if (!r.ok) {
+        toast.error(r.status === 403 ? 'Reserve aux managers' : 'Erreur generation PDF');
+        return;
+      }
+      const blob = await r.blob();
+      const cd = r.headers.get('Content-Disposition') ?? '';
+      const m = cd.match(/filename="([^"]+)"/);
+      const filename = m?.[1] ?? 'urgence.pdf';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+      toast.success('PDF d\'urgence telecharge');
+    } catch (err: any) {
+      toast.error(err.message ?? 'Erreur');
+    }
+  }
 
   async function handleDelete() {
     if (!confirm('Supprimer definitivement cette societe ?')) return;
@@ -73,6 +117,30 @@ export default function CompanyDetailPage() {
             <button onClick={handleRefreshFromRegistry} className="btn btn-secondary" title="Synchroniser depuis Pappers / INSEE Sirene">
               <RefreshCw size={16} className="mr-1" /> Synchroniser
             </button>
+          )}
+          <button onClick={handleEmergencyPdf} className="btn btn-secondary" title="Telecharger un PDF avec toutes les infos pour intervention hors-ligne">
+            <FileWarning size={16} className="mr-1" /> PDF d'urgence
+          </button>
+          {billingStatus?.configured && !company.sellsyId && !company.qontoClientId && (
+            <button
+              onClick={handlePushBilling}
+              disabled={pushingBilling}
+              className="btn btn-secondary"
+              title={'Creer le tiers correspondant dans ' + billingStatus.provider}
+            >
+              <Send size={16} className="mr-1" />
+              {pushingBilling ? 'Push...' : 'Pousser vers ' + billingStatus.provider}
+            </button>
+          )}
+          {company.sellsyId && (
+            <a
+              href={'https://app.sellsy.com/companies/' + company.sellsyId}
+              target="_blank"
+              rel="noopener"
+              className="btn btn-secondary"
+            >
+              <Send size={16} className="mr-1" /> Voir dans Sellsy
+            </a>
           )}
           <button onClick={() => setEditing(!editing)} className="btn btn-secondary">
             <Edit size={16} className="mr-1" /> {editing ? 'Annuler' : 'Modifier'}
@@ -183,7 +251,11 @@ export default function CompanyDetailPage() {
         )}
       </div>
 
+      <ITGlueSection companyId={id} />
+
       <ClientDocsSection companyId={id} />
+
+      <RunbookRunsSection companyId={id} />
 
       {company.opportunities.length > 0 && (
         <div className="card p-6">

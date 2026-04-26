@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Plus, AlertTriangle, Trash2 } from 'lucide-react';
+import { Plus, AlertTriangle, Trash2, RefreshCw, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate, formatEuro, daysUntil } from '@/lib/utils';
 
@@ -45,6 +45,23 @@ export default function AssetsPage() {
     if (!confirm('Supprimer cet asset ?')) return;
     await api.delete('/assets/' + id);
     load();
+  }
+
+  async function checkMonitoring(id: string, name: string) {
+    const t = toast.loading('Verification de ' + name + '...');
+    try {
+      const r = await api.post('/monitoring/assets/' + id + '/check');
+      toast.dismiss(t);
+      if (r.ok) {
+        toast.success('Verifie : ' + (r.daysRemaining !== undefined ? r.daysRemaining + ' jour(s) restants' : 'OK'));
+      } else {
+        toast.error('Echec : ' + (r.error ?? 'erreur inconnue'));
+      }
+      load();
+    } catch (err: any) {
+      toast.dismiss(t);
+      toast.error(err.message);
+    }
   }
 
   function set(k: string, v: any) { setDraft((d: any) => ({ ...d, [k]: v })); }
@@ -112,7 +129,10 @@ export default function AssetsPage() {
             {items.length === 0 ? (
               <tr><td colSpan={7} className="p-6 text-center text-slate-400">Aucun asset</td></tr>
             ) : items.map((a) => {
-              const expSoon = a.expiresAt && daysUntil(a.expiresAt) >= 0 && daysUntil(a.expiresAt) <= 30;
+              const days = a.expiresAt ? daysUntil(a.expiresAt) : null;
+              const expSoon = days !== null && days >= 0 && days <= 30;
+              const expired = days !== null && days < 0;
+              const monitorable = (a.type === 'CERTIFICATE' || a.type === 'DOMAIN') && a.identifier;
               return (
                 <tr key={a.id} className="border-t border-slate-200 dark:border-slate-700">
                   <td className="p-3 font-medium">{a.name}</td>
@@ -121,14 +141,35 @@ export default function AssetsPage() {
                   <td className="p-3 font-mono text-xs">{a.identifier ?? '-'}</td>
                   <td className="p-3">
                     {a.expiresAt ? (
-                      <span className={'inline-flex items-center gap-1 ' + (expSoon ? 'text-amber-600 font-medium' : '')}>
-                        {expSoon && <AlertTriangle size={14} />} {formatDate(a.expiresAt)}
-                      </span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className={'inline-flex items-center gap-1 ' + (expired ? 'text-red-600 font-medium' : expSoon ? 'text-amber-600 font-medium' : '')}>
+                          {expired ? <ShieldAlert size={14} /> : expSoon ? <AlertTriangle size={14} /> : <ShieldCheck size={14} className="text-emerald-600" />}
+                          {formatDate(a.expiresAt)}
+                        </span>
+                        {days !== null && (
+                          <span className="text-xs text-slate-400">
+                            {expired ? 'expire depuis ' + Math.abs(days) + ' j' : 'dans ' + days + ' j'}
+                          </span>
+                        )}
+                        {a.lastMonitoredAt && (
+                          <span className="text-xs text-slate-400">verifie {formatDate(a.lastMonitoredAt)}</span>
+                        )}
+                        {a.monitoringError && (
+                          <span className="text-xs text-red-500" title={a.monitoringError}>echec dernier check</span>
+                        )}
+                      </div>
                     ) : '-'}
                   </td>
                   <td className="p-3"><span className="badge bg-slate-100 text-slate-700">{STATUS_LABEL[a.status]}</span></td>
                   <td className="p-3">
-                    <button onClick={() => remove(a.id)} className="text-red-500 hover:text-red-700"><Trash2 size={14} /></button>
+                    <div className="flex gap-2 items-center">
+                      {monitorable && (
+                        <button onClick={() => checkMonitoring(a.id, a.name)} className="text-mdo-600 hover:text-mdo-700" title="Verifier maintenant (TLS / WHOIS)">
+                          <RefreshCw size={14} />
+                        </button>
+                      )}
+                      <button onClick={() => remove(a.id)} className="text-red-500 hover:text-red-700"><Trash2 size={14} /></button>
+                    </div>
                   </td>
                 </tr>
               );

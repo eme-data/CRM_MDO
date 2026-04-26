@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Save, TestTube, Eye, EyeOff, RefreshCw, Building2, Send, Inbox } from 'lucide-react';
+import { Save, TestTube, Eye, EyeOff, RefreshCw, Building2, Send, Inbox, Clock, Receipt } from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface SettingItem {
@@ -32,9 +32,20 @@ const CATEGORY_META: Record<string, { title: string; icon: any; description: str
     icon: Inbox,
     description: 'Boite mail scannee toutes les 2 minutes pour creer des tickets automatiquement.',
   },
+  sla: {
+    title: 'SLA par offre',
+    icon: Clock,
+    description: 'Delais de reponse cibles par offre client (Essentiel / Pro / Souverain).',
+  },
+  billing: {
+    title: 'Facturation externe (Sellsy / Qonto)',
+    icon: Receipt,
+    description:
+      'Connecteurs vers les outils de facturation electronique (PDP). Sellsy genere les factures et abonnements ; Qonto synchronise les transactions bancaires pour rapprochement.',
+  },
 };
 
-const ORDER = ['lookup', 'smtp', 'imap'];
+const ORDER = ['lookup', 'smtp', 'imap', 'sla', 'billing'];
 
 export default function AdminSettingsPage() {
   const [groups, setGroups] = useState<Record<string, SettingItem[]>>({});
@@ -43,7 +54,7 @@ export default function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [testEmail, setTestEmail] = useState('');
-  const [testing, setTesting] = useState<'smtp' | 'imap' | null>(null);
+  const [testing, setTesting] = useState<'smtp' | 'imap' | 'sellsy' | 'qonto' | null>(null);
 
   async function load() {
     setLoading(true);
@@ -97,6 +108,19 @@ export default function AdminSettingsPage() {
       toast.success(res.message ?? 'Test IMAP OK');
     } catch (err: any) {
       toast.error(err.message ?? 'Echec test IMAP');
+    } finally {
+      setTesting(null);
+    }
+  }
+
+  async function testProvider(kind: 'sellsy' | 'qonto') {
+    setTesting(kind);
+    try {
+      const res = await api.post('/billing/test/' + kind);
+      if (res.ok) toast.success(res.message ?? 'Connexion ' + kind + ' OK');
+      else toast.error(res.message ?? 'Echec ' + kind);
+    } catch (err: any) {
+      toast.error(err.message ?? 'Echec test ' + kind);
     } finally {
       setTesting(null);
     }
@@ -177,6 +201,30 @@ export default function AdminSettingsPage() {
                   <TestTube size={14} className="mr-1" />
                   {testing === 'imap' ? 'Test en cours...' : 'Tester IMAP'}
                 </button>
+              </div>
+            )}
+
+            {cat === 'billing' && (
+              <div className="border-t pt-4 flex flex-wrap gap-2">
+                <button
+                  onClick={() => testProvider('sellsy')}
+                  disabled={testing === 'sellsy'}
+                  className="btn btn-secondary"
+                >
+                  <TestTube size={14} className="mr-1" />
+                  {testing === 'sellsy' ? 'Test...' : 'Tester Sellsy'}
+                </button>
+                <button
+                  onClick={() => testProvider('qonto')}
+                  disabled={testing === 'qonto'}
+                  className="btn btn-secondary"
+                >
+                  <TestTube size={14} className="mr-1" />
+                  {testing === 'qonto' ? 'Test...' : 'Tester Qonto'}
+                </button>
+                <a href="/admin/billing" className="btn btn-secondary">
+                  <Receipt size={14} className="mr-1" /> Tableau de bord facturation
+                </a>
               </div>
             )}
           </div>
