@@ -35,6 +35,7 @@ import { NetworksModule } from './networks/networks.module';
 import { FlexibleAssetsModule } from './flexible-assets/flexible-assets.module';
 import { ItemLinksModule } from './item-links/item-links.module';
 import { QuickNotesModule } from './quick-notes/quick-notes.module';
+import { MonitoringModule } from './monitoring/monitoring.module';
 import { EmergencyPdfModule } from './emergency-pdf/emergency-pdf.module';
 import { RunbooksModule } from './runbooks/runbooks.module';
 import { MfaModule } from './mfa/mfa.module';
@@ -90,6 +91,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     FlexibleAssetsModule,
     ItemLinksModule,
     QuickNotesModule,
+    MonitoringModule,
     EmergencyPdfModule,
     RunbooksModule,
     ImportsModule,

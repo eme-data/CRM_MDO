@@ -741,6 +741,12 @@ model Asset {
   expiresAt      DateTime?     // pour licences/domains/certs
   costHt         Decimal?      @db.Decimal(10, 2)
   notes          String?
+  // Auto-monitoring SSL / WHOIS (DOMAIN, CERTIFICATE)
+  // expiresAt est rempli automatiquement, lastMonitoredAt = horodatage du dernier check.
+  // monitoringEnabled = false desactive le cron pour cet asset.
+  lastMonitoredAt DateTime?
+  monitoringEnabled Boolean   @default(true)
+  monitoringError String?    // dernier message d'erreur si check echoue
 
   companyId      String
   company        Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
