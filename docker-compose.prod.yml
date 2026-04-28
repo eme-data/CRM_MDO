@@ -22,6 +22,8 @@ services:
       - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+      # Access logs JSON exposes a l'hote pour CrowdSec.
+      - /var/log/caddy:/var/log/caddy
     depends_on:
       - backend
       - frontend

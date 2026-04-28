@@ -5,6 +5,17 @@
 {$DOMAIN} {
     encode zstd gzip
 
+    # Access log JSON pour CrowdSec (parser caddy).
+    # Le volume caddy-logs est lu par le service crowdsec systemd de l'hote
+    # (/var/log/caddy → bind-mount dans docker-compose.prod.yml).
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 100MiB
+            roll_keep 5
+        }
+        format json
+    }
+
     # API backend - on conserve le prefixe /api (NestJS a setGlobalPrefix('api'))
     handle /api/* {
         reverse_proxy backend:4000
@@ -13,6 +24,17 @@
     # Health check direct (route publique du backend, exclue du globalPrefix)
     handle /health {
         reverse_proxy backend:4000
+    }
+
+    # Endpoint Prometheus (publication metrique). Restreint au reseau interne :
+    # en prod ce chemin doit etre filtre par firewall ou par auth basic.
+    handle /metrics {
+        # Restriction : refuse toutes les IPs sauf loopback + reseau Docker.
+        @internal remote_ip 127.0.0.1 172.16.0.0/12 10.0.0.0/8
+        handle @internal {
+            reverse_proxy backend:4000
+        }
+        respond 403
     }
 
     # Tout le reste vers le frontend Next.js

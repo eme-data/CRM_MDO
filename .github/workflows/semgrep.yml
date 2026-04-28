@@ -1,0 +1,42 @@
+name: Semgrep SAST
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Lundi 02:00 UTC : scan complet hebdo (catch les nouvelles regles).
+    - cron: '0 2 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  semgrep:
+    name: Semgrep scan
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep:latest
+    if: (github.actor != 'dependabot[bot]')
+    steps:
+      - uses: actions/checkout@v4
+
+      # Configs : auto + javascript + typescript + nodejs (express/nestjs heuristics)
+      - name: Run Semgrep
+        run: |
+          semgrep ci \
+            --config=p/default \
+            --config=p/javascript \
+            --config=p/typescript \
+            --config=p/nodejs \
+            --config=p/owasp-top-ten \
+            --config=p/secrets \
+            --sarif --output=semgrep.sarif || true
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif

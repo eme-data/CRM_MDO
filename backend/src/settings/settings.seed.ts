@@ -13,6 +13,25 @@ export interface SettingDef {
 }
 
 export const SETTINGS_DEFS: SettingDef[] = [
+  // ---------- Securite / Authentification ----------
+  {
+    key: 'auth.mfaRequiredRoles',
+    category: 'security',
+    label: 'Roles pour lesquels la 2FA est obligatoire',
+    description:
+      'Liste de roles separes par virgules (ADMIN,MANAGER,SALES,READONLY). Les utilisateurs concernes verront leur 2FA non activee detectee au login : ils restent connectes mais sont rediriges vers la page MFA et ne peuvent acceder qu\'a /mfa et /auth/me tant que la 2FA n\'est pas activee.',
+    defaultValue: 'ADMIN,MANAGER',
+    envVar: 'MFA_REQUIRED_ROLES',
+  },
+  {
+    key: 'auth.passwordMinLength',
+    category: 'security',
+    label: 'Longueur minimale des mots de passe',
+    description: 'Recommande : 12 caracteres minimum.',
+    defaultValue: '12',
+    envVar: 'PASSWORD_MIN_LENGTH',
+  },
+
   // ---------- Annuaire entreprises ----------
   {
     key: 'lookup.pappersApiKey',

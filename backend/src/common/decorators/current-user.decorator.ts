@@ -6,6 +6,7 @@ export interface JwtUser {
   role: string;
   firstName: string;
   lastName: string;
+  mfaPending?: boolean;
 }
 
 export const CurrentUser = createParamDecorator(

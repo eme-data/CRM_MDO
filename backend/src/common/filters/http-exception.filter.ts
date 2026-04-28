@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Request, Response } from 'express';
+import { captureException } from '../observability/sentry';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -50,6 +51,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
     } else if (exception instanceof Error) {
       message = exception.message;
       this.logger.error(exception.stack);
+    }
+
+    // Sentry : on capture uniquement les 5xx pour eviter le bruit (4xx = erreur
+    // utilisateur attendue : validation, auth, not found, conflit ...).
+    if (status >= 500) {
+      captureException(exception, {
+        path: request.url,
+        method: request.method,
+        statusCode: status,
+      });
     }
 
     response.status(status).json({

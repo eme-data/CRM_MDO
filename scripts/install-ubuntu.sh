@@ -51,7 +51,7 @@ DEBIAN_FRONTEND=noninteractive apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
 apt-get install -y -qq \
   curl wget git ca-certificates gnupg lsb-release \
-  ufw fail2ban htop unzip jq openssl dnsutils cron
+  ufw htop unzip jq openssl dnsutils cron restic
 ok "Systeme a jour"
 
 # ----- Timezone --------------------------------------------------------------
@@ -93,9 +93,29 @@ ufw allow 443/udp comment "HTTP/3 (Caddy)"
 ufw --force enable
 ok "UFW actif"
 
-# ----- Fail2ban --------------------------------------------------------------
-systemctl enable --now fail2ban
-ok "fail2ban actif"
+# ----- CrowdSec --------------------------------------------------------------
+# CrowdSec remplace fail2ban : detection multi-source (sshd + Caddy access logs)
+# avec partage de blocklist communautaire. Le bouncer iptables applique les
+# decisions (DROP) sans dependance sur netfilter-persistent.
+if ! command -v cscli >/dev/null 2>&1; then
+  log "Installation CrowdSec..."
+  curl -fsSL https://install.crowdsec.net | bash
+  apt-get install -y -qq crowdsec
+  apt-get install -y -qq crowdsec-firewall-bouncer-iptables
+  # Collections : sshd (login bruteforce SSH) + base-http-scenarios (scans HTTP)
+  cscli collections install crowdsecurity/sshd >/dev/null 2>&1 || true
+  cscli collections install crowdsecurity/base-http-scenarios >/dev/null 2>&1 || true
+  cscli collections install crowdsecurity/caddy >/dev/null 2>&1 || true
+  cscli collections install crowdsecurity/linux >/dev/null 2>&1 || true
+  systemctl enable --now crowdsec
+  systemctl enable --now crowdsec-firewall-bouncer
+  ok "CrowdSec actif (sshd + http + caddy)"
+else
+  ok "CrowdSec deja installe : $(cscli version | head -n1)"
+fi
+
+# CrowdSec lit les logs Caddy depuis le conteneur via /var/log/caddy.
+# La config d'acquisition sera ajoutee apres le demarrage du conteneur Caddy.
 
 # ----- Clonage / maj du repo -------------------------------------------------
 if [[ -d "${INSTALL_DIR}/.git" ]]; then
@@ -212,8 +232,25 @@ log "Build des images Docker (cela peut prendre quelques minutes)..."
 docker compose -f docker-compose.yml -f docker-compose.prod.yml build
 
 log "Demarrage de la stack..."
+mkdir -p /var/log/caddy
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ok "Stack demarree"
+
+# ----- Acquisition CrowdSec sur les logs Caddy -------------------------------
+if command -v cscli >/dev/null 2>&1; then
+  ACQUIS_FILE=/etc/crowdsec/acquis.d/caddy.yaml
+  mkdir -p /etc/crowdsec/acquis.d
+  if [[ ! -f "${ACQUIS_FILE}" ]]; then
+    cat > "${ACQUIS_FILE}" <<'ACQ_EOF'
+filenames:
+  - /var/log/caddy/access.log
+labels:
+  type: caddy
+ACQ_EOF
+    systemctl reload crowdsec || systemctl restart crowdsec
+    ok "CrowdSec : acquisition Caddy configuree"
+  fi
+fi
 
 # ----- Attente que le backend soit pret --------------------------------------
 log "Attente que le backend soit pret..."
@@ -234,10 +271,22 @@ ADMIN_EMAIL="${ADMIN_EMAIL:-mathieu@mdoservices.fr}"
 read -rp "Prenom : " ADMIN_FIRST
 read -rp "Nom : " ADMIN_LAST
 while :; do
-  read -rsp "Mot de passe (>= 8 caracteres) : " ADMIN_PASS
+  read -rsp "Mot de passe (>= 12 caracteres, 3 classes : minuscules/majuscules/chiffres/symboles) : " ADMIN_PASS
   echo
-  [[ ${#ADMIN_PASS} -ge 8 ]] && break
-  warn "Mot de passe trop court"
+  if [[ ${#ADMIN_PASS} -lt 12 ]]; then
+    warn "Mot de passe trop court (min 12)"
+    continue
+  fi
+  classes=0
+  [[ "${ADMIN_PASS}" =~ [a-z] ]] && classes=$((classes+1))
+  [[ "${ADMIN_PASS}" =~ [A-Z] ]] && classes=$((classes+1))
+  [[ "${ADMIN_PASS}" =~ [0-9] ]] && classes=$((classes+1))
+  [[ "${ADMIN_PASS}" =~ [^A-Za-z0-9] ]] && classes=$((classes+1))
+  if [[ ${classes} -lt 3 ]]; then
+    warn "Mot de passe trop faible (au moins 3 classes requises)"
+    continue
+  fi
+  break
 done
 
 docker compose exec -T \
@@ -259,9 +308,38 @@ chown "${TARGET_USER}:${TARGET_USER}" "${BACKUP_DIR}"
 cat > /etc/cron.d/crm-mdo-backup <<CRON_EOF
 # Backup quotidien CRM MDO Services a 03h00
 0 3 * * * ${TARGET_USER} cd ${INSTALL_DIR} && ${BACKUP_SCRIPT} ${BACKUP_DIR} >> /var/log/crm-mdo-backup.log 2>&1
+# Backup off-site chiffre (restic) a 04h00 - actif uniquement si /etc/crm-mdo/backup.env existe
+0 4 * * * ${TARGET_USER} test -r /etc/crm-mdo/backup.env && ${INSTALL_DIR}/scripts/backup-offsite.sh >> /var/log/crm-mdo-backup-offsite.log 2>&1
 CRON_EOF
 chmod 644 /etc/cron.d/crm-mdo-backup
-ok "Cron de backup configure (3h00 tous les jours -> ${BACKUP_DIR})"
+ok "Cron de backup configure (3h00 local, 4h00 offsite si /etc/crm-mdo/backup.env present)"
+
+# ----- Squelette config offsite ----------------------------------------------
+mkdir -p /etc/crm-mdo
+if [[ ! -f /etc/crm-mdo/backup.env.example ]]; then
+  cat > /etc/crm-mdo/backup.env.example <<'OFFSITE_EOF'
+# Configuration backup off-site restic.
+# Copier en /etc/crm-mdo/backup.env (chmod 600) et renseigner les valeurs.
+#
+# === Backblaze B2 (recommande, EUR ~0.005/GB/mois) ===
+# export RESTIC_REPOSITORY="b2:bucket-name:/crm-mdo"
+# export B2_ACCOUNT_ID="..."
+# export B2_ACCOUNT_KEY="..."
+#
+# === S3 / Scaleway / OVH Cloud ===
+# export RESTIC_REPOSITORY="s3:s3.eu-west-3.amazonaws.com/bucket-name/crm-mdo"
+# export AWS_ACCESS_KEY_ID="..."
+# export AWS_SECRET_ACCESS_KEY="..."
+#
+# === Hetzner StorageBox SFTP ===
+# export RESTIC_REPOSITORY="sftp:user@u-host.your-storagebox.de:/crm-mdo"
+#
+# Mot de passe de chiffrement (genere : openssl rand -hex 32)
+# export RESTIC_PASSWORD="..."
+OFFSITE_EOF
+  chmod 644 /etc/crm-mdo/backup.env.example
+  ok "Modele config offsite cree : /etc/crm-mdo/backup.env.example"
+fi
 
 # ----- Recapitulatif ---------------------------------------------------------
 echo

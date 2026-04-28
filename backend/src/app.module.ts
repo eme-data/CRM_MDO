@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bullmq';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import configuration from './config/configuration';
 import { PrismaModule } from './database/prisma.module';
 import { SettingsModule } from './settings/settings.module';
@@ -43,8 +44,12 @@ import { ImportsModule } from './imports/imports.module';
 import { SearchModule } from './search/search.module';
 import { SurveillanceModule } from './surveillance/surveillance.module';
 import { ReportsModule } from './reports/reports.module';
+import { GdprModule } from './gdpr/gdpr.module';
 import { HealthController } from './health/health.controller';
+import { MetricsController } from './common/observability/metrics.controller';
+import { AppLoggerModule } from './common/observability/logger.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { MfaRequiredGuard } from './common/guards/mfa-required.guard';
 
 @Module({
   imports: [
@@ -52,7 +57,17 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
       isGlobal: true,
       load: [configuration],
     }),
+    AppLoggerModule,
     ScheduleModule.forRoot(),
+    // Rate-limiting global. Definit deux paliers :
+    //  - "short" : 60 req / minute (anti-burst)
+    //  - "medium": 600 req / 10 min (utilisation normale)
+    // Les controleurs sensibles (auth) appliquent un palier "auth" plus strict via @Throttle.
+    ThrottlerModule.forRoot([
+      { name: 'short', ttl: 60_000, limit: 60 },
+      { name: 'medium', ttl: 600_000, limit: 600 },
+      { name: 'auth', ttl: 300_000, limit: 10 },
+    ]),
     BullModule.forRootAsync({
       useFactory: () => ({
         connection: {
@@ -98,15 +113,29 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     SearchModule,
     SurveillanceModule,
     ReportsModule,
+    GdprModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, MetricsController],
   providers: [
+    // ThrottlerGuard avant JwtAuthGuard : on rate-limit AVANT de tenter l'auth,
+    // sinon un attaquant epuise le pool bcrypt en bombardant /auth/login.
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    // Apres l'auth : bloque les utilisateurs dont le role exige la 2FA mais qui
+    // ne l'ont pas encore activee. AuthController et MfaController sont marques
+    // @AllowMfaPending pour permettre la configuration initiale.
+    {
+      provide: APP_GUARD,
+      useClass: MfaRequiredGuard,
     },
   ],
 })

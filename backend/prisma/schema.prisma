@@ -29,6 +29,10 @@ model User {
   lastLoginAt     DateTime?
   // Signature email pour les replies tickets sortants (texte brut, format libre)
   signature       String?
+  // Token opaque pour l'export iCal authentifie (les clients calendrier ne
+  // supportent pas Bearer). NULL tant que l'utilisateur n'a pas active la
+  // fonctionnalite ; revoquable via /users/me/ical/regenerate.
+  icalToken       String?   @unique
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -68,13 +72,18 @@ model Team {
 }
 
 model RefreshToken {
-  id        String    @id @default(uuid())
-  token     String    @unique
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime  @default(now())
+  id          String    @id @default(uuid())
+  token       String    @unique
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Metadata utilisee par l'UI sessions/devices (pas de fingerprinting fort,
+  // juste une etiquette informelle pour aider l'utilisateur a reconnaitre la session).
+  userAgent   String?
+  ip          String?
+  lastUsedAt  DateTime?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
 
   @@index([userId])
 }

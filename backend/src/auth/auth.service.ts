@@ -10,6 +10,8 @@ import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
 import { MfaService } from '../mfa/mfa.service';
+import { SettingsService } from '../settings/settings.service';
+import { assertStrongPassword } from '../common/validators/password.validator';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 
@@ -22,9 +24,24 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly mfa: MfaService,
+    private readonly settings: SettingsService,
   ) {}
 
-  async login(dto: LoginDto) {
+  // Determine si l'utilisateur a une 2FA "due" : son role est dans la liste des
+  // roles obligatoires (setting `auth.mfaRequiredRoles`) mais sa 2FA n'est pas
+  // encore activee. Tant que ce flag est true, le MfaRequiredGuard bloque tous
+  // les endpoints sauf /mfa/*, /auth/* et ceux annotes @AllowMfaPending.
+  private async computeMfaPending(userId: string, role: string): Promise<boolean> {
+    const requiredRolesRaw = (await this.settings.get('auth.mfaRequiredRoles')) ?? '';
+    const requiredRoles = requiredRolesRaw
+      .split(',')
+      .map((r) => r.trim().toUpperCase())
+      .filter(Boolean);
+    if (!requiredRoles.includes(role.toUpperCase())) return false;
+    return !(await this.mfa.isEnabledFor(userId));
+  }
+
+  async login(dto: LoginDto, context: { ip?: string; userAgent?: string } = {}) {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Identifiants invalides');
@@ -53,10 +70,11 @@ export class AuthService {
       data: { userId: user.id, action: 'LOGIN', entity: 'User', entityId: user.id },
     });
 
-    return this.issueTokens(user.id, user.email, user.role);
+    const mfaPending = await this.computeMfaPending(user.id, user.role);
+    return this.issueTokens(user.id, user.email, user.role, mfaPending, context);
   }
 
-  async refresh(rawToken: string) {
+  async refresh(rawToken: string, context: { ip?: string; userAgent?: string } = {}) {
     const existing = await this.prisma.refreshToken.findUnique({
       where: { token: rawToken },
       include: { user: true },
@@ -72,10 +90,17 @@ export class AuthService {
 
     await this.prisma.refreshToken.update({
       where: { id: existing.id },
-      data: { revokedAt: new Date() },
+      data: { revokedAt: new Date(), lastUsedAt: new Date() },
     });
 
-    return this.issueTokens(existing.user.id, existing.user.email, existing.user.role);
+    const mfaPending = await this.computeMfaPending(existing.user.id, existing.user.role);
+    return this.issueTokens(
+      existing.user.id,
+      existing.user.email,
+      existing.user.role,
+      mfaPending,
+      context,
+    );
   }
 
   async logout(userId: string, refreshToken?: string) {
@@ -97,6 +122,11 @@ export class AuthService {
     if (!user) throw new UnauthorizedException();
     const valid = await bcrypt.compare(dto.oldPassword, user.passwordHash);
     if (!valid) throw new BadRequestException('Ancien mot de passe incorrect');
+    const minLength = parseInt(
+      (await this.settings.get('auth.passwordMinLength')) ?? '12',
+      10,
+    );
+    assertStrongPassword(dto.newPassword, minLength);
     const hash = await bcrypt.hash(dto.newPassword, 12);
     await this.prisma.user.update({
       where: { id: userId },
@@ -109,11 +139,18 @@ export class AuthService {
     return { success: true };
   }
 
-  private async issueTokens(userId: string, email: string, role: string) {
+  private async issueTokens(
+    userId: string,
+    email: string,
+    role: string,
+    mfaPending = false,
+    context: { ip?: string; userAgent?: string } = {},
+  ) {
     const accessToken = await this.jwtService.signAsync({
       sub: userId,
       email,
       role,
+      mfaPending,
     });
 
     const refreshToken = randomBytes(48).toString('hex');
@@ -121,14 +158,67 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + this.parseDuration(refreshExpiresIn));
 
     await this.prisma.refreshToken.create({
-      data: { token: refreshToken, userId, expiresAt },
+      data: {
+        token: refreshToken,
+        userId,
+        expiresAt,
+        ip: context.ip?.slice(0, 64),
+        // Tronque le UA pour eviter les payloads malicieux et les logs verbeux
+        userAgent: context.userAgent?.slice(0, 256),
+        lastUsedAt: new Date(),
+      },
     });
 
     return {
       accessToken,
       refreshToken,
       expiresIn: this.configService.get<string>('jwt.expiresIn') ?? '15m',
+      mfaPending,
     };
+  }
+
+  // Liste les sessions actives (refresh tokens non revoques, non expires).
+  async listSessions(userId: string, currentRawToken?: string) {
+    const tokens = await this.prisma.refreshToken.findMany({
+      where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        userAgent: true,
+        ip: true,
+        createdAt: true,
+        lastUsedAt: true,
+        expiresAt: true,
+        token: true,
+      },
+    });
+    return tokens.map((t) => ({
+      id: t.id,
+      userAgent: t.userAgent,
+      ip: t.ip,
+      createdAt: t.createdAt,
+      lastUsedAt: t.lastUsedAt,
+      expiresAt: t.expiresAt,
+      isCurrent: currentRawToken ? t.token === currentRawToken : false,
+    }));
+  }
+
+  async revokeSession(userId: string, sessionId: string) {
+    const result = await this.prisma.refreshToken.updateMany({
+      where: { id: sessionId, userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return { revoked: result.count };
+  }
+
+  async revokeAllSessions(userId: string, exceptRawToken?: string) {
+    const whereClause: any = { userId, revokedAt: null };
+    if (exceptRawToken) whereClause.token = { not: exceptRawToken };
+    const result = await this.prisma.refreshToken.updateMany({
+      where: whereClause,
+      data: { revokedAt: new Date() },
+    });
+    return { revoked: result.count };
   }
 
   private parseDuration(duration: string): number {

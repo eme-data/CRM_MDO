@@ -8,6 +8,7 @@ export interface JwtPayload {
   sub: string;
   email: string;
   role: string;
+  mfaPending?: boolean;
 }
 
 @Injectable()
@@ -38,6 +39,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Utilisateur invalide ou desactive');
     }
-    return user;
+    return { ...user, mfaPending: payload.mfaPending === true };
   }
 }

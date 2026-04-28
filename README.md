@@ -30,6 +30,12 @@ Le besoin specifique : gerer finement les **contrats** (abonnements mensuels Ess
 - **Journal d'activite** : qui a fait quoi et quand
 - **Multi-utilisateurs** : roles ADMIN / MANAGER / SALES / READONLY
 - **Emails** : historises en base (EmailLog)
+- **Securite** : 2FA TOTP obligatoire pour ADMIN/MANAGER, rate-limiting auth, politique mot de passe (12 char min, 3 classes), CSP/HSTS strictes, sessions/devices manageables
+- **RGPD** : export contact (art. 15) + anonymisation (art. 17)
+- **Calendrier** : export iCal authentifie pour brancher Outlook/Google Calendar sur les interventions du technicien
+- **PWA** : manifest + service worker (mode offline-light, installable depuis Chrome/Edge)
+- **Observabilite** : logs structures pino (JSON), endpoint Prometheus `/metrics`, integration Sentry opt-in (`SENTRY_DSN`)
+- **CI/CD** : GitHub Actions (lint + build + Prisma validate + npm audit + Docker smoke), Semgrep SAST, Dependabot
 
 ## Demarrage local (dev)
 
@@ -55,13 +61,28 @@ REPO_URL=https://github.com/VOTRE_ORG/CRM_MDO.git sudo bash scripts/install-ubun
 ```
 
 Le script :
-- Met a jour le systeme, installe Docker + Compose
-- Configure UFW + fail2ban
+- Met a jour le systeme, installe Docker + Compose + restic
+- Configure UFW + CrowdSec (sshd + http + caddy collections, bouncer iptables)
 - Genere un `.env` avec mots de passe aleatoires
 - Verifie que `crm.mdoservices.fr` pointe bien vers le serveur
 - Deploie la stack avec Caddy + HTTPS Let's Encrypt automatique
-- Cree le 1er compte admin (interactif)
-- Configure un backup quotidien cron
+- Cree le 1er compte admin (interactif, mot de passe >= 12 char, 3 classes min)
+- Configure un backup local quotidien (3h) + un backup off-site chiffre quotidien (4h, restic, opt-in via `/etc/crm-mdo/backup.env`)
+
+### Backup off-site (recommande)
+
+Pour activer le backup off-site chiffre, copier `/etc/crm-mdo/backup.env.example` en
+`/etc/crm-mdo/backup.env` (chmod 600), renseigner `RESTIC_REPOSITORY` (B2/S3/SFTP),
+les credentials du provider et `RESTIC_PASSWORD` (genere via `openssl rand -hex 32`),
+puis :
+
+```bash
+sudo -E restic init   # une seule fois, depuis le serveur
+```
+
+Le cron (4h) prendra ensuite le relais. Le `forget --prune` n'est volontairement pas
+automatise : a lancer mensuellement depuis un poste de confiance pour proteger
+contre un scenario ransomware ou l'attaquant aurait acces aux credentials du serveur.
 
 Voir [docs/deploy.md](docs/deploy.md) pour les details.
 

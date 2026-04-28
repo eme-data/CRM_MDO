@@ -1,12 +1,21 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../database/prisma.service';
+import { SettingsService } from '../settings/settings.service';
+import { assertStrongPassword } from '../common/validators/password.validator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
+  ) {}
+
+  private async getMinPasswordLength(): Promise<number> {
+    return parseInt((await this.settings.get('auth.passwordMinLength')) ?? '12', 10);
+  }
 
   async list() {
     return this.prisma.user.findMany({
@@ -63,6 +72,7 @@ export class UsersService {
   async create(dto: CreateUserDto) {
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (existing) throw new ConflictException('Email deja utilise');
+    assertStrongPassword(dto.password, await this.getMinPasswordLength());
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const user = await this.prisma.user.create({
       data: {
@@ -111,6 +121,7 @@ export class UsersService {
 
   async resetPassword(id: string, newPassword: string) {
     await this.findById(id);
+    assertStrongPassword(newPassword, await this.getMinPasswordLength());
     const hash = await bcrypt.hash(newPassword, 12);
     await this.prisma.user.update({
       where: { id },

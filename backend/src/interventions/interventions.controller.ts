@@ -14,10 +14,13 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { InterventionStatus } from '@prisma/client';
 import { InterventionsService } from './interventions.service';
+import { IcalService } from './ical.service';
 import { PdfService } from '../pdf/pdf.service';
 import { CreateInterventionDto } from './dto/create-intervention.dto';
 import { UpdateInterventionDto } from './dto/update-intervention.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { Public } from '../common/decorators/public.decorator';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Interventions')
 @ApiBearerAuth()
@@ -27,7 +30,29 @@ export class InterventionsController {
   constructor(
     private readonly service: InterventionsService,
     private readonly pdf: PdfService,
+    private readonly ical: IcalService,
   ) {}
+
+  // --- iCal export pour l'utilisateur connecte ---
+  // GET /interventions/me/ical/url renvoie l'URL signee a coller dans
+  // Outlook/Google Calendar. Le token est genere si absent.
+  @Get('me/ical/url')
+  async myIcalUrl(@CurrentUser() user: JwtUser) {
+    const token = await this.ical.getOrCreateToken(user.id);
+    return { token, hint: '/api/calendar/' + token + '/interventions.ics' };
+  }
+
+  @Post('me/ical/regenerate')
+  async regenerateIcal(@CurrentUser() user: JwtUser) {
+    const token = await this.ical.regenerateToken(user.id);
+    return { token, hint: '/api/calendar/' + token + '/interventions.ics' };
+  }
+
+  @Delete('me/ical')
+  async revokeIcal(@CurrentUser() user: JwtUser) {
+    await this.ical.revokeToken(user.id);
+    return { revoked: true };
+  }
 
   @Get()
   findAll(

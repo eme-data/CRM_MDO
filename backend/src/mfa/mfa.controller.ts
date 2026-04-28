@@ -3,10 +3,14 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { MfaService } from './mfa.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
+import { AllowMfaPending } from '../common/decorators/allow-mfa-pending.decorator';
 
 @ApiTags('MFA')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
+// MFA controller doit rester accessible meme quand mfaPending = true,
+// sinon l'utilisateur ne peut jamais activer sa 2FA et reste bloque.
+@AllowMfaPending()
 @Controller('mfa')
 export class MfaController {
   constructor(private readonly service: MfaService) {}
