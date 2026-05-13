@@ -1,4 +1,4 @@
-import { IsBoolean, IsDateString, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateTimeEntryDto {
   @IsDateString()
@@ -20,6 +20,15 @@ export class CreateTimeEntryDto {
   @IsOptional()
   @IsBoolean()
   billable?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  hourlyRateHt?: number;
+
+  @IsOptional()
+  @IsString()
+  companyId?: string;
 
   @IsOptional()
   @IsString()

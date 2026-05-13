@@ -1,8 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, Save, X } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, ClipboardList } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { TableRowSkeleton } from '@/components/ui/Skeleton';
 
 interface Template {
   id: string;
@@ -14,8 +17,9 @@ interface Template {
 }
 
 export default function TemplatesPage() {
-  const [items, setItems] = useState<Template[]>([]);
+  const [items, setItems] = useState<Template[] | null>(null);
   const [editing, setEditing] = useState<Template | 'new' | null>(null);
+  const confirm = useConfirm();
 
   async function load() {
     setItems(await api.get('/response-templates'));
@@ -23,8 +27,14 @@ export default function TemplatesPage() {
 
   useEffect(() => { load(); }, []);
 
-  async function handleDelete(id: string) {
-    if (!confirm('Supprimer ce template ?')) return;
+  async function handleDelete(id: string, name: string) {
+    const ok = await confirm({
+      title: 'Supprimer ce template ?',
+      message: `« ${name} » sera supprime.`,
+      confirmLabel: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await api.delete('/response-templates/' + id);
       toast.success('Template supprime');
@@ -67,10 +77,19 @@ export default function TemplatesPage() {
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 ? (
-              <tr><td colSpan={5} className="p-6 text-center text-slate-400">Aucun template</td></tr>
+            {items === null ? (
+              Array.from({ length: 3 }).map((_, i) => <TableRowSkeleton key={i} cols={5} />)
+            ) : items.length === 0 ? (
+              <tr><td colSpan={5} className="p-0">
+                <EmptyState
+                  icon={ClipboardList}
+                  title="Aucun template"
+                  description="Creez des reponses pre-remplies pour gagner du temps sur les tickets recurrents."
+                  action={<button onClick={() => setEditing('new')} className="btn btn-primary"><Plus size={16} className="mr-1" />Nouveau template</button>}
+                />
+              </td></tr>
             ) : items.map((t) => (
-              <tr key={t.id} className="border-t hover:bg-slate-50">
+              <tr key={t.id} className="border-t hover:bg-slate-50 dark:hover:bg-slate-700/50">
                 <td className="p-3 font-medium">{t.name}</td>
                 <td className="p-3">{t.category ?? '-'}</td>
                 <td className="p-3">
@@ -82,10 +101,10 @@ export default function TemplatesPage() {
                 </td>
                 <td className="p-3 max-w-md truncate text-slate-500">{t.body.split('\n')[0]}</td>
                 <td className="p-3 flex gap-2 justify-end">
-                  <button onClick={() => setEditing(t)} className="text-slate-500 hover:text-mdo-600">
+                  <button onClick={() => setEditing(t)} aria-label={`Modifier ${t.name}`} className="text-slate-500 hover:text-mdo-600">
                     <Edit size={14} />
                   </button>
-                  <button onClick={() => handleDelete(t.id)} className="text-slate-500 hover:text-red-600">
+                  <button onClick={() => handleDelete(t.id, t.name)} aria-label={`Supprimer ${t.name}`} className="text-slate-500 hover:text-red-600">
                     <Trash2 size={14} />
                   </button>
                 </td>

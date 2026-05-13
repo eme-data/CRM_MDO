@@ -1,6 +1,7 @@
 'use client';
+import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Building2,
@@ -13,143 +14,191 @@ import {
   ClipboardList,
   Receipt,
   Server,
+  Shield,
+  ShieldCheck,
+  Activity,
   Layers,
   ListChecks,
   Calendar,
   BarChart3,
   Upload,
-  Settings,
   LogOut,
+  Clock,
+  User,
+  ChevronDown,
+  KeyRound,
+  FileBarChart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logout } from '@/lib/auth';
-import { useRouter } from 'next/navigation';
 import { NotificationBell } from './NotificationBell';
 import { ThemeToggle } from '../ThemeToggle';
 
-const nav = [
-  { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
-  { href: '/reports', label: 'Reporting', icon: BarChart3 },
-  { href: '/companies', label: 'Societes', icon: Building2 },
-  { href: '/contacts', label: 'Contacts', icon: UsersIcon },
-  { href: '/opportunities', label: 'Opportunites', icon: Target },
-  { href: '/contracts', label: 'Contrats', icon: FileText },
-  { href: '/invoices', label: 'Factures', icon: Receipt },
-  { href: '/tickets', label: 'Support', icon: LifeBuoy },
-  { href: '/interventions', label: 'Interventions', icon: Wrench },
-  { href: '/calendar', label: 'Calendrier', icon: Calendar },
-  { href: '/assets', label: 'Assets clients', icon: Server },
-  { href: '/tasks', label: 'Taches', icon: CheckSquare },
-  { href: '/templates', label: 'Templates', icon: ClipboardList },
+type NavItem = { href: string; label: string; icon: any };
+type NavSection = { title: string; items: NavItem[] };
+
+const sections: NavSection[] = [
+  {
+    title: 'Pilotage',
+    items: [
+      { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
+      { href: '/reports', label: 'Reporting', icon: BarChart3 },
+    ],
+  },
+  {
+    title: 'Commercial',
+    items: [
+      { href: '/companies', label: 'Societes', icon: Building2 },
+      { href: '/contacts', label: 'Contacts', icon: UsersIcon },
+      { href: '/opportunities', label: 'Opportunites', icon: Target },
+      { href: '/contracts', label: 'Contrats', icon: FileText },
+      { href: '/invoices', label: 'Factures', icon: Receipt },
+    ],
+  },
+  {
+    title: 'Service & Support',
+    items: [
+      { href: '/tickets', label: 'Support', icon: LifeBuoy },
+      { href: '/interventions', label: 'Interventions', icon: Wrench },
+      { href: '/calendar', label: 'Calendrier', icon: Calendar },
+    ],
+  },
+  {
+    title: 'Infogerance',
+    items: [
+      { href: '/assets', label: 'Assets clients', icon: Server },
+      { href: '/surveillance', label: 'Surveillance', icon: Shield },
+      { href: '/uptime', label: 'Uptime sites', icon: Activity },
+      { href: '/audit-dns', label: 'Audit DNS', icon: ShieldCheck },
+    ],
+  },
+  {
+    title: 'Outils',
+    items: [
+      { href: '/tasks', label: 'Taches', icon: CheckSquare },
+      { href: '/templates', label: 'Templates', icon: ClipboardList },
+    ],
+  },
 ];
+
+const adminItems: NavItem[] = [
+  { href: '/users', label: 'Utilisateurs', icon: UsersIcon },
+  { href: '/imports', label: 'Imports CSV', icon: Upload },
+  { href: '/admin/settings', label: 'API, SMTP, IMAP', icon: KeyRound },
+  { href: '/admin/billing', label: 'Facturation (Sellsy/Qonto)', icon: Receipt },
+  { href: '/admin/client-reports', label: 'Rapports clients mensuels', icon: FileBarChart },
+  { href: '/admin/time-billing', label: 'Facturation du temps', icon: Clock },
+  { href: '/admin/flexible-asset-types', label: 'Templates assets flexibles', icon: Layers },
+  { href: '/admin/runbooks', label: 'Runbooks / procedures', icon: ListChecks },
+  { href: '/admin/activity', label: "Journal d'activite", icon: ClipboardList },
+];
+
+function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        'group flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+        active
+          ? 'bg-mdo-600 text-white shadow-sm'
+          : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+      )}
+    >
+      <Icon size={18} className={active ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'} />
+      <span className="truncate">{item.label}</span>
+    </Link>
+  );
+}
 
 export function Sidebar({ user }: { user?: { firstName: string; lastName: string; role: string } }) {
   const pathname = usePathname();
   const router = useRouter();
+  const isAdmin = user?.role === 'ADMIN';
+  const adminActive = isAdmin && adminItems.some((i) => pathname?.startsWith(i.href));
+  const [adminOpen, setAdminOpen] = useState<boolean>(adminActive);
 
   async function handleLogout() {
     await logout();
     router.replace('/login');
   }
 
+  function isActive(href: string) {
+    return pathname === href || pathname?.startsWith(href + '/');
+  }
+
   return (
-    <aside className="w-64 bg-slate-900 text-white flex flex-col min-h-screen">
-      <div className="p-6 border-b border-slate-800">
-        <h1 className="text-xl font-bold text-white">CRM MDO</h1>
-        <p className="text-xs text-slate-400">Services IT &amp; Cybersecurite</p>
-        <p className="text-xs text-slate-500 mt-1">Ctrl+K pour rechercher</p>
+    <aside className="w-64 bg-slate-900 text-white flex flex-col min-h-screen border-r border-slate-800">
+      <div className="px-6 py-5 border-b border-slate-800">
+        <h1 className="text-xl font-bold text-white tracking-tight">CRM MDO</h1>
+        <p className="text-xs text-slate-400 mt-0.5">Services IT &amp; Cybersecurite</p>
+        <p className="text-[11px] text-slate-500 mt-2 inline-flex items-center gap-1">
+          <kbd className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 font-mono text-[10px]">Ctrl</kbd>
+          <span>+</span>
+          <kbd className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 font-mono text-[10px]">K</kbd>
+          <span>rechercher</span>
+        </p>
       </div>
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {nav.map((item) => {
-          const Icon = item.icon;
-          const active = pathname === item.href || pathname?.startsWith(item.href + '/');
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-                active ? 'bg-mdo-600 text-white' : 'text-slate-300 hover:bg-slate-800',
-              )}
+
+      <nav className="flex-1 px-3 py-4 overflow-y-auto sidebar-scroll">
+        {sections.map((section) => (
+          <div key={section.title} className="mb-4">
+            <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              {section.title}
+            </p>
+            <div className="space-y-0.5 mt-1">
+              {section.items.map((item) => (
+                <NavLink key={item.href} item={item} active={isActive(item.href)} />
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {isAdmin && (
+          <div className="mb-4">
+            <button
+              onClick={() => setAdminOpen((o) => !o)}
+              aria-expanded={adminOpen}
+              className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors"
             >
-              <Icon size={18} />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-      <div className="p-4 border-t border-slate-800 space-y-2">
-        {user && (
-          <div className="px-3 py-2 text-sm">
-            <div className="font-medium">{user.firstName} {user.lastName}</div>
-            <div className="text-xs text-slate-400">{user.role}</div>
+              <span>Administration</span>
+              <ChevronDown size={12} className={cn('transition-transform', adminOpen && 'rotate-180')} />
+            </button>
+            {adminOpen && (
+              <div className="space-y-0.5 mt-1">
+                {adminItems.map((item) => (
+                  <NavLink key={item.href} item={item} active={isActive(item.href)} />
+                ))}
+              </div>
+            )}
           </div>
         )}
-        <NotificationBell />
-        <ThemeToggle />
-        <Link
-          href="/time"
-          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
-        >
-          <Settings size={18} /> Mon temps
-        </Link>
-        <Link
-          href="/settings"
-          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
-        >
-          <Settings size={18} /> Mon profil
-        </Link>
-        {user?.role === 'ADMIN' && (
-          <>
-            <Link
-              href="/users"
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
-            >
-              <Settings size={18} /> Utilisateurs
-            </Link>
-            <Link
-              href="/imports"
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
-            >
-              <Upload size={18} /> Imports CSV
-            </Link>
-            <Link
-              href="/admin/settings"
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
-            >
-              <Settings size={18} /> Admin (cles, SMTP, IMAP)
-            </Link>
-            <Link
-              href="/admin/billing"
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
-            >
-              <Receipt size={18} /> Facturation (Sellsy/Qonto)
-            </Link>
-            <Link
-              href="/admin/flexible-asset-types"
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
-            >
-              <Layers size={18} /> Templates assets flexibles
-            </Link>
-            <Link
-              href="/admin/runbooks"
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
-            >
-              <ListChecks size={18} /> Runbooks / procedures
-            </Link>
-            <Link
-              href="/admin/activity"
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
-            >
-              <Settings size={18} /> Journal d'activite
-            </Link>
-          </>
+      </nav>
+
+      <div className="px-3 py-3 border-t border-slate-800 space-y-1">
+        {user && (
+          <div className="flex items-center gap-3 px-3 py-2 mb-1 rounded-md bg-slate-800/50">
+            <div className="h-8 w-8 rounded-full bg-mdo-600 text-white flex items-center justify-center text-xs font-semibold shrink-0">
+              {user.firstName[0]}{user.lastName[0]}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium truncate">{user.firstName} {user.lastName}</div>
+              <div className="text-[11px] text-slate-400 truncate">{user.role}</div>
+            </div>
+          </div>
         )}
+        <div className="flex items-center justify-between gap-2 px-1">
+          <NotificationBell />
+          <ThemeToggle />
+        </div>
+        <NavLink item={{ href: '/time', label: 'Mon temps', icon: Clock }} active={isActive('/time')} />
+        <NavLink item={{ href: '/settings', label: 'Mon profil', icon: User }} active={isActive('/settings')} />
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
         >
-          <LogOut size={18} /> Deconnexion
+          <LogOut size={18} className="text-slate-400" /> Deconnexion
         </button>
       </div>
     </aside>

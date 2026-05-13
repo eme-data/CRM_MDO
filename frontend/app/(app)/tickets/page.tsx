@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  Plus, Search, AlertTriangle, LayoutGrid, List as ListIcon, Trash2, UserCheck,
+  Plus, Search, AlertTriangle, LayoutGrid, List as ListIcon, Trash2, UserCheck, LifeBuoy,
 } from 'lucide-react';
 import {
   DndContext, useDraggable, useDroppable,
@@ -10,6 +10,9 @@ import {
 } from '@dnd-kit/core';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { TableRowSkeleton } from '@/components/ui/Skeleton';
 import {
   formatDate,
   ticketStatusLabel,
@@ -47,6 +50,7 @@ export default function TicketsPage() {
 
   // Bulk selection
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const confirm = useConfirm();
   function toggle(id: string) {
     setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
@@ -129,11 +133,19 @@ export default function TicketsPage() {
   }
   async function bulkDelete() {
     if (selected.size === 0) return;
-    if (!confirm('Supprimer ' + selected.size + ' ticket(s) ?')) return;
-    await api.post('/tickets/bulk-delete', { ids: Array.from(selected) });
-    toast.success('Supprime');
-    setSelected(new Set());
-    load();
+    const ok = await confirm({
+      title: `Supprimer ${selected.size} ticket${selected.size > 1 ? 's' : ''} ?`,
+      message: 'Les tickets selectionnes seront definitivement supprimes avec leurs reponses et pieces jointes.',
+      confirmLabel: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.post('/tickets/bulk-delete', { ids: Array.from(selected) });
+      toast.success(`${selected.size} ticket(s) supprime(s)`);
+      setSelected(new Set());
+      load();
+    } catch (err: any) { toast.error(err.message); }
   }
 
   return (
@@ -215,9 +227,18 @@ export default function TicketsPage() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={9} className="p-6 text-center text-slate-400">Chargement...</td></tr>
+                  Array.from({ length: 5 }).map((_, i) => <TableRowSkeleton key={i} cols={9} />)
                 ) : tickets.length === 0 ? (
-                  <tr><td colSpan={9} className="p-6 text-center text-slate-400">Aucun ticket</td></tr>
+                  <tr><td colSpan={9} className="p-0">
+                    <EmptyState
+                      icon={LifeBuoy}
+                      title="Aucun ticket"
+                      description={search || status || priority ? "Aucun ticket ne correspond aux filtres actifs." : "Les tickets crees par vous, par les clients ou via l'inbox IMAP apparaitront ici."}
+                      action={!search && !status && !priority ? (
+                        <Link href="/tickets/new" className="btn btn-primary"><Plus size={16} className="mr-1" />Nouveau ticket</Link>
+                      ) : undefined}
+                    />
+                  </td></tr>
                 ) : tickets.map((t) => {
                   const overdue = t.dueDate && new Date(t.dueDate) < new Date() && !['RESOLVED', 'CLOSED', 'CANCELLED'].includes(t.status);
                   return (

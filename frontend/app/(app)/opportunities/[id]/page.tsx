@@ -6,12 +6,15 @@ import { toast } from 'sonner';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatEuro, formatDate, stageLabel } from '@/lib/utils';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 export default function OpportunityDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
   const [opp, setOpp] = useState<any>(null);
+  const confirm = useConfirm();
 
   async function load() { setOpp(await api.get('/opportunities/' + id)); }
   useEffect(() => { load(); }, [id]);
@@ -23,13 +26,29 @@ export default function OpportunityDetailPage() {
   }
 
   async function handleDelete() {
-    if (!confirm('Supprimer cette opportunite ?')) return;
-    await api.delete('/opportunities/' + id);
-    toast.success('Opportunite supprimee');
-    router.replace('/opportunities');
+    const ok = await confirm({
+      title: 'Supprimer cette opportunite ?',
+      message: `« ${opp?.title ?? 'Cette opportunite'} » sera definitivement supprimee.`,
+      confirmLabel: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.delete('/opportunities/' + id);
+      toast.success('Opportunite supprimee');
+      router.replace('/opportunities');
+    } catch (err: any) { toast.error(err.message); }
   }
 
-  if (!opp) return <div>Chargement...</div>;
+  if (!opp) return (
+    <div className="space-y-6 max-w-4xl">
+      <Skeleton className="h-4 w-32" />
+      <Skeleton className="h-10 w-80" />
+      <div className="card p-6 grid grid-cols-2 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-5" />)}
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6 max-w-4xl">

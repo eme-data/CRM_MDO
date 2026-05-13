@@ -69,6 +69,8 @@ export class TimeEntriesService {
         durationMin: duration,
         description: dto.description,
         billable: dto.billable ?? true,
+        hourlyRateHt: dto.hourlyRateHt,
+        companyId: dto.companyId,
         ticketId: dto.ticketId,
         interventionId: dto.interventionId,
         contractId: dto.contractId,
@@ -186,4 +188,174 @@ export class TimeEntriesService {
       });
     }
   }
+
+  // ============================================================
+  // FACTURATION DU TEMPS (admin)
+  // ============================================================
+  // Resolveur de companyId effectif d'une entree : direct si TimeEntry.companyId,
+  // sinon via ticket.companyId, sinon intervention.companyId, sinon contract.companyId.
+  // Retourne null si l'entree est totalement non rattachee (pause, admin interne).
+  private resolveCompanyId(e: {
+    companyId: string | null;
+    ticket: { companyId: string } | null;
+    intervention: { companyId: string } | null;
+    contract: { companyId: string } | null;
+  }): string | null {
+    return e.companyId
+      ?? e.ticket?.companyId
+      ?? e.intervention?.companyId
+      ?? e.contract?.companyId
+      ?? null;
+  }
+
+  /**
+   * Agregat de facturation : pour chaque societe, total d'heures billable
+   * sur la periode, montant HT estime, statut facture/non facture.
+   */
+  async billingByCompany(params: { from: string; to: string; onlyUnbilled?: boolean }) {
+    const where: Prisma.TimeEntryWhereInput = {
+      endedAt: { not: null },
+      billable: true,
+      startedAt: { gte: new Date(params.from), lte: new Date(params.to) },
+    };
+    if (params.onlyUnbilled) where.invoicedAt = null;
+
+    const entries = await this.prisma.timeEntry.findMany({
+      where,
+      include: {
+        ticket: { select: { id: true, reference: true, companyId: true } },
+        intervention: { select: { id: true, title: true, companyId: true } },
+        contract: { select: { id: true, reference: true, companyId: true } },
+      },
+    });
+
+    // Recupere les noms de societes en un seul findMany
+    const companyIds = new Set<string>();
+    for (const e of entries) {
+      const cid = this.resolveCompanyId(e);
+      if (cid) companyIds.add(cid);
+    }
+    const companies = await this.prisma.company.findMany({
+      where: { id: { in: Array.from(companyIds) } },
+      select: { id: true, name: true },
+    });
+    const companyMap = new Map(companies.map((c) => [c.id, c.name]));
+
+    const buckets = new Map<string, {
+      companyId: string | null;
+      companyName: string;
+      totalMin: number;
+      billedMin: number;
+      unbilledMin: number;
+      estimatedHt: number;
+      entries: number;
+    }>();
+    const NO_COMPANY = '__none__';
+
+    for (const e of entries) {
+      const cid = this.resolveCompanyId(e);
+      const key = cid ?? NO_COMPANY;
+      if (!buckets.has(key)) {
+        buckets.set(key, {
+          companyId: cid,
+          companyName: cid ? (companyMap.get(cid) ?? 'Inconnu') : 'Non rattache',
+          totalMin: 0,
+          billedMin: 0,
+          unbilledMin: 0,
+          estimatedHt: 0,
+          entries: 0,
+        });
+      }
+      const b = buckets.get(key)!;
+      const minutes = e.durationMin ?? 0;
+      b.totalMin += minutes;
+      b.entries += 1;
+      if (e.invoicedAt) b.billedMin += minutes;
+      else b.unbilledMin += minutes;
+      const rate = e.hourlyRateHt ? Number(e.hourlyRateHt) : 0;
+      b.estimatedHt += (minutes / 60) * rate;
+    }
+
+    return Array.from(buckets.values()).sort((a, b) => b.totalMin - a.totalMin);
+  }
+
+  /** Detail des entries facturables d'une societe sur une periode. */
+  async billingDetail(params: { companyId: string; from: string; to: string; onlyUnbilled?: boolean }) {
+    const where: Prisma.TimeEntryWhereInput = {
+      endedAt: { not: null },
+      billable: true,
+      startedAt: { gte: new Date(params.from), lte: new Date(params.to) },
+      OR: [
+        { companyId: params.companyId },
+        { ticket: { companyId: params.companyId } },
+        { intervention: { companyId: params.companyId } },
+        { contract: { companyId: params.companyId } },
+      ],
+    };
+    if (params.onlyUnbilled) where.invoicedAt = null;
+    return this.prisma.timeEntry.findMany({
+      where,
+      orderBy: { startedAt: 'asc' },
+      include: {
+        user: { select: { firstName: true, lastName: true } },
+        ticket: { select: { reference: true, title: true } },
+        intervention: { select: { title: true } },
+        contract: { select: { reference: true } },
+      },
+    });
+  }
+
+  /** Marque une liste d'entries comme facturees (ex. apres envoi vers Sellsy). */
+  async markInvoiced(ids: string[], invoicerId: string, invoiceReference?: string) {
+    if (ids.length === 0) return { updated: 0 };
+    const r = await this.prisma.timeEntry.updateMany({
+      where: { id: { in: ids }, invoicedAt: null },
+      data: {
+        invoicedAt: new Date(),
+        invoicedById: invoicerId,
+        invoiceReference: invoiceReference ?? null,
+      },
+    });
+    return { updated: r.count };
+  }
+
+  async unmarkInvoiced(ids: string[]) {
+    if (ids.length === 0) return { updated: 0 };
+    const r = await this.prisma.timeEntry.updateMany({
+      where: { id: { in: ids } },
+      data: { invoicedAt: null, invoicedById: null, invoiceReference: null },
+    });
+    return { updated: r.count };
+  }
+
+  /** Export CSV des entries facturables d'une societe (a coller dans Sellsy). */
+  async exportCsv(params: { companyId: string; from: string; to: string; onlyUnbilled?: boolean }): Promise<string> {
+    const items = await this.billingDetail(params);
+    const lines: string[] = [];
+    // En-tete CSV (UTF-8 avec BOM pour Excel FR)
+    lines.push('Date;Duree (h);Description;Reference;Technicien;Taux HT;Montant HT');
+    for (const e of items) {
+      const date = e.startedAt.toISOString().slice(0, 10);
+      const hours = ((e.durationMin ?? 0) / 60).toFixed(2);
+      const desc = csvEscape(
+        e.description
+        ?? e.ticket?.title
+        ?? e.intervention?.title
+        ?? 'Prestation',
+      );
+      const ref = csvEscape(e.ticket?.reference ?? e.contract?.reference ?? '');
+      const tech = csvEscape(e.user.firstName + ' ' + e.user.lastName);
+      const rate = e.hourlyRateHt ? Number(e.hourlyRateHt).toFixed(2) : '';
+      const amount = e.hourlyRateHt ? ((Number(e.hourlyRateHt) * (e.durationMin ?? 0)) / 60).toFixed(2) : '';
+      lines.push([date, hours, desc, ref, tech, rate, amount].join(';'));
+    }
+    return '﻿' + lines.join('\n');
+  }
+}
+
+function csvEscape(s: string): string {
+  if (s.includes(';') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
 }

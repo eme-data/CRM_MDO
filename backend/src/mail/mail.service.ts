@@ -265,8 +265,201 @@ export class MailService {
   }
 
   // ============================================================
+  // Uptime monitoring : alerte DOWN / UP
+  // ============================================================
+
+  async sendUptimeAlert(params: {
+    to: string;
+    status: 'UP' | 'DOWN';
+    monitor: { id: string; name: string; url: string };
+    companyName: string;
+    message: string;
+  }) {
+    const isDown = params.status === 'DOWN';
+    const subject = isDown
+      ? '[ALERTE] Site DOWN - ' + params.monitor.name
+      : '[OK] Site retabli - ' + params.monitor.name;
+
+    const color = isDown ? '#b91c1c' : '#059669';
+    const headline = isDown ? 'Site indisponible' : 'Site retabli';
+
+    const html = `
+<!DOCTYPE html>
+<html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; color:#1f2937;">
+  <h2 style="color:${color};">${headline}</h2>
+  <table style="border-collapse:collapse;width:100%;margin:20px 0;">
+    <tr><td style="padding:8px;border:1px solid #ddd;"><strong>Site</strong></td><td style="padding:8px;border:1px solid #ddd;">${this.escapeHtml(params.monitor.name)}</td></tr>
+    <tr><td style="padding:8px;border:1px solid #ddd;"><strong>Client</strong></td><td style="padding:8px;border:1px solid #ddd;">${this.escapeHtml(params.companyName)}</td></tr>
+    <tr><td style="padding:8px;border:1px solid #ddd;"><strong>URL</strong></td><td style="padding:8px;border:1px solid #ddd;"><code>${this.escapeHtml(params.monitor.url)}</code></td></tr>
+    <tr><td style="padding:8px;border:1px solid #ddd;"><strong>Detail</strong></td><td style="padding:8px;border:1px solid #ddd;">${this.escapeHtml(params.message)}</td></tr>
+  </table>
+  <p style="color:#666;font-size:12px;">CRM MDO Services - alerte uptime automatique.</p>
+</body></html>`;
+
+    await this.send({
+      to: params.to,
+      subject,
+      html,
+      text:
+        headline +
+        ' : ' +
+        params.monitor.name +
+        ' (' +
+        params.companyName +
+        ')\nURL : ' +
+        params.monitor.url +
+        '\n' +
+        params.message,
+      relatedEntity: 'UptimeMonitor',
+      relatedEntityId: params.monitor.id,
+    });
+  }
+
+  // ============================================================
   // Contrats : alertes de renouvellement (existant)
   // ============================================================
+
+  // ============================================================
+  // Assets : alertes SSL / domaines (monitoring auto)
+  // ============================================================
+
+  async sendAssetExpiryAlert(params: {
+    to: string;
+    kind: 'SSL' | 'DOMAIN';
+    daysRemaining: number;
+    asset: { id: string; name: string; identifier: string | null };
+    company: { name: string };
+  }) {
+    const label = params.kind === 'SSL' ? 'Certificat SSL' : 'Domaine';
+    const urgency =
+      params.daysRemaining <= 7
+        ? 'URGENT'
+        : params.daysRemaining <= 14
+          ? 'IMPORTANT'
+          : 'INFO';
+    const subject =
+      '[' +
+      urgency +
+      '] ' +
+      label +
+      ' ' +
+      (params.asset.identifier ?? params.asset.name) +
+      ' expire dans ' +
+      params.daysRemaining +
+      ' jour(s)';
+
+    const html = `
+<!DOCTYPE html>
+<html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; color:#1f2937;">
+  <h2 style="color:#b91c1c;">${label} bientot expire</h2>
+  <p>Le ${label.toLowerCase()} ci-dessous arrive a echeance dans <strong>${params.daysRemaining} jour(s)</strong> :</p>
+  <table style="border-collapse:collapse;width:100%;margin:20px 0;">
+    <tr><td style="padding:8px;border:1px solid #ddd;"><strong>Client</strong></td><td style="padding:8px;border:1px solid #ddd;">${this.escapeHtml(params.company.name)}</td></tr>
+    <tr><td style="padding:8px;border:1px solid #ddd;"><strong>Asset</strong></td><td style="padding:8px;border:1px solid #ddd;">${this.escapeHtml(params.asset.name)}</td></tr>
+    <tr><td style="padding:8px;border:1px solid #ddd;"><strong>Identifiant</strong></td><td style="padding:8px;border:1px solid #ddd;"><code>${this.escapeHtml(params.asset.identifier ?? '-')}</code></td></tr>
+    <tr><td style="padding:8px;border:1px solid #ddd;"><strong>Type</strong></td><td style="padding:8px;border:1px solid #ddd;">${label}</td></tr>
+  </table>
+  <p>Pensez a planifier le renouvellement avec le client.</p>
+  <p style="color:#666;font-size:12px;">CRM MDO Services - alerte automatique de surveillance.</p>
+</body></html>`;
+
+    await this.send({
+      to: params.to,
+      subject,
+      html,
+      text:
+        label +
+        ' ' +
+        (params.asset.identifier ?? params.asset.name) +
+        ' (client ' +
+        params.company.name +
+        ') expire dans ' +
+        params.daysRemaining +
+        ' jour(s).',
+      relatedEntity: 'Asset',
+      relatedEntityId: params.asset.id,
+    });
+  }
+
+  async sendAssetWeeklyDigest(params: {
+    to: string;
+    items: Array<{
+      kind: 'SSL' | 'DOMAIN';
+      daysRemaining: number;
+      assetName: string;
+      identifier: string | null;
+      companyName: string;
+      expiresAt: Date;
+    }>;
+  }) {
+    if (params.items.length === 0) return;
+    const subject =
+      '[CRM] Recap surveillance - ' +
+      params.items.length +
+      ' asset(s) a renouveler dans les 60 jours';
+
+    const sorted = [...params.items].sort((a, b) => a.daysRemaining - b.daysRemaining);
+    const rows = sorted
+      .map((it) => {
+        const color = it.daysRemaining <= 7 ? '#b91c1c' : it.daysRemaining <= 30 ? '#b45309' : '#1f2937';
+        const dateFr = format(it.expiresAt, 'PPP', { locale: fr });
+        const kindLabel = it.kind === 'SSL' ? 'Certificat' : 'Domaine';
+        return (
+          '<tr>' +
+          '<td style="padding:6px 8px;border:1px solid #e5e7eb;">' + kindLabel + '</td>' +
+          '<td style="padding:6px 8px;border:1px solid #e5e7eb;">' + this.escapeHtml(it.companyName) + '</td>' +
+          '<td style="padding:6px 8px;border:1px solid #e5e7eb;"><code>' + this.escapeHtml(it.identifier ?? it.assetName) + '</code></td>' +
+          '<td style="padding:6px 8px;border:1px solid #e5e7eb;">' + dateFr + '</td>' +
+          '<td style="padding:6px 8px;border:1px solid #e5e7eb;color:' + color + ';font-weight:600;">' + it.daysRemaining + ' j</td>' +
+          '</tr>'
+        );
+      })
+      .join('');
+
+    const html = `
+<!DOCTYPE html>
+<html><body style="font-family: Arial, sans-serif; max-width: 760px; margin: auto; color:#1f2937;">
+  <h2 style="color:#1d4ed8;">Surveillance hebdomadaire - certificats &amp; domaines</h2>
+  <p>Voici les <strong>${params.items.length}</strong> asset(s) qui arrivent a echeance dans les 60 prochains jours :</p>
+  <table style="border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;">
+    <thead style="background:#f3f4f6;">
+      <tr>
+        <th style="padding:8px;border:1px solid #e5e7eb;text-align:left;">Type</th>
+        <th style="padding:8px;border:1px solid #e5e7eb;text-align:left;">Client</th>
+        <th style="padding:8px;border:1px solid #e5e7eb;text-align:left;">Identifiant</th>
+        <th style="padding:8px;border:1px solid #e5e7eb;text-align:left;">Expire le</th>
+        <th style="padding:8px;border:1px solid #e5e7eb;text-align:left;">Restant</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <p style="color:#666;font-size:12px;">CRM MDO Services - recap automatique tous les lundis a 8h.</p>
+</body></html>`;
+
+    await this.send({
+      to: params.to,
+      subject,
+      html,
+      text:
+        params.items.length +
+        ' asset(s) expirent dans les 60 jours :\n' +
+        sorted
+          .map(
+            (it) =>
+              '- ' +
+              (it.kind === 'SSL' ? 'Cert' : 'Dom') +
+              ' ' +
+              (it.identifier ?? it.assetName) +
+              ' (' +
+              it.companyName +
+              ') : ' +
+              it.daysRemaining +
+              ' j',
+          )
+          .join('\n'),
+      relatedEntity: 'AssetDigest',
+    });
+  }
 
   async sendContractRenewalAlert(params: ContractAlertParams) {
     const endDateFr = format(params.contract.endDate, 'PPP', { locale: fr });

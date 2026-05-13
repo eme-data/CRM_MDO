@@ -15,24 +15,31 @@
 body {
   background-color: var(--bg);
   color: var(--fg);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+*:focus-visible {
+  @apply outline-none ring-2 ring-mdo-500 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 rounded-sm;
 }
 
 .btn {
-  @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors;
+  @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
 }
 .btn-primary {
-  @apply bg-mdo-500 text-white hover:bg-mdo-600;
+  @apply bg-mdo-500 text-white hover:bg-mdo-600 shadow-sm;
 }
 .btn-secondary {
   @apply border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700;
 }
 .btn-danger {
-  @apply bg-red-600 text-white hover:bg-red-700;
+  @apply bg-red-600 text-white hover:bg-red-700 shadow-sm;
 }
 
 .input {
-  @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-mdo-500 focus:outline-none focus:ring-1 focus:ring-mdo-500
-    dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100;
+  @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400
+    focus:border-mdo-500 focus:outline-none focus:ring-1 focus:ring-mdo-500
+    dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500
+    disabled:opacity-60 disabled:cursor-not-allowed;
 }
 
 .label {
@@ -45,4 +52,39 @@ body {
 
 .badge {
   @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+}
+
+/* Scrollbar fine pour la sidebar (Firefox + WebKit) */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(51 65 85) transparent;
+}
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: rgb(51 65 85);
+  border-radius: 3px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(71 85 105);
+}
+
+/* Animation d'entree pour les modales / dialogs */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-in.fade-in {
+  animation: fade-in 120ms ease-out;
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-in.scale-in {
+  animation: scale-in 140ms ease-out;
 }

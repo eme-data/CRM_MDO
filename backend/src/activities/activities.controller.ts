@@ -1,12 +1,17 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 
+// Journal d'activite : sensible (qui a fait quoi, quand, sur quelle entite).
+// Reserve aux ADMIN — sert d'audit trail et ne doit pas etre consulte par
+// les utilisateurs operationnels (SALES, MANAGER).
 @ApiTags('Activities')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
+@Roles(Role.ADMIN)
 @Controller('activities')
 export class ActivitiesController {
   constructor(private readonly prisma: PrismaService) {}

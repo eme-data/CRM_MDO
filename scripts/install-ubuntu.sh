@@ -36,10 +36,16 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 source /etc/os-release
-if [[ "${VERSION_ID}" != "24.04" ]]; then
-  warn "Ce script est concu pour Ubuntu 24.04. Version detectee : ${VERSION_ID}"
-  read -rp "Continuer quand meme ? (o/N) " ans
-  [[ "$ans" =~ ^[oO]$ ]] || exit 1
+SUPPORTED=("ubuntu:22.04" "ubuntu:24.04" "debian:12")
+CURRENT="${ID}:${VERSION_ID}"
+if [[ ! " ${SUPPORTED[*]} " =~ " ${CURRENT} " ]]; then
+  warn "Ce script est valide pour : ${SUPPORTED[*]}. Detecte : ${CURRENT}"
+  if [[ "${ASSUME_YES:-0}" == "1" ]]; then
+    warn "ASSUME_YES=1 : on continue."
+  else
+    read -rp "Continuer quand meme ? (o/N) " ans
+    [[ "$ans" =~ ^[oO]$ ]] || exit 1
+  fi
 fi
 
 log "Installation CRM MDO Services sur ${DOMAIN}"
@@ -68,9 +74,12 @@ fi
 if ! command -v docker >/dev/null 2>&1; then
   log "Installation Docker..."
   install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  DOCKER_VENDOR="${ID}"
+  # Pour les derives Ubuntu (Mint, Pop!_OS) on retombe sur ubuntu
+  [[ "${ID_LIKE:-}" =~ ubuntu ]] && DOCKER_VENDOR=ubuntu
+  curl -fsSL "https://download.docker.com/linux/${DOCKER_VENDOR}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
   chmod a+r /etc/apt/keyrings/docker.gpg
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release; echo "$VERSION_CODENAME") stable" \
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${DOCKER_VENDOR} $(. /etc/os-release; echo "$VERSION_CODENAME") stable" \
     > /etc/apt/sources.list.d/docker.list
   apt-get update -qq
   apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
@@ -93,16 +102,17 @@ ufw allow 443/udp comment "HTTP/3 (Caddy)"
 ufw --force enable
 ok "UFW actif"
 
-# ----- CrowdSec --------------------------------------------------------------
+# ----- CrowdSec (optionnel) --------------------------------------------------
 # CrowdSec remplace fail2ban : detection multi-source (sshd + Caddy access logs)
-# avec partage de blocklist communautaire. Le bouncer iptables applique les
-# decisions (DROP) sans dependance sur netfilter-persistent.
-if ! command -v cscli >/dev/null 2>&1; then
+# avec partage de blocklist communautaire. ~250 MB RAM, donc desactivable sur
+# les petits VPS (<2 Go) via SKIP_CROWDSEC=1.
+if [[ "${SKIP_CROWDSEC:-0}" == "1" ]]; then
+  warn "SKIP_CROWDSEC=1 : CrowdSec non installe (recommande sur VPS <2 Go RAM)"
+elif ! command -v cscli >/dev/null 2>&1; then
   log "Installation CrowdSec..."
   curl -fsSL https://install.crowdsec.net | bash
   apt-get install -y -qq crowdsec
   apt-get install -y -qq crowdsec-firewall-bouncer-iptables
-  # Collections : sshd (login bruteforce SSH) + base-http-scenarios (scans HTTP)
   cscli collections install crowdsecurity/sshd >/dev/null 2>&1 || true
   cscli collections install crowdsecurity/base-http-scenarios >/dev/null 2>&1 || true
   cscli collections install crowdsecurity/caddy >/dev/null 2>&1 || true
@@ -222,8 +232,12 @@ if [[ -n "${RESOLVED_IP}" && "${RESOLVED_IP}" == "${SERVER_IP}" ]]; then
 else
   warn "${DOMAIN} resout vers '${RESOLVED_IP:-rien}' mais ce serveur est '${SERVER_IP:-inconnu}'"
   warn "Assurez-vous que le DNS est a jour avant que Let's Encrypt ne tente de delivrer le certificat"
-  read -rp "Continuer quand meme ? (o/N) " ans
-  [[ "$ans" =~ ^[oO]$ ]] || exit 1
+  if [[ "${ASSUME_YES:-0}" == "1" ]]; then
+    warn "ASSUME_YES=1 : on continue malgre le DNS non aligne."
+  else
+    read -rp "Continuer quand meme ? (o/N) " ans
+    [[ "$ans" =~ ^[oO]$ ]] || exit 1
+  fi
 fi
 
 # ----- Build et demarrage ----------------------------------------------------

@@ -1,9 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Building2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { companyStatusLabel, sectorLabel } from '@/lib/utils';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { TableRowSkeleton } from '@/components/ui/Skeleton';
 
 interface Company {
   id: string;
@@ -81,12 +83,21 @@ export default function CompaniesPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className="p-6 text-center text-slate-400">Chargement...</td></tr>
+              Array.from({ length: 5 }).map((_, i) => <TableRowSkeleton key={i} cols={7} />)
             ) : companies.length === 0 ? (
-              <tr><td colSpan={7} className="p-6 text-center text-slate-400">Aucune societe</td></tr>
+              <tr><td colSpan={7} className="p-0">
+                <EmptyState
+                  icon={Building2}
+                  title="Aucune societe"
+                  description={search || status ? "Aucune societe ne correspond aux filtres actifs." : "Commencez par ajouter votre premiere societe (prospect ou client)."}
+                  action={!search && !status ? (
+                    <Link href="/companies/new" className="btn btn-primary"><Plus size={16} className="mr-1" />Nouvelle societe</Link>
+                  ) : undefined}
+                />
+              </td></tr>
             ) : (
               companies.map((c) => (
-                <tr key={c.id} className="border-t hover:bg-slate-50">
+                <tr key={c.id} className="border-t hover:bg-slate-50 dark:hover:bg-slate-700/50">
                   <td className="p-3">
                     <Link href={'/companies/' + c.id} className="font-medium text-mdo-600 hover:underline">
                       {c.name}

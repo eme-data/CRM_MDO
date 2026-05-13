@@ -2,9 +2,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Plus, AlertTriangle, Trash2, RefreshCw, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Plus, AlertTriangle, Trash2, RefreshCw, ShieldCheck, ShieldAlert, Bell, BellOff, Search, Server } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatDate, formatEuro, daysUntil } from '@/lib/utils';
+import { formatDate, daysUntil } from '@/lib/utils';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { TableRowSkeleton } from '@/components/ui/Skeleton';
 
 const TYPE_LABEL: Record<string, string> = {
   HARDWARE: 'Materiel', LICENSE: 'Licence', SOFTWARE: 'Logiciel',
@@ -15,20 +18,25 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function AssetsPage() {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<any[] | null>(null);
   const [companies, setCompanies] = useState<any[]>([]);
   const [filterType, setFilterType] = useState('');
+  const [filterExpiring, setFilterExpiring] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [draft, setDraft] = useState<any>({ type: 'HARDWARE', status: 'ACTIVE' });
+  const [draft, setDraft] = useState<any>({ type: 'HARDWARE', status: 'ACTIVE', monitoringEnabled: true });
+  const confirm = useConfirm();
 
   async function load() {
-    const p = filterType ? '?type=' + filterType : '';
-    setItems(await api.get('/assets' + p));
+    const params = new URLSearchParams();
+    if (filterType) params.set('type', filterType);
+    if (filterExpiring) params.set('expiringInDays', filterExpiring);
+    const qs = params.toString();
+    setItems(await api.get('/assets' + (qs ? '?' + qs : '')));
   }
   useEffect(() => {
     load();
     api.get('/companies?pageSize=500').then((r) => setCompanies(r.items));
-  }, [filterType]);
+  }, [filterType, filterExpiring]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -36,15 +44,34 @@ export default function AssetsPage() {
       await api.post('/assets', { ...draft, costHt: draft.costHt ? Number(draft.costHt) : undefined });
       toast.success('Asset cree');
       setShowForm(false);
-      setDraft({ type: 'HARDWARE', status: 'ACTIVE' });
+      setDraft({ type: 'HARDWARE', status: 'ACTIVE', monitoringEnabled: true });
       load();
     } catch (err: any) { toast.error(err.message); }
   }
 
-  async function remove(id: string) {
-    if (!confirm('Supprimer cet asset ?')) return;
-    await api.delete('/assets/' + id);
-    load();
+  async function remove(id: string, name: string) {
+    const ok = await confirm({
+      title: 'Supprimer cet asset ?',
+      message: `« ${name} » sera definitivement retire du CRM. Cette action est irreversible.`,
+      confirmLabel: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.delete('/assets/' + id);
+      toast.success('Asset supprime');
+      load();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  }
+
+  async function toggleMonitoring(a: any) {
+    try {
+      await api.patch('/assets/' + a.id, { monitoringEnabled: !a.monitoringEnabled });
+      toast.success(a.monitoringEnabled ? 'Surveillance desactivee' : 'Surveillance activee');
+      load();
+    } catch (err: any) { toast.error(err.message); }
   }
 
   async function checkMonitoring(id: string, name: string) {
@@ -98,6 +125,23 @@ export default function AssetsPage() {
             <div><label className="label">Expire le</label><input type="date" className="input" onChange={(e) => set('expiresAt', e.target.value)} /></div>
             <div><label className="label">Cout HT</label><input type="number" step="0.01" className="input" onChange={(e) => set('costHt', e.target.value)} /></div>
           </div>
+          {(draft.type === 'CERTIFICATE' || draft.type === 'DOMAIN') && (
+            <div className="flex items-start gap-2 rounded-md bg-mdo-50 dark:bg-slate-700 p-3">
+              <input
+                id="monitoringEnabled"
+                type="checkbox"
+                className="mt-0.5"
+                checked={draft.monitoringEnabled !== false}
+                onChange={(e) => set('monitoringEnabled', e.target.checked)}
+              />
+              <label htmlFor="monitoringEnabled" className="text-sm">
+                <span className="font-medium">Surveillance automatique</span>
+                <span className="block text-xs text-slate-500 dark:text-slate-300">
+                  Verification quotidienne (TLS / WHOIS) et alerte (notif + email) a 30, 14, 7 et 1 jour(s) avant expiration. L'identifiant doit etre un FQDN (ex. <code>crm.mdoservices.fr</code>) pour un certificat, ou un domaine (ex. <code>mdoservices.fr</code>) pour un nom de domaine.
+                </span>
+              </label>
+            </div>
+          )}
           <div className="flex gap-2">
             <button type="submit" className="btn btn-primary">Creer</button>
             <button type="button" onClick={() => setShowForm(false)} className="btn btn-secondary">Annuler</button>
@@ -105,16 +149,23 @@ export default function AssetsPage() {
         </form>
       )}
 
-      <div className="card p-4">
+      <div className="card p-4 flex flex-wrap items-center gap-3">
         <select className="input max-w-xs" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
           <option value="">Tous types</option>
           {Object.entries(TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <select className="input max-w-xs" value={filterExpiring} onChange={(e) => setFilterExpiring(e.target.value)}>
+          <option value="">Toutes echeances</option>
+          <option value="7">Expire dans 7 jours</option>
+          <option value="30">Expire dans 30 jours</option>
+          <option value="60">Expire dans 60 jours</option>
+          <option value="90">Expire dans 90 jours</option>
         </select>
       </div>
 
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 dark:bg-slate-700 text-left">
+          <thead className="bg-slate-50 dark:bg-slate-700 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="p-3 font-medium">Nom</th>
               <th className="p-3 font-medium">Type</th>
@@ -126,8 +177,19 @@ export default function AssetsPage() {
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 ? (
-              <tr><td colSpan={7} className="p-6 text-center text-slate-400">Aucun asset</td></tr>
+            {items === null ? (
+              Array.from({ length: 4 }).map((_, i) => <TableRowSkeleton key={i} cols={7} />)
+            ) : items.length === 0 ? (
+              <tr><td colSpan={7} className="p-0">
+                <EmptyState
+                  icon={Server}
+                  title="Aucun asset"
+                  description={filterType || filterExpiring ? 'Aucun asset ne correspond aux filtres actifs.' : 'Commencez par ajouter un materiel, une licence ou un domaine a surveiller.'}
+                  action={!filterType && !filterExpiring ? (
+                    <button onClick={() => setShowForm(true)} className="btn btn-primary"><Plus size={16} className="mr-1" />Nouvel asset</button>
+                  ) : undefined}
+                />
+              </td></tr>
             ) : items.map((a) => {
               const days = a.expiresAt ? daysUntil(a.expiresAt) : null;
               const expSoon = days !== null && days >= 0 && days <= 30;
@@ -164,11 +226,31 @@ export default function AssetsPage() {
                   <td className="p-3">
                     <div className="flex gap-2 items-center">
                       {monitorable && (
-                        <button onClick={() => checkMonitoring(a.id, a.name)} className="text-mdo-600 hover:text-mdo-700" title="Verifier maintenant (TLS / WHOIS)">
-                          <RefreshCw size={14} />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => toggleMonitoring(a)}
+                            aria-label={a.monitoringEnabled ? `Desactiver la surveillance de ${a.name}` : `Activer la surveillance de ${a.name}`}
+                            className={a.monitoringEnabled ? 'text-emerald-600 hover:text-emerald-700' : 'text-slate-400 hover:text-slate-600'}
+                            title={a.monitoringEnabled ? 'Surveillance active - cliquer pour desactiver' : 'Surveillance desactivee - cliquer pour activer'}
+                          >
+                            {a.monitoringEnabled ? <Bell size={14} /> : <BellOff size={14} />}
+                          </button>
+                          <button onClick={() => checkMonitoring(a.id, a.name)} aria-label={`Verifier ${a.name} maintenant`} className="text-mdo-600 hover:text-mdo-700" title="Verifier maintenant (TLS / WHOIS)">
+                            <RefreshCw size={14} />
+                          </button>
+                        </>
                       )}
-                      <button onClick={() => remove(a.id)} className="text-red-500 hover:text-red-700"><Trash2 size={14} /></button>
+                      {a.type === 'DOMAIN' && a.identifier && (
+                        <Link
+                          href={'/audit-dns?domain=' + encodeURIComponent(a.identifier)}
+                          aria-label={`Audit DNS de ${a.identifier}`}
+                          className="text-blue-600 hover:text-blue-700"
+                          title="Audit DNS (MX / SPF / DMARC)"
+                        >
+                          <Search size={14} />
+                        </Link>
+                      )}
+                      <button onClick={() => remove(a.id, a.name)} aria-label={`Supprimer ${a.name}`} className="text-red-500 hover:text-red-700" title="Supprimer"><Trash2 size={14} /></button>
                     </div>
                   </td>
                 </tr>

@@ -49,6 +49,43 @@ interface InterventionPdfParams {
   technician?: { firstName: string; lastName: string };
 }
 
+export interface MonthlyReportData {
+  company: { name: string; address?: string | null; postalCode?: string | null; city?: string | null };
+  periodStart: Date;
+  periodEnd: Date;
+  tickets: {
+    total: number;
+    resolved: number;
+    avgResolutionHours: number | null;
+    slaRespected: number; // count
+    slaTotal: number; // count avec SLA defini
+    byCategory: Array<{ category: string; count: number }>;
+  };
+  interventions: {
+    total: number;
+    totalDurationMin: number;
+    list: Array<{ scheduledAt: Date; title: string; type: string; durationMin: number | null }>;
+  };
+  surveillance: {
+    monitoredCount: number;
+    expiredCount: number;
+    expiringIn30: number;
+    alertsSent: number;
+    items: Array<{ name: string; type: string; expiresAt: Date | null; daysRemaining: number | null }>;
+  };
+  uptime: {
+    monitors: number;
+    avgUptimePct: number | null;
+    incidents: number; // nombre de bascules UP→DOWN sur la periode
+    list: Array<{ name: string; url: string; uptimePct: number | null; incidents: number }>;
+  };
+  inventory: {
+    total: number;
+    byType: Array<{ type: string; count: number }>;
+    list: Array<{ name: string; type: string; identifier: string | null; status: string; expiresAt: Date | null }>;
+  };
+}
+
 @Injectable()
 export class PdfService {
   // ============ Generation generique d'un PDF en buffer ============
@@ -248,6 +285,192 @@ export class PdfService {
       doc.moveDown(3);
       this.footer(doc);
     });
+  }
+
+  // ============ RAPPORT MENSUEL CLIENT ============
+  // Synthese de l'activite MDO pour un client sur un mois : tickets resolus,
+  // interventions, surveillance certificats/domaines, uptime, inventaire.
+  // C'est le document que recoit le client a chaque debut de mois.
+  async monthlyClientReport(data: MonthlyReportData): Promise<Buffer> {
+    return this.toBuffer((doc) => {
+      const monthLabel = format(data.periodStart, 'MMMM yyyy', { locale: fr });
+      this.header(doc, 'RAPPORT MENSUEL');
+      this.companyHeader(doc);
+
+      // Sous-titre periode + client
+      doc.moveDown(2);
+      doc.fontSize(16).fillColor('#1d4ed8').text(monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1));
+      doc.fontSize(11).fillColor('#666').text(
+        'Du ' + format(data.periodStart, 'PPP', { locale: fr }) +
+        ' au ' + format(data.periodEnd, 'PPP', { locale: fr }),
+      );
+      doc.moveDown();
+      doc.fontSize(13).fillColor('#000').text('Client : ' + data.company.name);
+      if (data.company.address) doc.fontSize(10).fillColor('#666').text(data.company.address);
+      if (data.company.postalCode || data.company.city) {
+        doc.fontSize(10).fillColor('#666').text((data.company.postalCode ?? '') + ' ' + (data.company.city ?? ''));
+      }
+
+      // ===== Synthese chiffree (KPIs) =====
+      doc.moveDown(1.5);
+      this.sectionTitle(doc, 'Synthese du mois');
+      const kpiY = doc.y + 4;
+      this.kpiBox(doc, 50, kpiY, 'Tickets resolus', String(data.tickets.resolved), '/ ' + data.tickets.total + ' au total');
+      this.kpiBox(doc, 180, kpiY, 'Interventions', String(data.interventions.total), this.fmtDuration(data.interventions.totalDurationMin));
+      this.kpiBox(doc, 310, kpiY, 'Uptime moyen', data.uptime.avgUptimePct !== null ? data.uptime.avgUptimePct.toFixed(2) + ' %' : 'N/A', data.uptime.monitors + ' site(s)');
+      this.kpiBox(doc, 440, kpiY, 'Alertes envoyees', String(data.surveillance.alertsSent), data.surveillance.monitoredCount + ' actifs');
+      doc.y = kpiY + 60;
+
+      // ===== Tickets =====
+      doc.moveDown();
+      this.sectionTitle(doc, 'Support : tickets traites');
+      doc.fontSize(10).fillColor('#000');
+      doc.text('Tickets resolus dans le mois : ' + data.tickets.resolved + ' / ' + data.tickets.total);
+      if (data.tickets.avgResolutionHours !== null) {
+        doc.text('Temps moyen de resolution : ' + data.tickets.avgResolutionHours.toFixed(1) + ' h');
+      }
+      if (data.tickets.slaTotal > 0) {
+        const slaPct = (data.tickets.slaRespected / data.tickets.slaTotal) * 100;
+        doc.text('SLA respecte : ' + data.tickets.slaRespected + ' / ' + data.tickets.slaTotal + ' (' + slaPct.toFixed(0) + ' %)');
+      }
+      if (data.tickets.byCategory.length > 0) {
+        doc.moveDown(0.3);
+        doc.fontSize(10).fillColor('#666').text('Repartition par categorie :');
+        for (const c of data.tickets.byCategory) {
+          doc.fontSize(10).fillColor('#000').text('  - ' + c.category + ' : ' + c.count);
+        }
+      }
+
+      // ===== Interventions =====
+      doc.moveDown();
+      this.sectionTitle(doc, 'Interventions sur site / a distance');
+      if (data.interventions.list.length === 0) {
+        doc.fontSize(10).fillColor('#666').text('Aucune intervention sur la periode.');
+      } else {
+        this.tableHeader(doc, ['Date', 'Titre', 'Type', 'Duree'], [70, 220, 90, 70]);
+        for (const it of data.interventions.list) {
+          this.ensureSpace(doc, 18);
+          this.tableRow(doc, [
+            format(it.scheduledAt, 'dd/MM/yyyy', { locale: fr }),
+            it.title.length > 45 ? it.title.slice(0, 42) + '...' : it.title,
+            it.type,
+            it.durationMin ? this.fmtDuration(it.durationMin) : '-',
+          ], [70, 220, 90, 70]);
+        }
+      }
+
+      // ===== Surveillance certificats / domaines =====
+      doc.moveDown();
+      this.sectionTitle(doc, 'Surveillance certificats et domaines');
+      doc.fontSize(10).fillColor('#000');
+      doc.text('Elements surveilles : ' + data.surveillance.monitoredCount);
+      doc.text('Expires ou bientot : ' + (data.surveillance.expiredCount + data.surveillance.expiringIn30));
+      doc.text('Alertes envoyees ce mois : ' + data.surveillance.alertsSent);
+      if (data.surveillance.items.length > 0) {
+        doc.moveDown(0.3);
+        this.tableHeader(doc, ['Nom', 'Type', 'Expire le', 'Restant'], [200, 80, 90, 70]);
+        for (const s of data.surveillance.items) {
+          this.ensureSpace(doc, 18);
+          this.tableRow(doc, [
+            s.name.length > 38 ? s.name.slice(0, 35) + '...' : s.name,
+            s.type,
+            s.expiresAt ? format(s.expiresAt, 'dd/MM/yyyy', { locale: fr }) : '-',
+            s.daysRemaining !== null ? s.daysRemaining + ' j' : '-',
+          ], [200, 80, 90, 70]);
+        }
+      }
+
+      // ===== Uptime =====
+      doc.moveDown();
+      this.sectionTitle(doc, 'Disponibilite des sites');
+      if (data.uptime.monitors === 0) {
+        doc.fontSize(10).fillColor('#666').text('Aucun site surveille.');
+      } else {
+        this.tableHeader(doc, ['Site', 'URL', 'Uptime', 'Incidents'], [120, 220, 70, 70]);
+        for (const u of data.uptime.list) {
+          this.ensureSpace(doc, 18);
+          this.tableRow(doc, [
+            u.name.length > 22 ? u.name.slice(0, 19) + '...' : u.name,
+            u.url.length > 40 ? u.url.slice(0, 37) + '...' : u.url,
+            u.uptimePct !== null ? u.uptimePct.toFixed(2) + ' %' : 'N/A',
+            String(u.incidents),
+          ], [120, 220, 70, 70]);
+        }
+      }
+
+      // ===== Inventaire =====
+      doc.moveDown();
+      this.sectionTitle(doc, 'Inventaire des assets actifs');
+      doc.fontSize(10).fillColor('#000').text('Total : ' + data.inventory.total + ' element(s)');
+      if (data.inventory.byType.length > 0) {
+        for (const t of data.inventory.byType) {
+          doc.fontSize(10).fillColor('#000').text('  - ' + t.type + ' : ' + t.count);
+        }
+      }
+      if (data.inventory.list.length > 0) {
+        doc.moveDown(0.3);
+        this.tableHeader(doc, ['Nom', 'Type', 'Identifiant', 'Statut'], [160, 90, 180, 70]);
+        for (const a of data.inventory.list) {
+          this.ensureSpace(doc, 18);
+          this.tableRow(doc, [
+            a.name.length > 30 ? a.name.slice(0, 27) + '...' : a.name,
+            a.type,
+            a.identifier ? (a.identifier.length > 32 ? a.identifier.slice(0, 29) + '...' : a.identifier) : '-',
+            a.status,
+          ], [160, 90, 180, 70]);
+        }
+      }
+
+      this.footer(doc);
+    });
+  }
+
+  private fmtDuration(min: number): string {
+    if (!min) return '0h00';
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return h + 'h' + String(m).padStart(2, '0');
+  }
+
+  private sectionTitle(doc: any, title: string) {
+    doc.fontSize(13).fillColor('#1d4ed8').text(title);
+    doc.moveTo(50, doc.y + 2).lineTo(550, doc.y + 2).strokeColor('#dbeafe').stroke();
+    doc.moveDown(0.4);
+  }
+
+  private kpiBox(doc: any, x: number, y: number, label: string, value: string, sub: string) {
+    doc.roundedRect(x, y, 120, 50, 4).fillAndStroke('#f1f5f9', '#cbd5e1');
+    doc.fontSize(8).fillColor('#64748b').text(label, x + 8, y + 8, { width: 104 });
+    doc.fontSize(16).fillColor('#1d4ed8').text(value, x + 8, y + 20, { width: 104 });
+    doc.fontSize(8).fillColor('#94a3b8').text(sub, x + 8, y + 40, { width: 104 });
+  }
+
+  private tableHeader(doc: any, cols: string[], widths: number[]) {
+    const y = doc.y;
+    let x = 50;
+    doc.fontSize(9).fillColor('#1d4ed8');
+    for (let i = 0; i < cols.length; i++) {
+      doc.text(cols[i], x, y, { width: widths[i] });
+      x += widths[i];
+    }
+    doc.moveTo(50, y + 12).lineTo(550, y + 12).strokeColor('#cbd5e1').stroke();
+    doc.y = y + 16;
+    doc.fillColor('#000');
+  }
+
+  private tableRow(doc: any, cols: string[], widths: number[]) {
+    const y = doc.y;
+    let x = 50;
+    doc.fontSize(9).fillColor('#000');
+    for (let i = 0; i < cols.length; i++) {
+      doc.text(cols[i], x, y, { width: widths[i] });
+      x += widths[i];
+    }
+    doc.y = y + 14;
+  }
+
+  private ensureSpace(doc: any, needed: number) {
+    if (doc.y + needed > 760) doc.addPage();
   }
 
   // ============ Helpers ============

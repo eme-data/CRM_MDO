@@ -50,6 +50,7 @@ model User {
   ticketMessages     TicketMessage[]
   uploadedAttachments Attachment[]  @relation("AttachmentUploader")
   timeEntries        TimeEntry[]
+  invoicedTimeEntries TimeEntry[]   @relation("TimeEntryInvoicer")
   notifications      Notification[]
   responseTemplates  ResponseTemplate[]
   authoredDocPages   DocPage[]      @relation("DocPageAuthor")
@@ -157,6 +158,11 @@ model Company {
   flexibleAssets FlexibleAsset[]
   quickNotes     QuickNote[]
   runbookRuns    RunbookRun[]
+  uptimeMonitors UptimeMonitor[]
+  clientReports  ClientReport[]
+  timeEntries    TimeEntry[]
+  portalUsers    ClientPortalUser[]
+  m365Tenant     M365Tenant?
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -187,6 +193,7 @@ model Contact {
   tasks       Task[]
   notesRel    Note[]
   tickets     Ticket[]
+  portalUsers ClientPortalUser[] @relation("ContactPortalUser")
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -514,6 +521,9 @@ model EmailLog {
 
   @@index([status])
   @@index([toEmail])
+  // Permet de retrouver rapidement tous les emails lies a une entite donnee
+  // (contrat, ticket, societe...) pour l'historique des relations.
+  @@index([relatedEntity, relatedEntityId])
 }
 
 // =================== TICKETS (support client) ===================
@@ -584,6 +594,7 @@ model Ticket {
   interventions   Intervention[]
   attachments     Attachment[]
   timeEntries     TimeEntry[]
+  satisfaction    TicketSatisfaction?
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -656,13 +667,30 @@ model TimeEntry {
   durationMin   Int?
   description   String?
   billable      Boolean       @default(true)
+  // Taux horaire applique (HT). Optionnel : si null au moment de la facturation,
+  // on retombe sur le taux defini au niveau du contrat ou un defaut global.
+  hourlyRateHt  Decimal?      @db.Decimal(10, 2)
 
+  // Rattachement client : direct (saisie libre depuis /time) ou implicite via
+  // ticket/intervention/contract. Le service de facturation agregera en
+  // priorite par companyId, sinon par companyId du ticket/intervention/contract.
+  companyId      String?
+  company        Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
   ticketId       String?
   ticket         Ticket?       @relation(fields: [ticketId], references: [id], onDelete: SetNull)
   interventionId String?
   intervention   Intervention? @relation(fields: [interventionId], references: [id], onDelete: SetNull)
   contractId     String?
   contract       Contract?     @relation(fields: [contractId], references: [id], onDelete: SetNull)
+
+  // Suivi de la facturation : quand l'entree a-t-elle ete poussee dans Sellsy/
+  // Qonto ? `invoiceReference` peut etre l'ID Sellsy de la facture brouillon,
+  // un n. de facture, ou un libre texte. Permet le filtre "non facturees" pour
+  // la page admin de billing.
+  invoicedAt        DateTime?
+  invoiceReference  String?
+  invoicedById      String?
+  invoicedBy        User?     @relation("TimeEntryInvoicer", fields: [invoicedById], references: [id], onDelete: SetNull)
 
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -671,6 +699,8 @@ model TimeEntry {
   @@index([ticketId])
   @@index([interventionId])
   @@index([contractId])
+  @@index([companyId, invoicedAt])
+  @@index([invoicedAt])
 }
 
 // =================== NOTIFICATIONS IN-APP ===================
@@ -769,6 +799,72 @@ model Asset {
   @@index([contractId])
   @@index([type])
   @@index([expiresAt])
+}
+
+// =================== UPTIME MONITORING ===================
+
+// Surveillance HTTP/HTTPS d'un site ou endpoint client. Le cron uptime
+// frappe l'URL toutes les `intervalMinutes` minutes et stocke un check
+// dans UptimeCheck. Apres N echecs consecutifs, un UptimeIncident est
+// ouvert + notification (in-app + email) au proprietaire.
+model UptimeMonitor {
+  id              String           @id @default(uuid())
+  name            String           // libelle ("Site vitrine ACME")
+  url             String           // ex: https://www.acme.fr/
+  method          String           @default("GET")
+  expectedStatus  Int              @default(200)
+  intervalMinutes Int              @default(5)
+  enabled         Boolean          @default(true)
+  // Expose ce monitor sur la page /status publique (anonymisee, sans URL ni nom client).
+  // Defaut false : tous les monitors clients sont prives. A activer manuellement pour
+  // les services internes MDO (CRM, site vitrine, etc.) qu'on veut montrer publiquement.
+  isPublic        Boolean          @default(false)
+
+  companyId       String?
+  company         Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  // Cache du dernier etat pour les listings rapides
+  lastCheckedAt   DateTime?
+  lastStatus      String?          // "UP" | "DOWN" | null
+  lastHttpCode    Int?
+  lastResponseMs  Int?
+  lastError       String?
+  consecutiveFailures Int          @default(0)
+  alertSentAt     DateTime?        // pour eviter spam
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  checks          UptimeCheck[]
+  incidents       UptimeIncident[]
+
+  @@index([companyId])
+  @@index([enabled])
+}
+
+model UptimeCheck {
+  id          String         @id @default(uuid())
+  monitorId   String
+  monitor     UptimeMonitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  checkedAt   DateTime       @default(now())
+  isUp        Boolean
+  httpCode    Int?
+  responseMs  Int?
+  error       String?
+
+  @@index([monitorId, checkedAt])
+}
+
+model UptimeIncident {
+  id              String         @id @default(uuid())
+  monitorId       String
+  monitor         UptimeMonitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  startedAt       DateTime
+  endedAt         DateTime?
+  durationSeconds Int?
+  reason          String?        // dernier message d'erreur observe
+
+  @@index([monitorId, startedAt])
 }
 
 // =================== DOCUMENTATION CLIENT (KB) ===================
@@ -1188,4 +1284,233 @@ model UserMfa {
   recoveryCodes String  // JSON liste de codes hashes
   enabledAt    DateTime?
   createdAt    DateTime @default(now())
+}
+
+// =================== PORTAIL CLIENT (sous-domaine client.mdoservices.fr) ===================
+//
+// Authentification distincte des utilisateurs internes (modele User). Un contact
+// chez un client peut se connecter via un magic link envoye sur son email pro,
+// a condition que le domaine email corresponde a une societe enregistree.
+// Acces strictement scope a `companyId` (impossible de voir une autre societe).
+
+model ClientPortalUser {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Lien optionnel vers le Contact CRM correspondant (rempli automatiquement si
+  // un Contact existe deja avec cet email pour cette societe).
+  contactId     String?
+  contact       Contact? @relation("ContactPortalUser", fields: [contactId], references: [id], onDelete: SetNull)
+  firstName     String?
+  lastName      String?
+  isActive      Boolean  @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  magicLinks    ClientPortalMagicLink[]
+  sessions      ClientPortalSession[]
+
+  @@index([companyId])
+}
+
+model ClientPortalMagicLink {
+  id            String   @id @default(uuid())
+  userId        String
+  user          ClientPortalUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // On stocke un hash SHA256 du token clair. Le token clair n'apparait que dans
+  // l'email envoye au client — une fuite de la BDD ne donne pas acces aux liens.
+  tokenHash     String   @unique
+  expiresAt     DateTime
+  usedAt        DateTime?
+  ip            String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model ClientPortalSession {
+  id            String   @id @default(uuid())
+  userId        String
+  user          ClientPortalUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token         String   @unique  // opaque, 32 bytes hex
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  ip            String?
+  userAgent     String?
+  lastUsedAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// =================== MICROSOFT 365 / GRAPH API ===================
+//
+// Pour chaque societe cliente, MDO peut connecter le tenant M365 via OAuth
+// admin consent (app multi-tenant enregistree sur le tenant MDO). Une fois
+// consenti, MDO peut interroger periodiquement Graph API pour synchroniser
+// la liste des utilisateurs, leurs licences, leur statut MFA et les alertes
+// de securite.
+
+model M365Tenant {
+  id              String   @id @default(uuid())
+  companyId       String   @unique
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // GUID Entra ID du tenant client (immuable)
+  tenantId        String   @unique
+  tenantDomain    String?  // ex: acme.onmicrosoft.com
+  consentedAt     DateTime?
+  consentedBy     String?  // email/nom de l'admin client qui a fait le consent
+  lastSyncAt      DateTime?
+  lastSyncStatus  String?  // 'OK' | 'FAILED' | 'PARTIAL'
+  lastSyncError   String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users           M365User[]
+  licenses        M365License[]
+  alerts          M365SecurityAlert[]
+
+  @@index([companyId])
+}
+
+model M365User {
+  id             String      @id @default(uuid())
+  m365TenantId   String
+  m365Tenant     M365Tenant  @relation(fields: [m365TenantId], references: [id], onDelete: Cascade)
+  graphId        String      // ID Graph immuable
+  upn            String      // user principal name (ex: john@acme.onmicrosoft.com)
+  displayName    String?
+  jobTitle       String?
+  department     String?
+  accountEnabled Boolean     @default(true)
+  // null = inconnu (API premium non disponible ou pas encore syncho). True/false sinon.
+  mfaEnabled     Boolean?
+  lastSignInAt   DateTime?
+  // skuPartNumbers attribues (ex: ["ENTERPRISEPACK","EMS"])
+  licenseSkus    Json
+  syncedAt       DateTime    @default(now())
+
+  @@unique([m365TenantId, graphId])
+  @@index([m365TenantId])
+  @@index([accountEnabled])
+  @@index([mfaEnabled])
+}
+
+model M365License {
+  id              String      @id @default(uuid())
+  m365TenantId    String
+  m365Tenant      M365Tenant  @relation(fields: [m365TenantId], references: [id], onDelete: Cascade)
+  skuId           String      // GUID
+  skuPartNumber   String      // ex: ENTERPRISEPACK
+  name            String?     // libelle humain (mapping local : ENTERPRISEPACK -> Office 365 E3)
+  totalUnits      Int
+  consumedUnits   Int
+  syncedAt        DateTime    @default(now())
+
+  @@unique([m365TenantId, skuId])
+  @@index([m365TenantId])
+}
+
+model M365SecurityAlert {
+  id              String      @id @default(uuid())
+  m365TenantId    String
+  m365Tenant      M365Tenant  @relation(fields: [m365TenantId], references: [id], onDelete: Cascade)
+  alertId         String      // ID Graph de l'alerte
+  severity        String      // low / medium / high / informational
+  status          String      // newAlert / inProgress / resolved
+  title           String
+  description     String?
+  category        String?
+  createdDateTime DateTime
+  syncedAt        DateTime    @default(now())
+
+  @@unique([m365TenantId, alertId])
+  @@index([m365TenantId, severity])
+  @@index([status])
+}
+
+// =================== NPS / SATISFACTION POST-TICKET ===================
+//
+// Envoi automatique d'un mini-questionnaire au contact du ticket quand le statut
+// passe a RESOLVED. Le client clique sur le lien, note de 0 a 10 + commentaire
+// optionnel. Stockage dans TicketSatisfaction, agrege ensuite pour le NPS global.
+
+model TicketSatisfaction {
+  id              String    @id @default(uuid())
+  // Un ticket = au plus une demande NPS active (unique).
+  ticketId        String    @unique
+  ticket          Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  // Token cryptosecure pour la page publique de notation. Indexe pour lookup rapide.
+  token           String    @unique
+  tokenExpiresAt  DateTime
+  sentTo          String
+  sentAt          DateTime
+  // Reponse du client. Null tant que pas encore soumise.
+  score           Int?      // 0 - 10
+  comment         String?
+  submittedAt     DateTime?
+  // IP/UA tronques au moment de la soumission, pour detection de fraude basique.
+  submittedIp     String?
+  submittedUa     String?
+
+  @@index([sentAt])
+  @@index([submittedAt])
+  @@index([score])
+}
+
+// =================== CLIENT MONTHLY REPORTS ===================
+//
+// Rapport mensuel par client : agrege tickets resolus, interventions, uptime,
+// surveillance certificats/domaines + inventaire assets sur une periode donnee.
+// Genere soit manuellement depuis la fiche societe, soit automatiquement le 1er
+// de chaque mois via un cron (ClientReportsService.runMonthlyCron).
+//
+// Le PDF est stocke sur disque (UPLOADS_DIR/client-reports/) et accede via un
+// token cryptosecure 32 bytes hex (URL : /api/reports/download/:token). Le
+// token a une duree de vie de 30 jours pour ne pas creer de fuites permanentes.
+
+enum ClientReportStatus {
+  GENERATED   // PDF cree, pas encore envoye
+  SENT        // Email envoye au contact principal
+  DOWNLOADED  // Au moins un telechargement effectue via le lien
+  EXPIRED     // Token expire (information seulement, le PDF reste accessible en admin)
+}
+
+model ClientReport {
+  id              String              @id @default(uuid())
+  companyId       String
+  company         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Periode couverte : mois entier en general (1er → dernier jour).
+  periodStart     DateTime
+  periodEnd       DateTime
+  // Chemin relatif au UPLOADS_DIR (ex. client-reports/2026/05/abcd.pdf)
+  pdfPath         String
+  // Taille en octets, utile pour les UI et la suppression.
+  pdfSize         Int
+  // Token cryptosecure pour le download public. Indexe car cle de lookup.
+  accessToken     String              @unique
+  tokenExpiresAt  DateTime
+  status          ClientReportStatus  @default(GENERATED)
+  // Stats agregees stockees en JSON pour affichage rapide cote admin sans
+  // regenerer le PDF (ex. "12 tickets resolus, 4 interventions, uptime 99.8 %").
+  summary         Json
+  // Trace de l'envoi
+  sentTo          String?
+  sentAt          DateTime?
+  // Trace des telechargements (count + dernier)
+  downloadCount   Int                 @default(0)
+  lastDownloadAt  DateTime?
+  // Auteur de la generation (null si auto via cron)
+  generatedById   String?
+  createdAt       DateTime            @default(now())
+
+  @@index([companyId, periodStart])
+  @@index([accessToken])
+  @@index([tokenExpiresAt])
+  @@index([status])
 }

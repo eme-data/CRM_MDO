@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, Edit, Trash2, RefreshCw, XCircle, AlertTriangle, Download, Send } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { ContractForm } from '@/components/ContractForm';
 import {
   formatEuro,
@@ -25,6 +26,7 @@ export default function ContractDetailPage() {
   const [renewing, setRenewing] = useState(false);
   const [pushingBilling, setPushingBilling] = useState(false);
   const [billingStatus, setBillingStatus] = useState<{ provider: string; configured: boolean } | null>(null);
+  const confirm = useConfirm();
 
   async function load() {
     const c = await api.get('/contracts/' + id);
@@ -51,10 +53,18 @@ export default function ContractDetailPage() {
   }
 
   async function handleDelete() {
-    if (!confirm('Supprimer ce contrat ?')) return;
-    await api.delete('/contracts/' + id);
-    toast.success('Contrat supprime');
-    router.replace('/contracts');
+    const ok = await confirm({
+      title: 'Supprimer ce contrat ?',
+      message: `Le contrat ${contract?.reference ?? ''} sera supprime ainsi que son historique de renouvellements.`,
+      confirmLabel: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.delete('/contracts/' + id);
+      toast.success('Contrat supprime');
+      router.replace('/contracts');
+    } catch (err: any) { toast.error(err.message); }
   }
 
   async function handleTerminate() {

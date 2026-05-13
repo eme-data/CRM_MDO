@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Layers, Plus, Trash2, Edit, Save, GripVertical, ArrowUp, ArrowDown } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 
 const FIELD_TYPES = [
   { v: 'TEXT', label: 'Texte court' },
@@ -82,6 +83,7 @@ const SUGGESTIONS = [
 
 export default function FlexibleAssetTypesPage() {
   const [items, setItems] = useState<any[]>([]);
+  const confirm = useConfirm();
   const [editing, setEditing] = useState<any | 'new' | null>(null);
   const [draft, setDraft] = useState<any>({ name: '', icon: '', color: '', description: '', fields: [] });
 
@@ -139,10 +141,17 @@ export default function FlexibleAssetTypesPage() {
       load();
     } catch (err: any) { toast.error(err.message); }
   }
-  async function remove(id: string) {
-    if (!confirm('Supprimer ce template ?')) return;
+  async function remove(id: string, name: string) {
+    const ok = await confirm({
+      title: 'Supprimer ce template ?',
+      message: `« ${name} » sera supprime. Les assets flexibles existants bases sur ce template restent mais ne pourront plus etre crees.`,
+      confirmLabel: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await api.delete('/flexible-asset-types/' + id);
+      toast.success('Template supprime');
       load();
     } catch (err: any) { toast.error(err.message); }
   }
@@ -189,7 +198,7 @@ export default function FlexibleAssetTypesPage() {
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => openEdit(t)} className="text-mdo-600 hover:text-mdo-700"><Edit size={14} /></button>
-                    <button onClick={() => remove(t.id)} className="text-red-500 hover:text-red-700"><Trash2 size={14} /></button>
+                    <button onClick={() => remove(t.id, t.name)} aria-label={`Supprimer ${t.name}`} className="text-red-500 hover:text-red-700"><Trash2 size={14} /></button>
                   </div>
                 </div>
               ))}

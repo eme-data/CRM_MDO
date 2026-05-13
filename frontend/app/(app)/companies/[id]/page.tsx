@@ -5,10 +5,13 @@ import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Edit, Trash2, ArrowLeft, Plus, RefreshCw, Send, FileWarning } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { CompanyForm } from '@/components/CompanyForm';
 import { ClientDocsSection } from '@/components/ClientDocsSection';
 import { ITGlueSection } from '@/components/ITGlueSection';
 import { RunbookRunsSection } from '@/components/RunbookRunsSection';
+import { MonthlyReportsSection } from '@/components/MonthlyReportsSection';
+import { M365Section } from '@/components/M365Section';
 import {
   formatEuro,
   formatDate,
@@ -28,6 +31,7 @@ export default function CompanyDetailPage() {
   const [editing, setEditing] = useState(false);
   const [billingStatus, setBillingStatus] = useState<{ provider: string; configured: boolean } | null>(null);
   const [pushingBilling, setPushingBilling] = useState(false);
+  const confirm = useConfirm();
 
   async function load() {
     const c = await api.get('/companies/' + id);
@@ -76,7 +80,13 @@ export default function CompanyDetailPage() {
   }
 
   async function handleDelete() {
-    if (!confirm('Supprimer definitivement cette societe ?')) return;
+    const ok = await confirm({
+      title: 'Supprimer cette societe ?',
+      message: `« ${company?.name ?? 'Cette societe'} » sera definitivement supprimee avec ses contacts, contrats et opportunites. Cette action est irreversible.`,
+      confirmLabel: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await api.delete('/companies/' + id);
       toast.success('Societe supprimee');
@@ -256,6 +266,10 @@ export default function CompanyDetailPage() {
       <ClientDocsSection companyId={id} />
 
       <RunbookRunsSection companyId={id} />
+
+      <M365Section companyId={id} />
+
+      <MonthlyReportsSection companyId={id} />
 
       {company.opportunities.length > 0 && (
         <div className="card p-6">

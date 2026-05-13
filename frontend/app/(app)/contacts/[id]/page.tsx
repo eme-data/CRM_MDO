@@ -5,23 +5,43 @@ import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 export default function ContactDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
   const [contact, setContact] = useState<any>(null);
+  const confirm = useConfirm();
 
   useEffect(() => { api.get('/contacts/' + id).then(setContact); }, [id]);
 
   async function handleDelete() {
-    if (!confirm('Supprimer ce contact ?')) return;
-    await api.delete('/contacts/' + id);
-    toast.success('Contact supprime');
-    router.replace('/contacts');
+    const fullName = contact ? `${contact.firstName} ${contact.lastName}` : 'ce contact';
+    const ok = await confirm({
+      title: 'Supprimer ce contact ?',
+      message: `« ${fullName} » sera definitivement supprime.`,
+      confirmLabel: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.delete('/contacts/' + id);
+      toast.success('Contact supprime');
+      router.replace('/contacts');
+    } catch (err: any) { toast.error(err.message); }
   }
 
-  if (!contact) return <div>Chargement...</div>;
+  if (!contact) return (
+    <div className="space-y-6 max-w-3xl">
+      <Skeleton className="h-4 w-32" />
+      <Skeleton className="h-10 w-64" />
+      <div className="card p-6 space-y-3">
+        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-5 w-full" />)}
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6 max-w-3xl">

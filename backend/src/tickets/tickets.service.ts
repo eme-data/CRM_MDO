@@ -10,6 +10,7 @@ import { MailService } from '../mail/mail.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { SlaService } from './sla.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NpsService } from '../nps/nps.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { AddMessageDto } from './dto/add-message.dto';
@@ -24,6 +25,7 @@ export class TicketsService {
     private readonly attachments: AttachmentsService,
     private readonly sla: SlaService,
     private readonly notifications: NotificationsService,
+    private readonly nps: NpsService,
   ) {}
 
   async generateReference(): Promise<string> {
@@ -193,13 +195,19 @@ export class TicketsService {
     if (dto.closedAt) data.closedAt = new Date(dto.closedAt);
 
     // Auto-stamp les transitions de statut
+    const wasResolved = existing.status === 'RESOLVED';
+    let justResolved = false;
     if (dto.status) {
       if (dto.status === 'RESOLVED' && !existing.resolvedAt) {
         data.resolvedAt = new Date();
+        justResolved = !wasResolved;
       }
       if (dto.status === 'CLOSED' && !existing.closedAt) {
         data.closedAt = new Date();
-        if (!existing.resolvedAt) data.resolvedAt = new Date();
+        if (!existing.resolvedAt) {
+          data.resolvedAt = new Date();
+          justResolved = !wasResolved;
+        }
       }
     }
 
@@ -207,6 +215,15 @@ export class TicketsService {
     await this.prisma.activity.create({
       data: { userId, action: 'UPDATE', entity: 'Ticket', entityId: id },
     });
+
+    // Trigger NPS si on vient de passer en RESOLVED. Non-bloquant : si l'envoi
+    // mail echoue, le ticket reste resolu et l'admin peut relancer manuellement
+    // depuis la fiche ticket (bouton "Envoyer/renvoyer la demande NPS").
+    if (justResolved) {
+      this.nps.onTicketResolved(id).catch((err) =>
+        this.logger.warn('NPS trigger failed for ' + id + ' : ' + err.message),
+      );
+    }
 
     // Notification : changement d'assignee
     if (

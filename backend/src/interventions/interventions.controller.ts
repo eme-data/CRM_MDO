@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
-import { InterventionStatus } from '@prisma/client';
+import { InterventionStatus, Role } from '@prisma/client';
 import { InterventionsService } from './interventions.service';
 import { IcalService } from './ical.service';
 import { PdfService } from '../pdf/pdf.service';
@@ -21,6 +21,7 @@ import { UpdateInterventionDto } from './dto/update-intervention.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
 
 @ApiTags('Interventions')
 @ApiBearerAuth()
@@ -96,16 +97,19 @@ export class InterventionsController {
     res.send(buf);
   }
 
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post()
   create(@Body() dto: CreateInterventionDto) {
     return this.service.create(dto);
   }
 
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateInterventionDto) {
     return this.service.update(id, dto);
   }
 
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.service.remove(id);

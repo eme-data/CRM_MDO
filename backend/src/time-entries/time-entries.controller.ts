@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -7,14 +8,18 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
+import { Role } from '@prisma/client';
 import { TimeEntriesService } from './time-entries.service';
 import { CreateTimeEntryDto } from './dto/create-time-entry.dto';
 import { UpdateTimeEntryDto } from './dto/update-time-entry.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
 
 @ApiTags('TimeEntries')
 @ApiBearerAuth()
@@ -79,5 +84,64 @@ export class TimeEntriesController {
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.service.remove(id, user.id, user.role);
+  }
+
+  // ============================================================
+  // Endpoints FACTURATION (ADMIN/MANAGER)
+  // ============================================================
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('billing/by-company')
+  billingByCompany(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('onlyUnbilled') onlyUnbilled?: string,
+  ) {
+    if (!from || !to) throw new BadRequestException('from et to requis (YYYY-MM-DD)');
+    return this.service.billingByCompany({ from, to, onlyUnbilled: onlyUnbilled === 'true' });
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('billing/companies/:companyId')
+  billingDetail(
+    @Param('companyId') companyId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('onlyUnbilled') onlyUnbilled?: string,
+  ) {
+    if (!from || !to) throw new BadRequestException('from et to requis (YYYY-MM-DD)');
+    return this.service.billingDetail({ companyId, from, to, onlyUnbilled: onlyUnbilled === 'true' });
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('billing/companies/:companyId/export.csv')
+  async exportCsv(
+    @Param('companyId') companyId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('onlyUnbilled') onlyUnbilled?: string,
+    @Res() res?: Response,
+  ) {
+    if (!from || !to) throw new BadRequestException('from et to requis (YYYY-MM-DD)');
+    const csv = await this.service.exportCsv({
+      companyId, from, to, onlyUnbilled: onlyUnbilled === 'true',
+    });
+    res!.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res!.setHeader('Content-Disposition', `attachment; filename="time-${companyId}-${from}-${to}.csv"`);
+    res!.send(csv);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('billing/mark-invoiced')
+  markInvoiced(
+    @Body() body: { ids: string[]; invoiceReference?: string },
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.service.markInvoiced(body.ids ?? [], user.id, body.invoiceReference);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('billing/unmark-invoiced')
+  unmarkInvoiced(@Body() body: { ids: string[] }) {
+    return this.service.unmarkInvoiced(body.ids ?? []);
   }
 }

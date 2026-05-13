@@ -306,6 +306,65 @@ export const SETTINGS_DEFS: SettingDef[] = [
     description: 'Cron toutes les heures qui importe les nouvelles transactions Qonto pour rapprochement.',
     defaultValue: 'false',
   },
+
+  // ---------- Rapports clients mensuels ----------
+  {
+    key: 'reports.monthlyAutoSend',
+    category: 'reports',
+    label: 'Rapport mensuel - envoi automatique le 1er du mois',
+    description:
+      'Si actif, un rapport mensuel est genere et envoye au contact principal de chaque societe avec statut CUSTOMER le 1er du mois a 08h00.',
+    defaultValue: 'true',
+  },
+  {
+    key: 'app.publicUrl',
+    category: 'general',
+    label: 'URL publique du CRM',
+    description:
+      'Base URL utilisee pour construire les liens de telechargement publics des rapports (ex. https://crm.mdoservices.fr).',
+    defaultValue: 'https://crm.mdoservices.fr',
+    envVar: 'PUBLIC_URL',
+  },
+
+  // ---------- Portail client ----------
+  {
+    key: 'app.portalUrl',
+    category: 'general',
+    label: 'URL publique du portail client',
+    description:
+      'Base URL utilisee dans les emails magic link envoyes aux clients (ex. https://client.mdoservices.fr). Si vide, on utilise app.publicUrl.',
+    defaultValue: '',
+    envVar: 'PORTAL_URL',
+  },
+
+  // ---------- Microsoft 365 / Graph API ----------
+  {
+    key: 'm365.clientId',
+    category: 'integrations',
+    label: 'Microsoft 365 - Application (client) ID',
+    description:
+      "GUID de l'application multi-tenant enregistree sur Entra ID du tenant MDO Services. Voir docs/deploy-m365.md pour la procedure.",
+    envVar: 'M365_CLIENT_ID',
+  },
+  {
+    key: 'm365.clientSecret',
+    category: 'integrations',
+    label: 'Microsoft 365 - Client secret',
+    description:
+      "Secret client genere dans Entra ID > Certificates & secrets de l'application MDO. A renouveler avant expiration (max 24 mois).",
+    isSecret: true,
+    envVar: 'M365_CLIENT_SECRET',
+  },
+
+  // ---------- NPS / Satisfaction client ----------
+  {
+    key: 'nps.autoSendOnResolved',
+    category: 'reports',
+    label: 'NPS - envoi automatique a la resolution d\'un ticket',
+    description:
+      'Si actif, un mail demandant au contact de noter son experience (0-10) est envoye automatiquement quand un ticket passe en statut RESOLVED.',
+    defaultValue: 'true',
+  },
 ];
 
 export function findSettingDef(key: string): SettingDef | undefined {

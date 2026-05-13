@@ -36,6 +36,12 @@ export function clearTokens() {
   localStorage.removeItem(STORAGE_REFRESH);
 }
 
+// Endpoints d'authentification : un 401 ici signifie "identifiants invalides"
+// ou "TOTP_REQUIRED", PAS "session expiree". On ne doit donc ni tenter de
+// refresh, ni rediriger vers /login (la page se rechargerait en perdant l'etat
+// du formulaire — bug bloquant pour la 2FA).
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/refresh'];
+
 async function doFetch(path: string, init: RequestInit = {}, retry = true): Promise<any> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -46,7 +52,9 @@ async function doFetch(path: string, init: RequestInit = {}, retry = true): Prom
 
   const res = await fetch(API_URL + path, { ...init, headers });
 
-  if (res.status === 401 && retry) {
+  const isAuthEndpoint = AUTH_ENDPOINTS.some((p) => path.startsWith(p));
+
+  if (res.status === 401 && retry && !isAuthEndpoint) {
     const refresh = getRefreshToken();
     if (refresh) {
       try {
@@ -63,13 +71,28 @@ async function doFetch(path: string, init: RequestInit = {}, retry = true): Prom
       } catch {}
     }
     clearTokens();
-    if (typeof window !== 'undefined') window.location.href = '/login';
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
     throw new ApiError(401, 'Session expiree');
   }
 
   if (!res.ok) {
     let body: any = null;
     try { body = await res.json(); } catch {}
+    // 403 MFA_REQUIRED : l'utilisateur est authentifie mais sa 2FA n'est pas
+    // activee. On le redirige vers /settings (qui est sur la whitelist du
+    // MfaRequiredGuard) pour qu'il puisse finaliser l'activation.
+    if (
+      res.status === 403 &&
+      typeof window !== 'undefined' &&
+      (body?.message === 'MFA_REQUIRED' || String(body?.message ?? '').includes('MFA_REQUIRED'))
+    ) {
+      if (window.location.pathname !== '/settings') {
+        window.location.href = '/settings?mfaSetup=1';
+      }
+      throw new ApiError(403, 'MFA_REQUIRED', body);
+    }
     throw new ApiError(res.status, body?.message || res.statusText, body);
   }
 

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ListChecks, Plus, Trash2, Edit, Save, ArrowUp, ArrowDown, Wand2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 
 const CATEGORIES = ['ONBOARDING', 'AUDIT', 'PATCHING', 'INCIDENT', 'OFFBOARDING', 'AUTRE'] as const;
 const CATEGORY_LABEL: Record<string, string> = {
@@ -14,6 +15,7 @@ export default function AdminRunbooksPage() {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [editing, setEditing] = useState<any | 'new' | null>(null);
   const [draft, setDraft] = useState<any>({ name: '', category: 'AUTRE', description: '', steps: [] });
+  const confirm = useConfirm();
 
   async function load() {
     setItems(await api.get('/runbooks'));
@@ -73,10 +75,19 @@ export default function AdminRunbooksPage() {
       load();
     } catch (err: any) { toast.error(err.message); }
   }
-  async function remove(id: string) {
-    if (!confirm('Supprimer ce runbook ?')) return;
-    try { await api.delete('/runbooks/' + id); load(); }
-    catch (err: any) { toast.error(err.message); }
+  async function remove(id: string, name: string) {
+    const ok = await confirm({
+      title: 'Supprimer ce runbook ?',
+      message: `« ${name} » sera supprime, ainsi que ses etapes et son historique d'execution.`,
+      confirmLabel: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.delete('/runbooks/' + id);
+      toast.success('Runbook supprime');
+      load();
+    } catch (err: any) { toast.error(err.message); }
   }
 
   return (
@@ -122,7 +133,7 @@ export default function AdminRunbooksPage() {
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => openEdit(r)} className="text-mdo-600 hover:text-mdo-700"><Edit size={14} /></button>
-                    <button onClick={() => remove(r.id)} className="text-red-500 hover:text-red-700"><Trash2 size={14} /></button>
+                    <button onClick={() => remove(r.id, r.name)} aria-label={`Supprimer ${r.name}`} className="text-red-500 hover:text-red-700"><Trash2 size={14} /></button>
                   </div>
                 </div>
               ))}

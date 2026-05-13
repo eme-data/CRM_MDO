@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 import { Toaster } from 'sonner';
+import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -25,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="fr">
       <body>
-        {children}
+        <ConfirmProvider>{children}</ConfirmProvider>
         <Toaster position="top-right" richColors />
         {/* Enregistrement du service worker. Strategy "afterInteractive" pour
             ne pas bloquer le first paint. Le SW gere le mode offline + le

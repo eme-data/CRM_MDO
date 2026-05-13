@@ -1,8 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Users } from 'lucide-react';
 import { api } from '@/lib/api';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { TableRowSkeleton } from '@/components/ui/Skeleton';
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<any[]>([]);
@@ -40,11 +42,20 @@ export default function ContactsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} className="p-6 text-center text-slate-400">Chargement...</td></tr>
+              Array.from({ length: 5 }).map((_, i) => <TableRowSkeleton key={i} cols={5} />)
             ) : contacts.length === 0 ? (
-              <tr><td colSpan={5} className="p-6 text-center text-slate-400">Aucun contact</td></tr>
+              <tr><td colSpan={5} className="p-0">
+                <EmptyState
+                  icon={Users}
+                  title="Aucun contact"
+                  description={search ? "Aucun contact ne correspond a votre recherche." : "Ajoutez vos premiers interlocuteurs chez vos clients et prospects."}
+                  action={!search ? (
+                    <Link href="/contacts/new" className="btn btn-primary"><Plus size={16} className="mr-1" />Nouveau contact</Link>
+                  ) : undefined}
+                />
+              </td></tr>
             ) : contacts.map((c) => (
-              <tr key={c.id} className="border-t hover:bg-slate-50">
+              <tr key={c.id} className="border-t hover:bg-slate-50 dark:hover:bg-slate-700/50">
                 <td className="p-3">
                   <Link href={'/contacts/' + c.id} className="font-medium text-mdo-600 hover:underline">
                     {c.firstName} {c.lastName}

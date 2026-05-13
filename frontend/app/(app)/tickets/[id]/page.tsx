@@ -16,7 +16,9 @@ import {
   FileText,
 } from 'lucide-react';
 import { api, apiUpload, downloadAttachment } from '@/lib/api';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { TicketTimerButton } from '@/components/TicketTimerButton';
+import { TicketNpsSection } from '@/components/TicketNpsSection';
 import {
   formatDate,
   formatDateTime,
@@ -49,6 +51,7 @@ export default function TicketDetailPage() {
   const [bcc, setBcc] = useState('');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [posting, setPosting] = useState(false);
+  const confirm = useConfirm();
   const [templates, setTemplates] = useState<any[]>([]);
   const [showTemplates, setShowTemplates] = useState(false);
 
@@ -144,10 +147,18 @@ export default function TicketDetailPage() {
   }
 
   async function handleDelete() {
-    if (!confirm('Supprimer ce ticket ?')) return;
-    await api.delete('/tickets/' + id);
-    toast.success('Ticket supprime');
-    router.replace('/tickets');
+    const ok = await confirm({
+      title: 'Supprimer ce ticket ?',
+      message: `Le ticket ${ticket?.reference ?? ''} sera definitivement supprime avec ses reponses et pieces jointes.`,
+      confirmLabel: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.delete('/tickets/' + id);
+      toast.success('Ticket supprime');
+      router.replace('/tickets');
+    } catch (err: any) { toast.error(err.message); }
   }
 
   async function dlAttachment(att: { id: string; filename: string }) {
@@ -211,6 +222,8 @@ export default function TicketDetailPage() {
             <h3 className="font-semibold mb-2">Description</h3>
             <p className="text-sm text-slate-700 whitespace-pre-wrap">{ticket.description}</p>
           </div>
+
+          <TicketNpsSection ticketId={id} ticketStatus={ticket.status} />
 
           <div className="card p-6">
             <h3 className="font-semibold mb-4">Conversation ({ticket.messages.length})</h3>

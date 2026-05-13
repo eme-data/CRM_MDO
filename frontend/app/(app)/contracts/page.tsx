@@ -2,8 +2,10 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Search, AlertTriangle } from 'lucide-react';
+import { Plus, Search, AlertTriangle, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { TableRowSkeleton } from '@/components/ui/Skeleton';
 import {
   formatEuro,
   formatDate,
@@ -102,15 +104,24 @@ export default function ContractsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className="p-6 text-center text-slate-400">Chargement...</td></tr>
+              Array.from({ length: 5 }).map((_, i) => <TableRowSkeleton key={i} cols={8} />)
             ) : contracts.length === 0 ? (
-              <tr><td colSpan={8} className="p-6 text-center text-slate-400">Aucun contrat</td></tr>
+              <tr><td colSpan={8} className="p-0">
+                <EmptyState
+                  icon={FileText}
+                  title="Aucun contrat"
+                  description={search || status || expiringInDays ? "Aucun contrat ne correspond aux filtres actifs." : "Vos contrats MDO Essentiel / Pro / Souverain apparaitront ici."}
+                  action={!search && !status && !expiringInDays ? (
+                    <Link href="/contracts/new" className="btn btn-primary"><Plus size={16} className="mr-1" />Nouveau contrat</Link>
+                  ) : undefined}
+                />
+              </td></tr>
             ) : (
               contracts.map((c) => {
                 const days = daysUntil(c.endDate);
                 const warning = c.status === 'ACTIVE' && days <= 60;
                 return (
-                  <tr key={c.id} className="border-t hover:bg-slate-50">
+                  <tr key={c.id} className="border-t hover:bg-slate-50 dark:hover:bg-slate-700/50">
                     <td className="p-3">
                       <Link href={'/contracts/' + c.id} className="font-mono text-mdo-600 hover:underline">
                         {c.reference}

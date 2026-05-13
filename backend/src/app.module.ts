@@ -37,6 +37,7 @@ import { FlexibleAssetsModule } from './flexible-assets/flexible-assets.module';
 import { ItemLinksModule } from './item-links/item-links.module';
 import { QuickNotesModule } from './quick-notes/quick-notes.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
+import { UptimeModule } from './uptime/uptime.module';
 import { EmergencyPdfModule } from './emergency-pdf/emergency-pdf.module';
 import { RunbooksModule } from './runbooks/runbooks.module';
 import { MfaModule } from './mfa/mfa.module';
@@ -44,12 +45,18 @@ import { ImportsModule } from './imports/imports.module';
 import { SearchModule } from './search/search.module';
 import { SurveillanceModule } from './surveillance/surveillance.module';
 import { ReportsModule } from './reports/reports.module';
+import { ClientReportsModule } from './client-reports/client-reports.module';
+import { StatusModule } from './status/status.module';
+import { NpsModule } from './nps/nps.module';
+import { ClientPortalModule } from './client-portal/client-portal.module';
+import { M365Module } from './m365/m365.module';
 import { GdprModule } from './gdpr/gdpr.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { AppLoggerModule } from './common/observability/logger.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { MfaRequiredGuard } from './common/guards/mfa-required.guard';
+import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
   imports: [
@@ -107,12 +114,18 @@ import { MfaRequiredGuard } from './common/guards/mfa-required.guard';
     ItemLinksModule,
     QuickNotesModule,
     MonitoringModule,
+    UptimeModule,
     EmergencyPdfModule,
     RunbooksModule,
     ImportsModule,
     SearchModule,
     SurveillanceModule,
     ReportsModule,
+    ClientReportsModule,
+    StatusModule,
+    NpsModule,
+    ClientPortalModule,
+    M365Module,
     GdprModule,
     NotesModule,
     ActivitiesModule,
@@ -136,6 +149,14 @@ import { MfaRequiredGuard } from './common/guards/mfa-required.guard';
     {
       provide: APP_GUARD,
       useClass: MfaRequiredGuard,
+    },
+    // RolesGuard global : applique les decorateurs @Roles() sans que chaque
+    // controller ait a les redeclarer dans @UseGuards(). Si un endpoint n'a
+    // pas de @Roles(), le guard retourne true (pas de restriction).
+    // Important : place APRES JwtAuthGuard car il a besoin de req.user.
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
     },
   ],
 })

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Play, Square, Plus, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 
 function formatHm(min: number | null | undefined): string {
   if (!min) return '0h00';
@@ -23,6 +24,7 @@ function startOfWeekIso(): string {
 
 export default function TimePage() {
   const [entries, setEntries] = useState<any[]>([]);
+  const confirm = useConfirm();
   const [summary, setSummary] = useState<any>(null);
   const [current, setCurrent] = useState<any>(null);
   const [from, setFrom] = useState(startOfWeekIso().split('T')[0]);
@@ -87,9 +89,18 @@ export default function TimePage() {
   }
 
   async function remove(id: string) {
-    if (!confirm('Supprimer cette saisie ?')) return;
-    await api.delete('/time-entries/' + id);
-    load();
+    const ok = await confirm({
+      title: 'Supprimer cette saisie ?',
+      message: 'La saisie sera definitivement supprimee.',
+      confirmLabel: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.delete('/time-entries/' + id);
+      toast.success('Saisie supprimee');
+      load();
+    } catch (err: any) { toast.error(err.message); }
   }
 
   return (

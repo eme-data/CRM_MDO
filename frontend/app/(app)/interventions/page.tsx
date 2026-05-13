@@ -1,9 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus } from 'lucide-react';
+import { Plus, Wrench } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { TableRowSkeleton } from '@/components/ui/Skeleton';
 
 const STATUS_COLOR: Record<string, string> = {
   PLANNED: 'bg-blue-100 text-blue-700',
@@ -13,7 +15,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export default function InterventionsPage() {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<any[] | null>(null);
   useEffect(() => { api.get('/interventions').then(setItems); }, []);
 
   return (
@@ -23,7 +25,7 @@ export default function InterventionsPage() {
       </div>
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-slate-50 dark:bg-slate-700 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="p-3 font-medium">Date</th>
               <th className="p-3 font-medium">Titre</th>
@@ -34,10 +36,18 @@ export default function InterventionsPage() {
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 ? (
-              <tr><td colSpan={6} className="p-6 text-center text-slate-400">Aucune intervention</td></tr>
+            {items === null ? (
+              Array.from({ length: 4 }).map((_, i) => <TableRowSkeleton key={i} cols={6} />)
+            ) : items.length === 0 ? (
+              <tr><td colSpan={6} className="p-0">
+                <EmptyState
+                  icon={Wrench}
+                  title="Aucune intervention"
+                  description="Les interventions planifiees et historiques chez vos clients apparaitront ici."
+                />
+              </td></tr>
             ) : items.map((i) => (
-              <tr key={i.id} className="border-t hover:bg-slate-50">
+              <tr key={i.id} className="border-t hover:bg-slate-50 dark:hover:bg-slate-700/50">
                 <td className="p-3">{formatDateTime(i.scheduledAt)}</td>
                 <td className="p-3 font-medium">{i.title}</td>
                 <td className="p-3">

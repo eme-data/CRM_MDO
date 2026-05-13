@@ -1,8 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { ShieldCheck, Shield, Copy } from 'lucide-react';
+import { ShieldCheck, Shield, Copy, Download, X, AlertTriangle } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 
 export default function SettingsPage() {
   const [pwd, setPwd] = useState({ oldPassword: '', newPassword: '' });
@@ -84,91 +86,230 @@ function MfaSection() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [setup, setSetup] = useState<{ qr: string; recoveryCodes: string[] } | null>(null);
   const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [disablePromptOpen, setDisablePromptOpen] = useState(false);
+  const [disableCode, setDisableCode] = useState('');
+  const confirm = useConfirm();
+  const searchParams = useSearchParams();
+  // Si l'utilisateur arrive depuis le login avec ?mfaSetup=1 (compte sans 2FA active
+  // mais role exigeant la 2FA), on declenche automatiquement le flow d'activation.
+  const requireSetup = searchParams.get('mfaSetup') === '1';
 
   async function load() {
-    const s = await api.get('/mfa/status');
-    setEnabled(s.enabled);
+    try {
+      const s = await api.get('/mfa/status');
+      setEnabled(s.enabled);
+      // Auto-trigger du flow si exige et pas encore active
+      if (requireSetup && !s.enabled) {
+        void startSetup();
+      }
+    } catch {
+      setEnabled(false);
+    }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   async function startSetup() {
-    const r = await api.post('/mfa/setup');
-    setSetup(r);
+    setBusy(true);
+    try {
+      const r = await api.post('/mfa/setup');
+      setSetup(r);
+    } catch (err: any) {
+      toast.error('Impossible de demarrer la 2FA : ' + (err?.message ?? 'erreur inconnue'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function cancelSetup() {
+    setSetup(null);
+    setCode('');
   }
 
   async function confirmEnable() {
+    const clean = code.trim().replace(/\s/g, '');
+    if (clean.length !== 6) {
+      toast.error('Le code doit faire 6 chiffres');
+      return;
+    }
+    setBusy(true);
     try {
-      await api.post('/mfa/enable', { code });
-      toast.success('2FA activee');
+      await api.post('/mfa/enable', { code: clean });
+      toast.success('2FA activee — pensez a conserver vos codes de recuperation');
       setSetup(null);
       setCode('');
       load();
-    } catch (err: any) { toast.error(err.message); }
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Code invalide');
+    } finally {
+      setBusy(false);
+    }
   }
 
-  async function disable() {
-    const c = prompt('Entrez votre code TOTP pour desactiver la 2FA');
-    if (!c) return;
+  async function askDisable() {
+    const ok = await confirm({
+      title: 'Desactiver la 2FA ?',
+      message: 'Votre compte sera moins protege. Vous devrez ensuite saisir un code valide pour confirmer.',
+      confirmLabel: 'Continuer',
+      tone: 'warning',
+    });
+    if (!ok) return;
+    setDisableCode('');
+    setDisablePromptOpen(true);
+  }
+
+  async function submitDisable() {
+    const clean = disableCode.trim().replace(/\s/g, '');
+    if (!clean) {
+      toast.error('Code requis');
+      return;
+    }
+    setBusy(true);
     try {
-      await api.post('/mfa/disable', { code: c });
+      await api.post('/mfa/disable', { code: clean });
       toast.success('2FA desactivee');
+      setDisablePromptOpen(false);
+      setDisableCode('');
       load();
-    } catch (err: any) { toast.error(err.message); }
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Code invalide');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function copyRecoveryCodes() {
+    if (!setup) return;
+    navigator.clipboard.writeText(setup.recoveryCodes.join('\n'));
+    toast.success('Codes copies');
+  }
+
+  function downloadRecoveryCodes() {
+    if (!setup) return;
+    const blob = new Blob(
+      [`Codes de recuperation 2FA — CRM MDO Services\nGenere le ${new Date().toLocaleString('fr-FR')}\n\n${setup.recoveryCodes.join('\n')}\n\nChacun n'est utilisable qu'une seule fois. Conservez-les en lieu sur.\n`],
+      { type: 'text/plain;charset=utf-8' },
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'crm-mdo-recovery-codes.txt';
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
     <div className="card p-6 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h2 className="font-semibold flex items-center gap-2">
-          {enabled ? <ShieldCheck size={18} className="text-emerald-600" /> : <Shield size={18} className="text-slate-400" />}
+          {enabled
+            ? <ShieldCheck size={18} className="text-emerald-600" />
+            : <Shield size={18} className="text-slate-400" />}
           Authentification a deux facteurs (2FA)
+          {enabled && <span className="badge bg-emerald-100 text-emerald-700">Active</span>}
         </h2>
         {enabled === false && !setup && (
-          <button onClick={startSetup} className="btn btn-primary">Activer la 2FA</button>
+          <button onClick={startSetup} disabled={busy} className="btn btn-primary">
+            {busy ? 'Preparation...' : 'Activer la 2FA'}
+          </button>
         )}
         {enabled === true && (
-          <button onClick={disable} className="btn btn-danger">Desactiver</button>
+          <button onClick={askDisable} className="btn btn-danger">Desactiver</button>
         )}
       </div>
       <p className="text-sm text-slate-500">
-        Recommandee, surtout pour les comptes administrateurs. Compatible Google Authenticator, 1Password, Authy, etc.
+        Recommandee, surtout pour les comptes administrateurs. Compatible Google Authenticator, Microsoft Authenticator, 1Password, Authy, Bitwarden, etc.
       </p>
 
-      {setup && (
-        <div className="border border-mdo-200 dark:border-mdo-700 bg-mdo-50 dark:bg-mdo-900/20 rounded p-4 space-y-3">
-          <p className="text-sm">
-            1. Scannez ce QR code avec votre application authentificateur :
-          </p>
-          <img src={setup.qr} alt="QR 2FA" className="bg-white p-2 rounded inline-block" />
-          <p className="text-sm">
-            2. Entrez le code a 6 chiffres affiche par l'app :
-          </p>
-          <div className="flex gap-2 max-w-xs">
-            <input
-              className="input font-mono text-center text-lg tracking-wider"
-              maxLength={6}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="000000"
-            />
-            <button onClick={confirmEnable} className="btn btn-primary">Activer</button>
-          </div>
-          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded p-3 text-xs">
-            <p className="font-semibold mb-2">Codes de recuperation (a noter quelque part de sur)</p>
-            <p className="text-amber-800 dark:text-amber-200 mb-2">
-              Si vous perdez votre telephone, ces codes vous permettent de vous reconnecter (chacun n'est utilisable qu'une fois).
+      {requireSetup && !enabled && (
+        <div className="rounded-md bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 p-3 flex items-start gap-2 text-sm">
+          <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium text-amber-800 dark:text-amber-200">Activation de la 2FA obligatoire</p>
+            <p className="text-amber-700 dark:text-amber-300 mt-0.5">
+              Votre role (administrateur) exige l'activation de la 2FA. Tant qu'elle n'est pas configuree, vous ne pouvez pas acceder aux autres pages du CRM.
             </p>
-            <ul className="grid grid-cols-2 gap-1 font-mono">
+          </div>
+        </div>
+      )}
+
+      {setup && (
+        <div className="border border-mdo-200 dark:border-mdo-700 bg-mdo-50 dark:bg-mdo-900/20 rounded-md p-4 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">1. Scannez ce QR code avec votre application authentificateur</p>
+              <p className="text-xs text-slate-500 mt-0.5">Ne fermez pas cette fenetre avant d'avoir confirme le code.</p>
+            </div>
+            <button onClick={cancelSetup} className="text-slate-400 hover:text-slate-600" title="Annuler"><X size={18} /></button>
+          </div>
+          <img src={setup.qr} alt="QR 2FA" className="bg-white p-2 rounded-md inline-block border border-slate-200" />
+          <div>
+            <p className="text-sm font-medium mb-2">2. Entrez le code a 6 chiffres affiche par l'app</p>
+            <div className="flex gap-2 max-w-xs">
+              <input
+                className="input font-mono text-center text-lg tracking-[0.4em]"
+                maxLength={6}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="000000"
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmEnable(); } }}
+              />
+              <button onClick={confirmEnable} disabled={busy} className="btn btn-primary">
+                {busy ? '...' : 'Activer'}
+              </button>
+            </div>
+          </div>
+          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-md p-3 text-xs">
+            <p className="font-semibold mb-1">3. Codes de recuperation (a noter quelque part de sur)</p>
+            <p className="text-amber-800 dark:text-amber-200 mb-2">
+              Si vous perdez votre telephone, ces codes vous permettent de vous reconnecter — chacun n'est utilisable qu'une seule fois.
+            </p>
+            <ul className="grid grid-cols-2 gap-1 font-mono mb-2">
               {setup.recoveryCodes.map((c, i) => (
                 <li key={i} className="bg-white dark:bg-slate-800 p-1 rounded text-center">{c}</li>
               ))}
             </ul>
-            <button
-              onClick={() => { navigator.clipboard.writeText(setup.recoveryCodes.join('\n')); toast.success('Copie'); }}
-              className="mt-2 text-xs text-mdo-600 hover:underline inline-flex items-center gap-1"
-            >
-              <Copy size={12} /> Copier les codes
-            </button>
+            <div className="flex gap-3">
+              <button onClick={copyRecoveryCodes} className="text-mdo-600 hover:underline inline-flex items-center gap-1">
+                <Copy size={12} /> Copier
+              </button>
+              <button onClick={downloadRecoveryCodes} className="text-mdo-600 hover:underline inline-flex items-center gap-1">
+                <Download size={12} /> Telecharger .txt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {disablePromptOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in"
+          onClick={() => setDisablePromptOpen(false)}
+        >
+          <div className="card max-w-sm w-full p-6 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold">Confirmer la desactivation</h3>
+            <p className="text-sm text-slate-500">Entrez un code TOTP valide (ou un code de recuperation) pour desactiver la 2FA.</p>
+            <input
+              autoFocus
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              className="input font-mono text-center text-lg tracking-[0.4em]"
+              value={disableCode}
+              onChange={(e) => setDisableCode(e.target.value)}
+              placeholder="000000"
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitDisable(); } }}
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDisablePromptOpen(false)} className="btn btn-secondary">Annuler</button>
+              <button onClick={submitDisable} disabled={busy} className="btn btn-danger">
+                {busy ? '...' : 'Desactiver'}
+              </button>
+            </div>
           </div>
         </div>
       )}

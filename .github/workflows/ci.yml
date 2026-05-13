@@ -40,13 +40,17 @@ jobs:
         run: npx prisma generate
 
       - name: Lint
+        # Strict : un lint qui passe en continue-on-error masque la dette technique.
+        # On garde un seuil de warnings tolere mais la commande doit reussir.
         run: npm run lint -- --max-warnings 50
-        continue-on-error: true
 
       - name: Build
         run: npm run build
 
       - name: Audit (production deps only)
+        # On garde continue-on-error sur l'audit : certaines CVE indirectes n'ont
+        # pas de patch upstream et bloqueraient la CI sans recours immediat.
+        # A monitorer via une issue manuelle si l'output devient verbeux.
         run: npm audit --omit=dev --audit-level=high
         continue-on-error: true
 
@@ -72,7 +76,6 @@ jobs:
 
       - name: Lint
         run: npm run lint
-        continue-on-error: true
 
       - name: Build
         run: npm run build

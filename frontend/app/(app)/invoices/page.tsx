@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { FileText, Download, Play, ExternalLink } from 'lucide-react';
 import { api, downloadAttachment } from '@/lib/api';
 import { formatDate, formatEuro } from '@/lib/utils';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: 'Brouillon', ISSUED: 'Emise', PAID: 'Payee', OVERDUE: 'En retard', CANCELLED: 'Annulee',
@@ -36,6 +37,7 @@ export default function InvoicesPage() {
   const [items, setItems] = useState<any[]>([]);
   const [status, setStatus] = useState('');
   const [generating, setGenerating] = useState(false);
+  const confirm = useConfirm();
 
   async function load() {
     const p = status ? '?status=' + status : '';
@@ -44,7 +46,13 @@ export default function InvoicesPage() {
   useEffect(() => { load(); }, [status]);
 
   async function generateMonthly() {
-    if (!confirm('Generer les factures mensuelles pour tous les contrats actifs ?')) return;
+    const ok = await confirm({
+      title: 'Generer les factures mensuelles ?',
+      message: 'Une facture brouillon sera creee pour chaque contrat actif. Les contrats deja factures ce mois-ci sont ignores.',
+      confirmLabel: 'Generer',
+      tone: 'info',
+    });
+    if (!ok) return;
     setGenerating(true);
     try {
       const r = await api.post('/invoices/generate-monthly');

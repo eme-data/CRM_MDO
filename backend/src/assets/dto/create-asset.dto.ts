@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsNotEmpty,
@@ -60,4 +61,10 @@ export class CreateAssetDto {
   @IsOptional()
   @IsString()
   contractId?: string;
+
+  // Surveillance auto SSL / WHOIS (s'applique aux types CERTIFICATE et DOMAIN).
+  // Default cote DB = true.
+  @IsOptional()
+  @IsBoolean()
+  monitoringEnabled?: boolean;
 }
