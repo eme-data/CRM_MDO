@@ -4,6 +4,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { portalApi, setPortalSession } from '@/lib/portal-api';
 
+// useSearchParams() doit s'executer cote client. Sans cette directive, Next.js 14
+// tente un prerender statique au build qui echoue avec "prerender-error".
+export const dynamic = 'force-dynamic';
+
 export default function PortalVerifyPage() {
   const router = useRouter();
   const params = useSearchParams();
