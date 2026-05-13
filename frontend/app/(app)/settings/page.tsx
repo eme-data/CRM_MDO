@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { ShieldCheck, Shield, Copy, Download, X, AlertTriangle } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, setTokens } from '@/lib/api';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 
 export default function SettingsPage() {
@@ -138,7 +138,27 @@ function MfaSection() {
       toast.success('2FA activee — pensez a conserver vos codes de recuperation');
       setSetup(null);
       setCode('');
+      // Le JWT courant contient encore mfaPending=true. Sans refresh, le
+      // MfaRequiredGuard bloquerait tous les endpoints du CRM. On force un
+      // refresh pour obtenir un nouveau JWT avec mfaPending=false, puis on
+      // redirige vers le dashboard.
+      try {
+        const refreshToken = typeof window !== 'undefined'
+          ? localStorage.getItem('crm_mdo_refresh_token')
+          : null;
+        if (refreshToken) {
+          const data = await api.post('/auth/refresh', { refreshToken });
+          setTokens(data.accessToken, data.refreshToken);
+        }
+      } catch {
+        // Si le refresh echoue (rare), on continue : l'utilisateur n'aura
+        // qu'a se reconnecter une fois pour que mfaPending soit recalcule.
+      }
       load();
+      // Redirection nette vers le dashboard : on est libere du mode MFA-pending.
+      if (typeof window !== 'undefined' && window.location.search.includes('mfaSetup=1')) {
+        window.location.href = '/dashboard';
+      }
     } catch (err: any) {
       toast.error(err?.message ?? 'Code invalide');
     } finally {
