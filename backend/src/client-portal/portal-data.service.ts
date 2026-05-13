@@ -64,7 +64,7 @@ export class PortalDataService {
       where: { id: ticketId },
       include: {
         messages: {
-          where: { internal: false },
+          where: { isInternal: false },
           orderBy: { createdAt: 'asc' },
           include: { author: { select: { firstName: true, lastName: true } } },
         },
@@ -157,8 +157,13 @@ export class PortalDataService {
         ticketId,
         content: body.content.trim(),
         authorId: null,
-        internal: false,
-        // Champs custom de provenance portail si presents dans le schema (pas critique)
+        // Auteur identifie par le contact portail (name/email gardes pour traçabilite
+        // meme si l'auteur User est null cote interne).
+        authorName: portalUser.firstName && portalUser.lastName
+          ? `${portalUser.firstName} ${portalUser.lastName}`
+          : portalUser.email,
+        authorEmail: portalUser.email,
+        isInternal: false,
       },
     });
 

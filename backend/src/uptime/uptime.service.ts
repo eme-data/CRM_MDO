@@ -10,7 +10,7 @@ const HTTP_TIMEOUT_MS = 10_000;
 const FAIL_THRESHOLD_FOR_ALERT = 3; // 3 echecs consecutifs = incident + alerte
 const CHECK_RETENTION_DAYS = 30;
 
-interface ProbeResult {
+export interface ProbeResult {
   isUp: boolean;
   httpCode: number | null;
   responseMs: number;
