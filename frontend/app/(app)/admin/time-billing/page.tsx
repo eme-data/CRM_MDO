@@ -117,7 +117,7 @@ export default function TimeBillingPage() {
     if (selected.size === 0) return;
     const ok = await confirm({
       title: `Marquer ${selected.size} saisie(s) comme facturees ?`,
-      message: 'Cette action est utile une fois la facture creee dans Sellsy/Qonto. Les saisies disparaissent du filtre "non facturees" mais restent visibles globalement.',
+      message: 'Cette action est utile une fois la facture creee dans Qonto. Les saisies disparaissent du filtre "non facturees" mais restent visibles globalement.',
       confirmLabel: 'Marquer',
       tone: 'info',
     });
@@ -187,7 +187,7 @@ export default function TimeBillingPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Facturation du temps</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Agregat par client des heures facturables sur la periode. Export CSV pour copier-coller dans Sellsy / Qonto.
+          Agregat par client des heures facturables sur la periode. Export CSV pour importer dans Qonto.
         </p>
       </div>
 

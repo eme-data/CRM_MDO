@@ -15,7 +15,8 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
   // rawBody: true expose req.rawBody pour la verification de signature HMAC
-  // des webhooks (Sellsy, ...).
+  // des webhooks externes (PDP facturation, etc.). Conserve meme sans
+  // webhook actif pour eviter un redeploiement le jour ou on en branche un.
   // bufferLogs: true permet a nestjs-pino (s'il est configure) de prendre la main
   // sur les logs de bootstrap.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {

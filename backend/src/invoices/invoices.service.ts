@@ -211,7 +211,7 @@ export class InvoicesService {
   }
 
   // ============= Cron mensuel : generation auto a partir des contrats actifs =============
-  // Desactive automatiquement quand un provider externe (Sellsy/Qonto) est
+  // Desactive automatiquement quand un provider externe (Qonto) est
   // actif ET que billing.disableInternalCron est a true (defaut). Dans ce
   // mode, c'est le provider externe qui est la source de verite des factures.
   @Cron('0 6 1 * *') // 1er du mois a 6h

@@ -132,7 +132,7 @@ export default function CompanyDetailPage() {
           <button onClick={handleEmergencyPdf} className="btn btn-secondary" title="Telecharger un PDF avec toutes les infos pour intervention hors-ligne">
             <FileWarning size={16} className="mr-1" /> PDF d'urgence
           </button>
-          {billingStatus?.configured && !company.sellsyId && !company.qontoClientId && (
+          {billingStatus?.configured && !company.qontoClientId && (
             <button
               onClick={handlePushBilling}
               disabled={pushingBilling}
@@ -142,16 +142,6 @@ export default function CompanyDetailPage() {
               <Send size={16} className="mr-1" />
               {pushingBilling ? 'Push...' : 'Pousser vers ' + billingStatus.provider}
             </button>
-          )}
-          {company.sellsyId && (
-            <a
-              href={'https://app.sellsy.com/companies/' + company.sellsyId}
-              target="_blank"
-              rel="noopener"
-              className="btn btn-secondary"
-            >
-              <Send size={16} className="mr-1" /> Voir dans Sellsy
-            </a>
           )}
           <button onClick={() => setEditing(!editing)} className="btn btn-secondary">
             <Edit size={16} className="mr-1" /> {editing ? 'Annuler' : 'Modifier'}

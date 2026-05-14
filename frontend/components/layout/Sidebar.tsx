@@ -86,7 +86,7 @@ const adminItems: NavItem[] = [
   { href: '/users', label: 'Utilisateurs', icon: UsersIcon },
   { href: '/imports', label: 'Imports CSV', icon: Upload },
   { href: '/admin/settings', label: 'API, SMTP, IMAP', icon: KeyRound },
-  { href: '/admin/billing', label: 'Facturation (Sellsy/Qonto)', icon: Receipt },
+  { href: '/admin/billing', label: 'Facturation (Qonto)', icon: Receipt },
   { href: '/admin/client-reports', label: 'Rapports clients mensuels', icon: FileBarChart },
   { href: '/admin/time-billing', label: 'Facturation du temps', icon: Clock },
   { href: '/admin/flexible-asset-types', label: 'Templates assets flexibles', icon: Layers },

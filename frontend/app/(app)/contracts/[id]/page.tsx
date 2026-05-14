@@ -43,7 +43,7 @@ export default function ContractDetailPage() {
     setPushingBilling(true);
     try {
       const res = await api.post('/billing/contracts/' + id + '/push');
-      toast.success('Pousse vers ' + res.provider + (res.sellsySubscriptionId ? ' (abonnement cree)' : ' (client cree)'));
+      toast.success('Pousse vers ' + res.provider + (res.subscriptionId ? ' (abonnement cree)' : ' (client cree)'));
       load();
     } catch (err: any) {
       toast.error(err.message ?? 'Echec push');
@@ -134,7 +134,7 @@ export default function ContractDetailPage() {
               <button onClick={handleTerminate} className="btn btn-secondary">
                 <XCircle size={16} className="mr-1" /> Resilier
               </button>
-              {billingStatus?.configured && !contract.sellsySubscriptionId && (
+              {billingStatus?.configured && !contract.externalSyncedAt && (
                 <button onClick={handlePushBilling} disabled={pushingBilling} className="btn btn-secondary">
                   <Send size={16} className="mr-1" />
                   {pushingBilling ? 'Push...' : 'Pousser vers ' + billingStatus.provider}
@@ -200,23 +200,12 @@ export default function ContractDetailPage() {
             <h2 className="font-semibold mb-2">Description</h2>
             <p className="text-sm text-slate-600 whitespace-pre-wrap">{contract.description || 'Aucune description'}</p>
           </div>
-          {contract.sellsySubscriptionId && (
+          {contract.externalSyncedAt && (
             <div className="card p-6 md:col-span-2 border-purple-200 bg-purple-50/50">
               <h2 className="font-semibold mb-2 flex items-center gap-2">
-                <Send size={16} /> Synchronisation Sellsy
+                <Send size={16} /> Synchronisation facturation externe
               </h2>
-              <Info label="Abonnement Sellsy" value={contract.sellsySubscriptionId} />
-              {contract.externalSyncedAt && (
-                <Info label="Derniere synchro" value={formatDate(contract.externalSyncedAt)} />
-              )}
-              <a
-                href={'https://app.sellsy.com/subscriptions/' + contract.sellsySubscriptionId}
-                target="_blank"
-                rel="noopener"
-                className="text-sm text-mdo-600 hover:underline mt-2 inline-block"
-              >
-                Ouvrir dans Sellsy
-              </a>
+              <Info label="Derniere synchro" value={formatDate(contract.externalSyncedAt)} />
             </div>
           )}
           {contract.alerts && contract.alerts.length > 0 && (

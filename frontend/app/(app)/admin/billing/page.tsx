@@ -6,11 +6,10 @@ import { Receipt, RefreshCw, Database, ExternalLink, AlertCircle, CheckCircle2, 
 import { api } from '@/lib/api';
 
 interface BillingStatus {
-  provider: string; // none / sellsy / qonto
+  provider: string; // none / qonto
   configured: boolean;
   autoPushContracts: boolean;
   disableInternalCron: boolean;
-  sellsyConfigured: boolean;
   qontoConfigured: boolean;
   qontoSyncEnabled: boolean;
 }
@@ -43,8 +42,7 @@ export default function AdminBillingPage() {
   if (!status) return <div>Chargement...</div>;
 
   const providerLabel =
-    status.provider === 'sellsy' ? 'Sellsy'
-    : status.provider === 'qonto' ? 'Qonto'
+    status.provider === 'qonto' ? 'Qonto'
     : 'Aucun (mode interne)';
 
   return (
@@ -103,7 +101,6 @@ export default function AdminBillingPage() {
           value={status.configured ? 'OK (credentials valides)' : 'Incomplet - reglez les cles dans Parametres'}
           ok={status.configured}
         />
-        <Row label="Sellsy configure" value={status.sellsyConfigured ? 'Oui' : 'Non'} ok={status.sellsyConfigured} />
         <Row label="Qonto configure" value={status.qontoConfigured ? 'Oui' : 'Non'} ok={status.qontoConfigured} />
         <Row
           label="Push auto des contrats"
@@ -136,28 +133,6 @@ export default function AdminBillingPage() {
         </div>
       )}
 
-      {status.sellsyConfigured && (
-        <div className="card p-6 space-y-3">
-          <h2 className="font-semibold">Sellsy - Webhook</h2>
-          <p className="text-sm text-slate-500">
-            Configurez ce webhook dans Sellsy &gt; Reglages &gt; Integrations pour recevoir les changements de statut facture.
-          </p>
-          <code className="block bg-slate-100 dark:bg-slate-800 p-3 rounded text-xs font-mono">
-            POST https://crm.mdoservices.fr/api/billing/webhooks/sellsy
-          </code>
-          <p className="text-xs text-slate-500">
-            Header attendu : <code>X-Sellsy-Signature</code> (HMAC SHA-256 avec le secret configure dans les parametres).
-          </p>
-          <a
-            href="https://app.sellsy.com"
-            target="_blank"
-            rel="noopener"
-            className="inline-flex items-center gap-1 text-sm text-mdo-600 hover:underline"
-          >
-            <ExternalLink size={14} /> Ouvrir Sellsy
-          </a>
-        </div>
-      )}
     </div>
   );
 }

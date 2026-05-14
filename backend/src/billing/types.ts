@@ -1,9 +1,13 @@
-// Types communs pour les providers de facturation externe (Sellsy, Qonto, ...)
+// Types communs pour les providers de facturation externe.
+//
+// Provider actif unique : Qonto Factures (PDP conforme facturation
+// electronique 2026-2027). L'interface BillingProvider reste generique
+// pour permettre l'ajout d'un autre PDP a l'avenir sans refactor majeur.
 //
 // Le CRM ne genere plus les factures lui-meme quand un provider externe
 // est configure : il pousse les contrats / clients vers l'outil tiers
-// (qui sera la source de verite pour la facturation electronique PDP),
-// et recoit en retour les statuts via webhook ou pull periodique.
+// (source de verite pour la facturation electronique PDP), et recoit en
+// retour les statuts via webhook ou pull periodique.
 
 import { BillingProviderKind, InvoiceStatus } from '@prisma/client';
 

@@ -1,16 +1,16 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { BillingProviderKind, InvoiceStatus } from '@prisma/client';
-import * as crypto from 'crypto';
+import { InvoiceStatus } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { SettingsService } from '../settings/settings.service';
-import { SellsyProvider } from './sellsy.provider';
 import { QontoProvider } from './qonto.provider';
 import { BillingProvider } from './types';
 
-// Orchestrateur : choisit le provider actif a partir des settings,
-// expose les methodes haut niveau (sync contrat/client) et gere les
-// callbacks webhook + crons.
+// Orchestrateur de facturation externe. Qonto Factures = unique PDP (Plateforme
+// de Dematerialisation Partenaire) retenu apres retrait de Sellsy du stack MDO
+// (2026-05). Les champs schema sellsyId / sellsySubscriptionId / enum SELLSY
+// restent en base pour preserver l'integrite des donnees historiques mais ne
+// sont plus utilises en ecriture.
 
 @Injectable()
 export class BillingService {
@@ -19,14 +19,12 @@ export class BillingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settings: SettingsService,
-    private readonly sellsy: SellsyProvider,
     private readonly qonto: QontoProvider,
   ) {}
 
   // ---------- Selection du provider ----------
   async getActiveProvider(): Promise<BillingProvider | null> {
     const choice = (await this.settings.get('billing.provider')) ?? 'none';
-    if (choice === 'sellsy' && (await this.sellsy.isConfigured())) return this.sellsy;
     if (choice === 'qonto' && (await this.qonto.isConfigured())) return this.qonto;
     return null;
   }
@@ -36,7 +34,6 @@ export class BillingService {
     configured: boolean;
     autoPushContracts: boolean;
     disableInternalCron: boolean;
-    sellsyConfigured: boolean;
     qontoConfigured: boolean;
     qontoSyncEnabled: boolean;
   }> {
@@ -46,7 +43,6 @@ export class BillingService {
       configured: Boolean(await this.getActiveProvider()),
       autoPushContracts: await this.settings.getBool('billing.autoPushContracts'),
       disableInternalCron: await this.settings.getBool('billing.disableInternalCron'),
-      sellsyConfigured: await this.sellsy.isConfigured(),
       qontoConfigured: await this.qonto.isConfigured(),
       qontoSyncEnabled: await this.settings.getBool('billing.qonto.syncEnabled'),
     };
@@ -60,11 +56,8 @@ export class BillingService {
     const c = await this.prisma.company.findUnique({ where: { id: companyId } });
     if (!c) throw new NotFoundException('Societe introuvable');
 
-    // Si deja synchronise vers ce provider, on n'ecrase rien
-    if (provider.kind === 'SELLSY' && c.sellsyId) {
-      return { externalId: c.sellsyId, provider: 'sellsy' };
-    }
-    if (provider.kind === 'QONTO' && c.qontoClientId) {
+    // Si deja synchronise vers Qonto, on n'ecrase rien
+    if (c.qontoClientId) {
       return { externalId: c.qontoClientId, provider: 'qonto' };
     }
 
@@ -81,18 +74,18 @@ export class BillingService {
       country: c.country,
     });
 
-    const data: any = {};
-    if (provider.kind === 'SELLSY') data.sellsyId = remote.externalId;
-    if (provider.kind === 'QONTO') data.qontoClientId = remote.externalId;
-    await this.prisma.company.update({ where: { id: companyId }, data });
+    await this.prisma.company.update({
+      where: { id: companyId },
+      data: { qontoClientId: remote.externalId },
+    });
 
-    return { externalId: remote.externalId, provider: provider.kind.toLowerCase() };
+    return { externalId: remote.externalId, provider: 'qonto' };
   }
 
   // ---------- Push d'un contrat (client + abonnement recurrent) ----------
   async pushContract(contractId: string): Promise<{
-    sellsyClientId?: string;
-    sellsySubscriptionId?: string;
+    qontoClientId?: string;
+    subscriptionId?: string;
     provider: string;
   }> {
     const provider = await this.getActiveProvider();
@@ -124,10 +117,7 @@ export class BillingService {
         subscriptionId = sub.externalId;
         await this.prisma.contract.update({
           where: { id: contractId },
-          data: {
-            sellsySubscriptionId: provider.kind === 'SELLSY' ? sub.externalId : undefined,
-            externalSyncedAt: new Date(),
-          },
+          data: { externalSyncedAt: new Date() },
         });
       } catch (err: any) {
         this.logger.warn(
@@ -137,9 +127,9 @@ export class BillingService {
     }
 
     return {
-      sellsyClientId: provider.kind === 'SELLSY' ? clientPush.externalId : undefined,
-      sellsySubscriptionId: subscriptionId,
-      provider: provider.kind.toLowerCase(),
+      qontoClientId: clientPush.externalId,
+      subscriptionId,
+      provider: 'qonto',
     };
   }
 
@@ -203,50 +193,6 @@ export class BillingService {
       include: { lines: true },
     });
     return cached;
-  }
-
-  // ---------- Webhook Sellsy ----------
-  // Verifie la signature HMAC et applique l'evenement (mise a jour statut facture).
-  verifySellsySignature(rawBody: string, signature: string | undefined, secret: string): boolean {
-    if (!signature || !secret) return false;
-    const computed = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
-    try {
-      return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signature));
-    } catch {
-      return false;
-    }
-  }
-
-  async handleSellsyEvent(event: any): Promise<{ ok: boolean; updated?: string }> {
-    // Format attendu (a aligner avec la doc Sellsy actuelle) :
-    // { event: 'invoice.paid', resource: { id: '12345', status: 'paid', ... } }
-    const type: string = event?.event ?? event?.type ?? '';
-    const resource = event?.resource ?? event?.data ?? {};
-    if (!type.startsWith('invoice.')) return { ok: true };
-
-    const externalId = String(resource.id ?? '');
-    if (!externalId) return { ok: true };
-
-    const inv = await this.prisma.invoice.findFirst({
-      where: { provider: BillingProviderKind.SELLSY, externalId },
-    });
-    if (!inv) return { ok: true }; // facture pas (encore) cachee localement
-
-    // Pull frais pour avoir l'etat reel (les payloads webhook sont parfois minimes)
-    const fresh = await this.sellsy.pullInvoice(externalId);
-    if (!fresh) return { ok: true };
-
-    await this.prisma.invoice.update({
-      where: { id: inv.id },
-      data: {
-        status: fresh.status,
-        paidAt: fresh.status === 'PAID' ? (fresh.paidAt ?? new Date()) : null,
-        externalUrl: fresh.url ?? inv.externalUrl,
-        externalPdfUrl: fresh.pdfUrl ?? inv.externalPdfUrl,
-        externalSyncedAt: new Date(),
-      },
-    });
-    return { ok: true, updated: inv.id };
   }
 
   // ---------- Cron sync facture (fallback si webhook indisponible) ----------

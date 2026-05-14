@@ -7,7 +7,7 @@ import { PrismaService } from '../database/prisma.service';
 //
 // Pas de "MRR projeté" theorique pour rester sur du factuel : on n'extrapole
 // pas les contrats recurrents (cela serait double-comptabilise quand les factures
-// auront ete generees + poussees vers Sellsy/Qonto).
+// auront ete generees + poussees vers Qonto).
 
 @Injectable()
 export class CashFlowService {

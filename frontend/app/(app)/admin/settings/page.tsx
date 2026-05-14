@@ -38,10 +38,10 @@ const CATEGORY_META: Record<string, { title: string; icon: any; description: str
     description: 'Delais de reponse cibles par offre client (Essentiel / Pro / Souverain).',
   },
   billing: {
-    title: 'Facturation externe (Sellsy / Qonto)',
+    title: 'Facturation externe (Qonto)',
     icon: Receipt,
     description:
-      'Connecteurs vers les outils de facturation electronique (PDP). Sellsy genere les factures et abonnements ; Qonto synchronise les transactions bancaires pour rapprochement.',
+      'Connecteur vers Qonto (PDP de facturation electronique + synchronisation des transactions bancaires pour rapprochement).',
   },
 };
 
@@ -54,7 +54,7 @@ export default function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [testEmail, setTestEmail] = useState('');
-  const [testing, setTesting] = useState<'smtp' | 'imap' | 'sellsy' | 'qonto' | null>(null);
+  const [testing, setTesting] = useState<'smtp' | 'imap' | 'qonto' | null>(null);
 
   async function load() {
     setLoading(true);
@@ -113,7 +113,7 @@ export default function AdminSettingsPage() {
     }
   }
 
-  async function testProvider(kind: 'sellsy' | 'qonto') {
+  async function testProvider(kind: 'qonto') {
     setTesting(kind);
     try {
       const res = await api.post('/billing/test/' + kind);
@@ -206,14 +206,6 @@ export default function AdminSettingsPage() {
 
             {cat === 'billing' && (
               <div className="border-t pt-4 flex flex-wrap gap-2">
-                <button
-                  onClick={() => testProvider('sellsy')}
-                  disabled={testing === 'sellsy'}
-                  className="btn btn-secondary"
-                >
-                  <TestTube size={14} className="mr-1" />
-                  {testing === 'sellsy' ? 'Test...' : 'Tester Sellsy'}
-                </button>
                 <button
                   onClick={() => testProvider('qonto')}
                   disabled={testing === 'qonto'}

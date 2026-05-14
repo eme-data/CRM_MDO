@@ -172,7 +172,7 @@ export default function AgingReportPage() {
                         target="_blank"
                         rel="noopener"
                         className="text-mdo-600 hover:text-mdo-700"
-                        title="Ouvrir dans le PDP (Sellsy / Qonto)"
+                        title="Ouvrir dans le PDP (Qonto)"
                       >
                         <ExternalLink size={14} />
                       </a>

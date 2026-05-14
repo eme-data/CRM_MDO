@@ -12,8 +12,8 @@ import {
 
 // QontoProvider : aujourd'hui surtout utilise pour la lecture des transactions
 // bancaires (rapprochement paiements). L'edition/emission de factures Qonto
-// (Qonto Factures) est volontairement laissee en squelette : Mathieu utilise
-// Sellsy aujourd'hui, on prevoit Qonto si bascule.
+// (Qonto Factures) est volontairement laissee en squelette — a implementer
+// quand Mathieu bascule la facturation cote Qonto.
 
 @Injectable()
 export class QontoProvider implements BillingProvider {
@@ -73,13 +73,13 @@ export class QontoProvider implements BillingProvider {
   // ---------- Facturation Qonto Factures (squelette) ----------
   async pushClient(_input: PushClientInput): Promise<RemoteClient> {
     throw new Error(
-      'Qonto Factures : pushClient pas encore implemente. Utiliser Sellsy ou contribuer cette methode.',
+      'Qonto Factures : pushClient pas encore implemente. A coder quand on basculera la facturation cote Qonto.',
     );
   }
 
   async pushInvoice(_input: PushInvoiceInput): Promise<RemoteInvoice> {
     throw new Error(
-      'Qonto Factures : pushInvoice pas encore implemente. Utiliser Sellsy ou contribuer cette methode.',
+      'Qonto Factures : pushInvoice pas encore implemente. A coder quand on basculera la facturation cote Qonto.',
     );
   }
 

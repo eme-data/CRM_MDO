@@ -305,7 +305,7 @@ export class TimeEntriesService {
     });
   }
 
-  /** Marque une liste d'entries comme facturees (ex. apres envoi vers Sellsy). */
+  /** Marque une liste d'entries comme facturees (ex. apres envoi vers Qonto). */
   async markInvoiced(ids: string[], invoicerId: string, invoiceReference?: string) {
     if (ids.length === 0) return { updated: 0 };
     const r = await this.prisma.timeEntry.updateMany({
@@ -328,7 +328,7 @@ export class TimeEntriesService {
     return { updated: r.count };
   }
 
-  /** Export CSV des entries facturables d'une societe (a coller dans Sellsy). */
+  /** Export CSV des entries facturables d'une societe (importable dans Qonto). */
   async exportCsv(params: { companyId: string; from: string; to: string; onlyUnbilled?: boolean }): Promise<string> {
     const items = await this.billingDetail(params);
     const lines: string[] = [];

@@ -140,8 +140,11 @@ model Company {
   owner       User?         @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
 
   // Identifiants externes (outils de facturation tiers)
-  sellsyId    String?       @unique  // ID du tiers correspondant dans Sellsy
-  qontoClientId String?     @unique  // ID du client dans Qonto Factures (si utilise)
+  // @deprecated 2026-05 : Sellsy retire du stack MDO. Champ conserve pour ne
+  // pas perdre les references historiques des companies deja synchronisees
+  // dans Sellsy. Plus aucune ecriture cote code.
+  sellsyId    String?       @unique
+  qontoClientId String?     @unique  // ID du client dans Qonto Factures
 
   contacts       Contact[]
   opportunities  Opportunity[]
@@ -307,7 +310,9 @@ model Contract {
   nextContract       Contract?      @relation("ContractRenewal")
 
   // Synchronisation outil de facturation externe
-  sellsySubscriptionId String?      @unique  // ID abonnement recurrent cote Sellsy
+  // @deprecated 2026-05 : Sellsy retire du stack MDO. Champ conserve pour
+  // ne pas perdre les references historiques d'abonnements deja synchronises.
+  sellsySubscriptionId String?      @unique
   externalSyncedAt   DateTime?
 
   description        String?
@@ -1026,7 +1031,9 @@ enum InvoiceStatus {
 // Origine de la facture : interne au CRM, ou miroir d'un outil externe (PDP)
 enum BillingProviderKind {
   INTERNAL  // Facture generee dans le CRM (mode legacy / compatibilite)
-  SELLSY    // Source de verite : Sellsy (PDP)
+  // @deprecated 2026-05 : Sellsy retire du stack MDO. Valeur conservee pour
+  // preserver l'integrite des Invoice historiques deja crees avec ce provider.
+  SELLSY
   QONTO     // Source de verite : Qonto Factures (PDP)
 }
 

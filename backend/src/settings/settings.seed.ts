@@ -207,13 +207,16 @@ export const SETTINGS_DEFS: SettingDef[] = [
     defaultValue: '0.5',
   },
 
-  // ---------- Facturation externe (Sellsy / Qonto) ----------
+  // ---------- Facturation externe (Qonto Factures) ----------
+  // Note 2026-05 : Sellsy retire du stack MDO. Les anciennes entrees
+  // billing.sellsy.* restent eventuellement en base (settings non purges)
+  // mais ne sont plus seedees ni utilisees par le code.
   {
     key: 'billing.provider',
     category: 'billing',
     label: 'Outil de facturation actif',
     description:
-      'Choix du moteur de facturation. Valeurs : "none" (interne CRM, mode legacy), "sellsy" (PDP recommande), "qonto" (Qonto Factures).',
+      'Choix du moteur de facturation. Valeurs : "none" (interne CRM, mode legacy) ou "qonto" (Qonto Factures, PDP).',
     defaultValue: 'none',
     envVar: 'BILLING_PROVIDER',
   },
@@ -222,7 +225,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
     category: 'billing',
     label: 'Pousser auto les nouveaux contrats vers le provider',
     description:
-      'Si true, a la creation/activation d\'un Contract, le client + l\'abonnement sont automatiquement crees dans Sellsy/Qonto.',
+      'Si true, a la creation/activation d\'un Contract, le client + l\'abonnement sont automatiquement crees dans Qonto.',
     defaultValue: 'false',
   },
   {
@@ -230,49 +233,8 @@ export const SETTINGS_DEFS: SettingDef[] = [
     category: 'billing',
     label: 'Desactiver la generation interne mensuelle de factures',
     description:
-      'Recommande quand un provider externe (Sellsy/Qonto) est actif : evite de creer des doublons cote CRM. Le cron interne reste utile uniquement en mode "none".',
+      'Recommande quand Qonto est actif : evite de creer des doublons cote CRM. Le cron interne reste utile uniquement en mode "none".',
     defaultValue: 'true',
-  },
-
-  // -- Sellsy --
-  {
-    key: 'billing.sellsy.clientId',
-    category: 'billing',
-    label: 'Sellsy - Client ID OAuth2',
-    description:
-      'Cree depuis https://go.sellsy.com > Reglages > Integrations > Applications publiques (OAuth2 client_credentials).',
-    envVar: 'SELLSY_CLIENT_ID',
-  },
-  {
-    key: 'billing.sellsy.clientSecret',
-    category: 'billing',
-    label: 'Sellsy - Client Secret OAuth2',
-    isSecret: true,
-    envVar: 'SELLSY_CLIENT_SECRET',
-  },
-  {
-    key: 'billing.sellsy.apiBase',
-    category: 'billing',
-    label: 'Sellsy - URL de base API',
-    description: 'API v2 Sellsy. Defaut : https://api.sellsy.com/v2',
-    defaultValue: 'https://api.sellsy.com/v2',
-    envVar: 'SELLSY_API_BASE',
-  },
-  {
-    key: 'billing.sellsy.webhookSecret',
-    category: 'billing',
-    label: 'Sellsy - Secret HMAC webhook',
-    description:
-      'Secret partage utilise pour verifier la signature X-Sellsy-Signature des callbacks (statut facture, paiement).',
-    isSecret: true,
-    envVar: 'SELLSY_WEBHOOK_SECRET',
-  },
-  {
-    key: 'billing.sellsy.defaultRate',
-    category: 'billing',
-    label: 'Sellsy - ID du taux de TVA par defaut',
-    description: 'ID numerique du taux 20% dans le compte Sellsy (recupere via /rates).',
-    envVar: 'SELLSY_DEFAULT_RATE_ID',
   },
 
   // -- Qonto --

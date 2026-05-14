@@ -3,13 +3,12 @@ import { SettingsModule } from '../settings/settings.module';
 import { BillingService } from './billing.service';
 import { BillingController } from './billing.controller';
 import { CashFlowService } from './cashflow.service';
-import { SellsyProvider } from './sellsy.provider';
 import { QontoProvider } from './qonto.provider';
 
 @Module({
   imports: [SettingsModule],
-  providers: [BillingService, CashFlowService, SellsyProvider, QontoProvider],
+  providers: [BillingService, CashFlowService, QontoProvider],
   controllers: [BillingController],
-  exports: [BillingService, SellsyProvider, QontoProvider],
+  exports: [BillingService, QontoProvider],
 })
 export class BillingModule {}

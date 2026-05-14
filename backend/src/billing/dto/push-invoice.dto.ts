@@ -30,10 +30,11 @@ export class InvoiceLineInputDto {
   unitPriceHt!: number;
 }
 
-// Push manuel d'une facture vers Sellsy/Qonto (cas devis ponctuel, complement
-// hors-contrat, etc.). Le ValidationPipe global (whitelist + forbidNonWhitelisted
-// + transform) rejette les payloads malformes avec un 400 propre, plutot que
-// de laisser passer des champs inattendus jusqu'a l'appel API du provider.
+// Push manuel d'une facture vers le provider externe (Qonto Factures) — cas
+// devis ponctuel, complement hors-contrat, etc. Le ValidationPipe global
+// (whitelist + forbidNonWhitelisted + transform) rejette les payloads malformes
+// avec un 400 propre, plutot que de laisser passer des champs inattendus
+// jusqu'a l'appel API du provider.
 export class PushInvoiceDto {
   @IsUUID()
   companyId!: string;
@@ -69,7 +70,7 @@ export class PushInvoiceDto {
   @IsArray()
   @ArrayMinSize(1)
   // 100 lignes max : largement au-dessus d'un usage normal MSP, mais protege
-  // contre un payload accidentellement enorme qui ferait timeout l'API Sellsy.
+  // contre un payload accidentellement enorme qui ferait timeout l'API du PDP.
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => InvoiceLineInputDto)
