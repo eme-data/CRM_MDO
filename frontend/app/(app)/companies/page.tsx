@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { companyStatusLabel, sectorLabel } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableRowSkeleton } from '@/components/ui/Skeleton';
+import { Pagination } from '@/components/ui/Pagination';
 
 interface Company {
   id: string;
@@ -19,22 +20,45 @@ interface Company {
   _count: { contacts: number; contracts: number; opportunities: number };
 }
 
+interface CompaniesPage {
+  items: Company[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
+}
+
 export default function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageCount, setPageCount] = useState(1);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // Reset a la page 1 quand search/status changent : sinon on peut se
+  // retrouver sur la page 5 d'un filtre qui n'a qu'une page de resultats →
+  // ecran vide trompeur.
+  useEffect(() => {
+    setPage(1);
+  }, [search, status]);
 
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams();
     if (search) params.set('search', search);
     if (status) params.set('status', status);
+    params.set('page', String(page));
     api
-      .get('/companies' + (params.toString() ? '?' + params.toString() : ''))
-      .then((res) => setCompanies(res.items))
+      .get<CompaniesPage>('/companies?' + params.toString())
+      .then((res) => {
+        setCompanies(res.items);
+        setPageCount(res.pageCount);
+        setTotal(res.total);
+      })
       .finally(() => setLoading(false));
-  }, [search, status]);
+  }, [search, status, page]);
 
   return (
     <div className="space-y-6">
@@ -120,6 +144,13 @@ export default function CompaniesPage() {
             )}
           </tbody>
         </table>
+        <Pagination
+          page={page}
+          pageCount={pageCount}
+          total={total}
+          onChange={setPage}
+          itemLabel="societe"
+        />
       </div>
     </div>
   );

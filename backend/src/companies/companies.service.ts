@@ -4,16 +4,21 @@ import { PrismaService } from '../database/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { QueryCompaniesDto } from './dto/query-companies.dto';
+import { buildPageResult, toSkipTake } from '../common/pagination/pagination.dto';
 
 @Injectable()
 export class CompaniesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(query: QueryCompaniesDto) {
-    const page = query.page ?? 1;
-    const pageSize = query.pageSize ?? 25;
-    const where: Prisma.CompanyWhereInput = {};
+    // toSkipTake clamp pageSize a Max 200 (defense en profondeur meme si le
+    // DTO le valide deja) et normalise les defauts (page=1, pageSize=25 ici).
+    const { skip, take, page, pageSize } = toSkipTake({
+      page: query.page,
+      pageSize: query.pageSize ?? 25,
+    });
 
+    const where: Prisma.CompanyWhereInput = {};
     if (query.search) {
       where.OR = [
         { name: { contains: query.search, mode: 'insensitive' } },
@@ -34,13 +39,16 @@ export class CompaniesService {
           _count: { select: { contacts: true, contracts: true, opportunities: true } },
         },
         orderBy: { updatedAt: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        skip,
+        take,
       }),
       this.prisma.company.count({ where }),
     ]);
 
-    return { items, total, page, pageSize };
+    // buildPageResult ajoute pageCount = ceil(total / pageSize) que le frontend
+    // utilise pour rendre les controles "Page X / Y" et desactiver Next sur
+    // la derniere page.
+    return buildPageResult(items, total, page, pageSize);
   }
 
   async findOne(id: string) {
