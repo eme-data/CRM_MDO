@@ -118,8 +118,13 @@ export class CyberScoreService {
       netCount,
       locCount,
     ] = await Promise.all([
-      // M365 tenant + isActive
-      this.prisma.m365Tenant.findUnique({ where: { companyId } }),
+      // M365 tenant : on selectionne isActive + secureScorePercent en plus du flag.
+      // Le secureScorePercent est rempli par le cron M365 quand l'API Graph
+      // /security/secureScores est accessible (E3/E5/Business Premium).
+      this.prisma.m365Tenant.findUnique({
+        where: { companyId },
+        select: { id: true, isActive: true, secureScorePercent: true },
+      }),
       // Users enabled + MFA
       this.prisma.m365User.aggregate({
         where: { m365Tenant: { companyId }, accountEnabled: true },
@@ -234,6 +239,7 @@ export class CyberScoreService {
         enabledUsers: m365Users._count._all,
         usersWithMfa,
         openAlerts: sev,
+        secureScorePercent: tenant?.secureScorePercent ?? null,
       },
       assets: {
         activeCount: assetsActive,

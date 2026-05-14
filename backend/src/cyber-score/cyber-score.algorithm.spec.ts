@@ -8,6 +8,7 @@ function emptyInputs(): ScoreInputs {
       enabledUsers: 0,
       usersWithMfa: 0,
       openAlerts: { high: 0, medium: 0, low: 0 },
+      secureScorePercent: null,
     },
     assets: { activeCount: 0, expiredCount: 0, expiringSoonCount: 0 },
     certificates: { monitoredCount: 0, inError: 0, expired: 0 },
@@ -38,6 +39,7 @@ describe('computeCyberScore', () => {
           enabledUsers: 20,
           usersWithMfa: 20,
           openAlerts: { high: 0, medium: 0, low: 0 },
+          secureScorePercent: null,
         },
         assets: { activeCount: 30, expiredCount: 0, expiringSoonCount: 0 },
         certificates: { monitoredCount: 5, inError: 0, expired: 0 },
@@ -57,6 +59,7 @@ describe('computeCyberScore', () => {
           enabledUsers: 10,
           usersWithMfa: 0,
           openAlerts: { high: 5, medium: 10, low: 20 },
+          secureScorePercent: null,
         },
         assets: { activeCount: 10, expiredCount: 8, expiringSoonCount: 0 },
         certificates: { monitoredCount: 5, inError: 3, expired: 2 },
@@ -72,7 +75,60 @@ describe('computeCyberScore', () => {
     });
   });
 
-  describe('sous-score MFA M365', () => {
+  describe('sous-score posture M365 — Microsoft Secure Score', () => {
+    it('utilise Secure Score quand disponible (label different de MFA)', () => {
+      const inputs = emptyInputs();
+      inputs.m365.tenantConfigured = true;
+      inputs.m365.enabledUsers = 10;
+      inputs.m365.usersWithMfa = 8; // MFA = 80%
+      inputs.m365.secureScorePercent = 72.5; // Secure Score plus complet
+      const r = computeCyberScore(inputs);
+      expect(r.subscores.mfa.score).toBeCloseTo(72.5, 1);
+      expect(r.subscores.mfa.label).toBe('Microsoft Secure Score');
+      // Le detail mentionne aussi le MFA en complement (pour visibilite RDV client)
+      expect(r.subscores.mfa.detail).toContain('MFA');
+    });
+
+    it('retombe sur MFA pur quand Secure Score N/A (tenant non eligible)', () => {
+      const inputs = emptyInputs();
+      inputs.m365.tenantConfigured = true;
+      inputs.m365.enabledUsers = 10;
+      inputs.m365.usersWithMfa = 7;
+      inputs.m365.secureScorePercent = null; // pas de Secure Score (TPE en E1 par ex.)
+      const r = computeCyberScore(inputs);
+      expect(r.subscores.mfa.score).toBe(70);
+      expect(r.subscores.mfa.label).toBe('MFA M365');
+      expect(r.subscores.mfa.detail).toContain('Secure Score N/A');
+    });
+
+    it('Secure Score < 50 declenche une reco priorite 1 pointant vers le portail Microsoft', () => {
+      const inputs = emptyInputs();
+      inputs.m365.tenantConfigured = true;
+      inputs.m365.enabledUsers = 10;
+      inputs.m365.usersWithMfa = 10; // MFA OK mais Secure Score bas (autres signaux)
+      inputs.m365.secureScorePercent = 45;
+      const r = computeCyberScore(inputs);
+      const rec = r.recommendations.find((x) => x.title.includes('Secure Score'));
+      expect(rec).toBeDefined();
+      expect(rec!.priority).toBe(1);
+      expect(rec!.title).toContain('Microsoft Defender');
+    });
+
+    it('Secure Score borne (>100 ou <0) clampe a 0-100', () => {
+      const inputs = emptyInputs();
+      inputs.m365.tenantConfigured = true;
+      inputs.m365.enabledUsers = 5;
+      inputs.m365.secureScorePercent = 105; // bug source eventuel
+      const r = computeCyberScore(inputs);
+      expect(r.subscores.mfa.score).toBe(100);
+
+      inputs.m365.secureScorePercent = -5;
+      const r2 = computeCyberScore(inputs);
+      expect(r2.subscores.mfa.score).toBe(0);
+    });
+  });
+
+  describe('sous-score MFA M365 (fallback)', () => {
     it('null si tenant non configure (pas applicable)', () => {
       const r = computeCyberScore(emptyInputs());
       expect(r.subscores.mfa.score).toBeNull();

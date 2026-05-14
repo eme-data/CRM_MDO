@@ -143,6 +143,7 @@ export class M365Service {
       const licCount = await this.syncLicenses(tenant.id, accessToken).catch((e) => { errors.push('licenses: ' + e.message); return 0; });
       const mfaUpdated = await this.syncMfaStatus(tenant.id, accessToken).catch((e) => { errors.push('mfa: ' + e.message); return 0; });
       const alertsCount = await this.syncSecurityAlerts(tenant.id, accessToken).catch((e) => { errors.push('alerts: ' + e.message); return 0; });
+      const securePercent = await this.syncSecureScore(tenant.id, accessToken).catch((e) => { errors.push('secureScore: ' + e.message); return null; });
 
       const status = errors.length === 0 ? 'OK' : 'PARTIAL';
       await this.prisma.m365Tenant.update({
@@ -153,7 +154,7 @@ export class M365Service {
           lastSyncError: errors.length > 0 ? errors.join(' | ').slice(0, 500) : null,
         },
       });
-      return { usersCount, licCount, mfaUpdated, alertsCount, errors };
+      return { usersCount, licCount, mfaUpdated, alertsCount, securePercent, errors };
     } catch (err: any) {
       await this.prisma.m365Tenant.update({
         where: { id: tenant.id },
@@ -312,6 +313,52 @@ export class M365Service {
       });
     }
     return alerts.length;
+  }
+
+  /**
+   * Microsoft Secure Score : indicateur officiel Microsoft de la posture de
+   * securite du tenant (couvre MFA, conditional access, Defender, partage
+   * externe, etc.). Endpoint : /security/secureScores. Necessite la permission
+   * SecurityEvents.Read.All et un tenant avec licence appropriee (E3/E5/Business
+   * Premium typiquement). On prend le dernier (top=1, l'API retourne par ordre
+   * descendant).
+   *
+   * Si l'endpoint retourne 0 element (tenant sans Secure Score disponible) ou
+   * 401/403 (permission/licence manquante), on capture en upstream via le
+   * .catch() de l'orchestrateur — ces tenants restent avec secureScorePercent=null
+   * et le Cyber Score retombe sur la MFA pure (cf cyber-score.algorithm).
+   */
+  private async syncSecureScore(tenantPk: string, accessToken: string): Promise<number | null> {
+    const items = await this.graph.getAll<any>(accessToken, '/security/secureScores?$top=1');
+    if (items.length === 0) {
+      // Tenant connecte mais pas eligible Secure Score : on remet les champs
+      // a null pour ne pas garder une valeur perimee.
+      await this.prisma.m365Tenant.update({
+        where: { id: tenantPk },
+        data: {
+          secureScore: null,
+          secureScoreMax: null,
+          secureScorePercent: null,
+          secureScoreSyncedAt: new Date(),
+        },
+      });
+      return null;
+    }
+    const s = items[0];
+    const current = typeof s.currentScore === 'number' ? s.currentScore : Number(s.currentScore);
+    const max = typeof s.maxScore === 'number' ? s.maxScore : Number(s.maxScore);
+    if (!Number.isFinite(current) || !Number.isFinite(max) || max <= 0) return null;
+    const percent = (current / max) * 100;
+    await this.prisma.m365Tenant.update({
+      where: { id: tenantPk },
+      data: {
+        secureScore: current,
+        secureScoreMax: max,
+        secureScorePercent: percent,
+        secureScoreSyncedAt: new Date(),
+      },
+    });
+    return percent;
   }
 
   // ============================================================

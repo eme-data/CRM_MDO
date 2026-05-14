@@ -12,6 +12,12 @@ export interface ScoreInputs {
     enabledUsers: number;
     usersWithMfa: number;
     openAlerts: { high: number; medium: number; low: number };
+    // Microsoft Secure Score percent (0-100) si dispo, sinon null.
+    // Quand fourni, REMPLACE le calcul MFA-only dans le sous-score m365Posture :
+    // Secure Score est un indicateur Microsoft beaucoup plus complet (MFA +
+    // conditional access + Defender + partage externe + ...). Le fallback MFA
+    // reste actif pour les tenants sans licence eligible (TPE en E1 par ex.).
+    secureScorePercent: number | null;
   };
   assets: {
     // Total hors RETIRED
@@ -58,6 +64,10 @@ export interface ScoreResult {
   // Bucket textuel pour UI (couleur + libelle)
   level: 'NO_DATA' | 'POOR' | 'AVERAGE' | 'GOOD' | 'EXCELLENT';
   subscores: {
+    // Sous-score "posture M365" : utilise Microsoft Secure Score quand
+    // disponible (signal le plus complet), sinon retombe sur la couverture MFA.
+    // La cle reste `mfa` pour compatibilite API/frontend ; le label et le
+    // detail indiquent la source effective.
     mfa: Subscore;
     alerts: Subscore;
     assetHygiene: Subscore;
@@ -83,30 +93,45 @@ function pct(num: number, denom: number): number {
 }
 
 export function computeCyberScore(inputs: ScoreInputs): ScoreResult {
-  // ---------- Sous-score 1 : couverture MFA M365 ----------
+  // ---------- Sous-score 1 : posture M365 (Secure Score si dispo, sinon MFA) ----------
   let mfa: Subscore;
   if (!inputs.m365.tenantConfigured) {
     mfa = {
       score: null,
       weight: 25,
-      label: 'MFA M365',
+      label: 'Posture M365',
       detail: 'Tenant M365 non connecte au CRM',
     };
+  } else if (inputs.m365.secureScorePercent !== null) {
+    // Secure Score disponible : on l'utilise comme signal principal (couvre
+    // MFA + conditional access + Defender + partage externe + bien plus).
+    const score = Math.max(0, Math.min(100, inputs.m365.secureScorePercent));
+    mfa = {
+      score,
+      weight: 25,
+      label: 'Microsoft Secure Score',
+      detail: `${score.toFixed(1)}% (source officielle Microsoft)` +
+        (inputs.m365.enabledUsers > 0
+          ? ` · MFA : ${inputs.m365.usersWithMfa}/${inputs.m365.enabledUsers}`
+          : ''),
+    };
   } else if (inputs.m365.enabledUsers === 0) {
-    // Tenant connecte mais aucun user importe encore (sync recente ?)
+    // Tenant connecte, Secure Score N/A et aucun user importe (sync recente ?)
     mfa = {
       score: null,
       weight: 25,
-      label: 'MFA M365',
-      detail: 'Aucun utilisateur synchronise',
+      label: 'Posture M365',
+      detail: 'Aucun utilisateur synchronise, Secure Score non disponible',
     };
   } else {
+    // Fallback : couverture MFA pure quand Secure Score indisponible (TPE en
+    // E1, permission Secure Score manquante, etc.).
     const score = pct(inputs.m365.usersWithMfa, inputs.m365.enabledUsers);
     mfa = {
       score,
       weight: 25,
       label: 'MFA M365',
-      detail: `${inputs.m365.usersWithMfa} / ${inputs.m365.enabledUsers} utilisateurs avec MFA`,
+      detail: `${inputs.m365.usersWithMfa} / ${inputs.m365.enabledUsers} utilisateurs avec MFA (Secure Score N/A)`,
     };
   }
 
@@ -251,12 +276,24 @@ export function computeCyberScore(inputs: ScoreInputs): ScoreResult {
   const recs: Recommendation[] = [];
 
   if (mfa.score !== null && mfa.score < 80) {
-    const missing = inputs.m365.enabledUsers - inputs.m365.usersWithMfa;
-    recs.push({
-      priority: mfa.score < 50 ? 1 : 2,
-      title: `Activer MFA sur ${missing} utilisateur${missing > 1 ? 's' : ''} M365 restant${missing > 1 ? 's' : ''}`,
-      linkPath: null,
-    });
+    if (inputs.m365.secureScorePercent !== null) {
+      // Secure Score est en jeu : la reco pointe vers le portail Microsoft
+      // (le score est compose de dizaines d'items, on ne peut pas tous les
+      // lister ici — Microsoft fournit la liste detaillee dans son admin center).
+      recs.push({
+        priority: mfa.score < 50 ? 1 : 2,
+        title: `Microsoft Secure Score a ${mfa.score.toFixed(0)}% — consulter les recommandations dans le portail Microsoft Defender`,
+        linkPath: null,
+      });
+    } else {
+      // Fallback MFA pur : on peut etre precis sur le nombre d'users a couvrir.
+      const missing = inputs.m365.enabledUsers - inputs.m365.usersWithMfa;
+      recs.push({
+        priority: mfa.score < 50 ? 1 : 2,
+        title: `Activer MFA sur ${missing} utilisateur${missing > 1 ? 's' : ''} M365 restant${missing > 1 ? 's' : ''}`,
+        linkPath: null,
+      });
+    }
   }
   if (inputs.m365.openAlerts.high > 0) {
     recs.push({

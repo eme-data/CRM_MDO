@@ -1381,6 +1381,16 @@ model M365Tenant {
   lastSyncStatus  String?  // 'OK' | 'FAILED' | 'PARTIAL'
   lastSyncError   String?
   isActive        Boolean  @default(true)
+  // Microsoft Secure Score (https://learn.microsoft.com/en-us/graph/api/securescore-get).
+  // Indicateur Microsoft officiel de la posture securite du tenant : couvre MFA,
+  // conditional access, Defender, partage externe, etc. — beaucoup plus complet
+  // que la seule couverture MFA. Necessite la permission SecurityEvents.Read.All
+  // ET un tenant avec les licences appropriees (E3/E5/Business Premium). Si non
+  // disponible, ces champs restent null et le CRM retombe sur le MFA pur.
+  secureScore         Float?    // currentScore brut (echelle Microsoft, generalement 0-1000+)
+  secureScoreMax      Float?    // maxScore atteignable pour ce tenant (varie selon licences)
+  secureScorePercent  Float?    // currentScore / maxScore * 100 (cache pour filtrer/agreger sans recalculer)
+  secureScoreSyncedAt DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

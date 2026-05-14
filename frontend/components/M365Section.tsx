@@ -25,6 +25,12 @@ interface Tenant {
   lastSyncStatus: string | null;
   lastSyncError: string | null;
   isActive: boolean;
+  // Microsoft Secure Score (cf M365Tenant fields).
+  // null = non disponible (tenant sans licence eligible ou permission manquante).
+  secureScore: number | null;
+  secureScoreMax: number | null;
+  secureScorePercent: number | null;
+  secureScoreSyncedAt: string | null;
   _count: { users: number; licenses: number; alerts: number };
 }
 
@@ -242,7 +248,7 @@ export function M365Section({ companyId }: { companyId: string }) {
         ))}
       </div>
 
-      {tab === 'overview' && <OverviewTab users={users} licenses={licenses} alerts={alerts} />}
+      {tab === 'overview' && <OverviewTab tenant={tenant} users={users} licenses={licenses} alerts={alerts} />}
       {tab === 'users' && <UsersTab users={users} />}
       {tab === 'licenses' && <LicensesTab licenses={licenses} />}
       {tab === 'alerts' && <AlertsTab alerts={alerts} />}
@@ -264,35 +270,86 @@ function Tile({ icon: Icon, label, value, color }: { icon: any; label: string; v
   );
 }
 
-function OverviewTab({ users, licenses, alerts }: { users: M365User[]; licenses: M365License[]; alerts: M365Alert[] }) {
+function OverviewTab({ tenant, users, licenses, alerts }: { tenant: Tenant; users: M365User[]; licenses: M365License[]; alerts: M365Alert[] }) {
   const mfaTotal = users.filter((u) => u.mfaEnabled !== null).length;
   const mfaEnabled = users.filter((u) => u.mfaEnabled === true).length;
   const disabledUsers = users.filter((u) => !u.accountEnabled).length;
+  const securePct = tenant.secureScorePercent;
+  // Couleur du Secure Score : suit les memes paliers que le Cyber Score widget
+  // pour coherence visuelle (>=85 vert, 70-84 bleu, 50-69 amber, <50 rouge).
+  const secureColor =
+    securePct === null ? 'text-slate-500' :
+    securePct >= 85 ? 'text-emerald-700 dark:text-emerald-300' :
+    securePct >= 70 ? 'text-blue-700 dark:text-blue-300' :
+    securePct >= 50 ? 'text-amber-700 dark:text-amber-300' :
+    'text-red-700 dark:text-red-300';
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-      <div className="rounded-md bg-slate-50 dark:bg-slate-700/50 p-3">
-        <p className="text-xs text-slate-500">Couverture MFA</p>
-        <p className="font-medium">
-          {mfaTotal > 0
-            ? `${mfaEnabled} / ${mfaTotal} (${Math.round((mfaEnabled / mfaTotal) * 100)} %)`
-            : 'Donnees MFA non disponibles'}
+    <div className="space-y-3">
+      {/* Microsoft Secure Score : carte prominente en haut si dispo */}
+      {securePct !== null && tenant.secureScore !== null && tenant.secureScoreMax !== null && (
+        <div className="rounded-md border-2 border-mdo-200 dark:border-mdo-800 bg-mdo-50 dark:bg-mdo-950/30 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-medium">Microsoft Secure Score</p>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className={'text-3xl font-bold tabular-nums ' + secureColor}>
+                  {securePct.toFixed(1)}%
+                </span>
+                <span className="text-sm text-slate-500">
+                  {tenant.secureScore.toFixed(0)} / {tenant.secureScoreMax.toFixed(0)} pts
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Indicateur officiel Microsoft · couvre MFA, conditional access, Defender, partage externe
+                {tenant.secureScoreSyncedAt && (
+                  <span> · sync {formatDateTime(tenant.secureScoreSyncedAt)}</span>
+                )}
+              </p>
+            </div>
+            <a
+              href={'https://security.microsoft.com/securescore'}
+              target="_blank"
+              rel="noopener"
+              className="btn btn-secondary text-xs"
+              title="Voir le detail dans Microsoft Defender XDR"
+            >
+              Detail
+            </a>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        <div className="rounded-md bg-slate-50 dark:bg-slate-700/50 p-3">
+          <p className="text-xs text-slate-500">Couverture MFA</p>
+          <p className="font-medium">
+            {mfaTotal > 0
+              ? `${mfaEnabled} / ${mfaTotal} (${Math.round((mfaEnabled / mfaTotal) * 100)} %)`
+              : 'Donnees MFA non disponibles'}
+          </p>
+        </div>
+        <div className="rounded-md bg-slate-50 dark:bg-slate-700/50 p-3">
+          <p className="text-xs text-slate-500">Comptes desactives</p>
+          <p className="font-medium">{disabledUsers}</p>
+        </div>
+        <div className="rounded-md bg-slate-50 dark:bg-slate-700/50 p-3">
+          <p className="text-xs text-slate-500">Licences consommees</p>
+          <p className="font-medium tabular-nums">
+            {licenses.reduce((s, l) => s + l.consumedUnits, 0)} /{' '}
+            {licenses.reduce((s, l) => s + l.totalUnits, 0)}
+          </p>
+        </div>
+        <div className="rounded-md bg-slate-50 dark:bg-slate-700/50 p-3">
+          <p className="text-xs text-slate-500">Alertes severes</p>
+          <p className="font-medium">{alerts.filter((a) => a.severity === 'high').length}</p>
+        </div>
+      </div>
+
+      {securePct === null && tenant.isActive && (
+        <p className="text-xs text-slate-500 italic">
+          Microsoft Secure Score non disponible pour ce tenant (necessite une licence E3/E5/Business Premium et la permission SecurityEvents.Read.All sur l'app multi-tenant MDO).
         </p>
-      </div>
-      <div className="rounded-md bg-slate-50 dark:bg-slate-700/50 p-3">
-        <p className="text-xs text-slate-500">Comptes desactives</p>
-        <p className="font-medium">{disabledUsers}</p>
-      </div>
-      <div className="rounded-md bg-slate-50 dark:bg-slate-700/50 p-3">
-        <p className="text-xs text-slate-500">Licences consommees</p>
-        <p className="font-medium tabular-nums">
-          {licenses.reduce((s, l) => s + l.consumedUnits, 0)} /{' '}
-          {licenses.reduce((s, l) => s + l.totalUnits, 0)}
-        </p>
-      </div>
-      <div className="rounded-md bg-slate-50 dark:bg-slate-700/50 p-3">
-        <p className="text-xs text-slate-500">Alertes severes</p>
-        <p className="font-medium">{alerts.filter((a) => a.severity === 'high').length}</p>
-      </div>
+      )}
     </div>
   );
 }
