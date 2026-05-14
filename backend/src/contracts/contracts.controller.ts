@@ -12,12 +12,12 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
-import { ContractStatus } from '@prisma/client';
 import { ContractsService } from './contracts.service';
 import { PdfService } from '../pdf/pdf.service';
 import { CreateContractDto } from './dto/create-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { RenewContractDto } from './dto/renew-contract.dto';
+import { QueryContractsDto } from './dto/query-contracts.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -64,18 +64,8 @@ export class ContractsController {
   }
 
   @Get()
-  findAll(
-    @Query('search') search?: string,
-    @Query('status') status?: ContractStatus,
-    @Query('companyId') companyId?: string,
-    @Query('expiringInDays') expiringInDays?: string,
-  ) {
-    return this.service.findAll({
-      search,
-      status,
-      companyId,
-      expiringInDays: expiringInDays ? parseInt(expiringInDays, 10) : undefined,
-    });
+  findAll(@Query() query: QueryContractsDto) {
+    return this.service.findAll(query);
   }
 
   @Get('stats')

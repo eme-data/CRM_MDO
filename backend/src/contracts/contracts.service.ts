@@ -11,6 +11,8 @@ import { PrismaService } from '../database/prisma.service';
 import { CreateContractDto } from './dto/create-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { RenewContractDto } from './dto/renew-contract.dto';
+import { QueryContractsDto } from './dto/query-contracts.dto';
+import { buildPageResult, toSkipTake } from '../common/pagination/pagination.dto';
 
 const OFFER_UNIT_PRICES: Record<ContractOffer, number> = {
   MDO_ESSENTIEL: 69,
@@ -47,40 +49,46 @@ export class ContractsService {
     return `${prefix}${String(next).padStart(4, '0')}`;
   }
 
-  async findAll(params: {
-    search?: string;
-    status?: ContractStatus;
-    companyId?: string;
-    expiringInDays?: number;
-  }) {
+  async findAll(query: QueryContractsDto) {
+    const { skip, take, page, pageSize } = toSkipTake({
+      page: query.page,
+      // Defaut 25 (vs 50 PaginationDto) : les Contracts incluent company +
+      // owner aggregats, payload plus lourd par item.
+      pageSize: query.pageSize ?? 25,
+    });
+
     const where: Prisma.ContractWhereInput = {};
-    if (params.status) where.status = params.status;
-    if (params.companyId) where.companyId = params.companyId;
-    if (params.search) {
+    if (query.status) where.status = query.status;
+    if (query.companyId) where.companyId = query.companyId;
+    if (query.search) {
       where.OR = [
-        { title: { contains: params.search, mode: 'insensitive' } },
-        { reference: { contains: params.search, mode: 'insensitive' } },
+        { title: { contains: query.search, mode: 'insensitive' } },
+        { reference: { contains: query.search, mode: 'insensitive' } },
       ];
     }
-    if (params.expiringInDays != null) {
+    if (query.expiringInDays != null) {
       where.status = 'ACTIVE';
       where.endDate = {
         gte: new Date(),
-        lte: addDays(new Date(), params.expiringInDays),
+        lte: addDays(new Date(), query.expiringInDays),
       };
     }
-    return this.prisma.contract.findMany({
-      where,
-      include: {
-        company: { select: { id: true, name: true } },
-        owner: { select: { id: true, firstName: true, lastName: true } },
-      },
-      orderBy: { endDate: 'asc' },
-      // Safety cap : evite qu'un appel brut a /contracts charge 10k lignes en
-      // memoire. Une pagination explicite (?page=/?pageSize=) sera ajoutee au
-      // Sprint 2 quand la table contracts depassera 500 lignes.
-      take: 500,
-    });
+
+    const [items, total] = await Promise.all([
+      this.prisma.contract.findMany({
+        where,
+        include: {
+          company: { select: { id: true, name: true } },
+          owner: { select: { id: true, firstName: true, lastName: true } },
+        },
+        orderBy: { endDate: 'asc' },
+        skip,
+        take,
+      }),
+      this.prisma.contract.count({ where }),
+    ]);
+
+    return buildPageResult(items, total, page, pageSize);
   }
 
   async findOne(id: string) {

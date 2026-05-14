@@ -6,6 +6,7 @@ import { Plus, Search, AlertTriangle, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableRowSkeleton } from '@/components/ui/Skeleton';
+import { Pagination } from '@/components/ui/Pagination';
 import {
   formatEuro,
   formatDate,
@@ -34,7 +35,16 @@ export default function ContractsPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [expiringInDays, setExpiringInDays] = useState(sp.get('expiringInDays') ?? '');
+  const [page, setPage] = useState(1);
+  const [pageCount, setPageCount] = useState(1);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // Reset a la page 1 quand les filtres changent : eviter de se retrouver
+  // sur une page vide quand un filtre reduit drastiquement le resultat.
+  useEffect(() => {
+    setPage(1);
+  }, [search, status, expiringInDays]);
 
   useEffect(() => {
     setLoading(true);
@@ -42,11 +52,16 @@ export default function ContractsPage() {
     if (search) params.set('search', search);
     if (status) params.set('status', status);
     if (expiringInDays) params.set('expiringInDays', expiringInDays);
+    params.set('page', String(page));
     api
-      .get('/contracts' + (params.toString() ? '?' + params.toString() : ''))
-      .then(setContracts)
+      .get('/contracts?' + params.toString())
+      .then((res) => {
+        setContracts(res.items);
+        setPageCount(res.pageCount);
+        setTotal(res.total);
+      })
       .finally(() => setLoading(false));
-  }, [search, status, expiringInDays]);
+  }, [search, status, expiringInDays, page]);
 
   return (
     <div className="space-y-6">
@@ -157,6 +172,13 @@ export default function ContractsPage() {
             )}
           </tbody>
         </table>
+        <Pagination
+          page={page}
+          pageCount={pageCount}
+          total={total}
+          onChange={setPage}
+          itemLabel="contrat"
+        />
       </div>
     </div>
   );
