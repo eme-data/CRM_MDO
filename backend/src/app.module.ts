@@ -51,6 +51,7 @@ import { NpsModule } from './nps/nps.module';
 import { ClientPortalModule } from './client-portal/client-portal.module';
 import { M365Module } from './m365/m365.module';
 import { GdprModule } from './gdpr/gdpr.module';
+import { CyberScoreModule } from './cyber-score/cyber-score.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { MetricsService } from './common/observability/metrics.service';
@@ -130,6 +131,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     ClientPortalModule,
     M365Module,
     GdprModule,
+    CyberScoreModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,

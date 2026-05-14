@@ -12,6 +12,7 @@ import { ITGlueSection } from '@/components/ITGlueSection';
 import { RunbookRunsSection } from '@/components/RunbookRunsSection';
 import { MonthlyReportsSection } from '@/components/MonthlyReportsSection';
 import { M365Section } from '@/components/M365Section';
+import { CyberScoreWidget } from '@/components/CyberScoreWidget';
 import {
   formatEuro,
   formatDate,
@@ -160,6 +161,11 @@ export default function CompanyDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* Cyber Risk Score : widget prominent en haut de la fiche client.
+          Premier signal visuel a l'ouverture de la page, parfait pour les
+          RDV commerciaux (justifie l'upgrade Essentiel -> Pro -> Souverain). */}
+      <CyberScoreWidget companyId={id} />
 
       {editing ? (
         <CompanyForm company={company} />
