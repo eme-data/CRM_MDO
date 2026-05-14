@@ -60,6 +60,8 @@ model User {
   activities         Activity[]
   refreshTokens      RefreshToken[]
   interventions      Intervention[] @relation("InterventionTechnician")
+  recurringTemplatesCreated  RecurringTaskTemplate[] @relation("RecurringTemplateCreator")
+  recurringTemplatesAssigned RecurringTaskTemplate[] @relation("RecurringTemplateAssignee")
 
   @@index([teamId])
 }
@@ -163,6 +165,7 @@ model Company {
   timeEntries    TimeEntry[]
   portalUsers    ClientPortalUser[]
   m365Tenant     M365Tenant?
+  recurringTemplates RecurringTaskTemplate[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -317,6 +320,7 @@ model Contract {
   timeEntries        TimeEntry[]
   assets             Asset[]
   invoices           Invoice[]
+  recurringTemplates RecurringTaskTemplate[]
 
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
@@ -433,6 +437,13 @@ model Task {
   contractId    String?
   contract      Contract?    @relation(fields: [contractId], references: [id], onDelete: Cascade)
 
+  // Trace de l'origine recurrente : si cette Task a ete generee automatiquement
+  // par un RecurringTaskTemplate, on garde la reference pour pouvoir afficher
+  // "Tache generee depuis le modele 'Check backup mensuel'" + permettre la
+  // suppression en cascade quand on supprime le modele.
+  recurringTemplateId String?
+  recurringTemplate   RecurringTaskTemplate? @relation(fields: [recurringTemplateId], references: [id], onDelete: SetNull)
+
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
@@ -444,6 +455,68 @@ model Task {
   // FKs souvent filtrees mais sans index dedie (cascade depuis Company/Contact/...).
   @@index([companyId])
   @@index([contractId])
+  @@index([recurringTemplateId])
+}
+
+// =================== RECURRING TASK TEMPLATES ===================
+//
+// Modeles de taches recurrentes auto-generees par cron : "Check backup mensuel
+// client X", "Revue trimestriel client Y", "Patch management mensuel global", etc.
+// Le cron tourne une fois par jour ; pour chaque template dont nextRunAt <= now,
+// il cree une Task et recalcule nextRunAt selon la frequence.
+//
+// Scope : si companyId est defini, la Task generee sera rattachee a cette societe.
+// Sinon (template global) la Task est cree sans rattachement direct mais reste
+// visible dans /tasks pour l'assignee.
+
+enum RecurringFrequency {
+  WEEKLY      // tous les 7 jours
+  MONTHLY     // tous les mois (au dayOfMonth si defini, sinon meme date que startsOn)
+  QUARTERLY   // tous les 3 mois
+  YEARLY      // tous les ans
+}
+
+model RecurringTaskTemplate {
+  id              String              @id @default(uuid())
+  name            String              // libelle modele ("Check backup mensuel")
+  // Champs reproduits sur chaque Task generee :
+  title           String              // titre de la Task (peut contenir le mois pour mensuel)
+  description     String?
+  priority        TaskPriority        @default(NORMAL)
+  // Generation : on cree la Task a la prochaine date prevue (nextRunAt), avec
+  // dueDate = generatedAt + dueDateOffsetDays. Permet "Generee le 1er du mois,
+  // a faire pour le 15".
+  dueDateOffsetDays Int               @default(7)
+  frequency       RecurringFrequency  @default(MONTHLY)
+  // Jour du mois pour MONTHLY/QUARTERLY/YEARLY (1-28 pour eviter les soucis de
+  // fevrier). Null = on prend le jour du startsOn comme reference.
+  dayOfMonth      Int?
+  // Date de demarrage et arret optionnel
+  startsOn        DateTime            @default(now())
+  endsOn          DateTime?
+  // Prochain horodatage attendu de generation (recalcule apres chaque run).
+  nextRunAt       DateTime
+  lastRunAt       DateTime?
+  // Compteur d'instances generees (info admin, pas critique)
+  generatedCount  Int                 @default(0)
+  isActive        Boolean             @default(true)
+  // Rattachements optionnels appliques aux Tasks generees
+  companyId       String?
+  company         Company?            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assigneeId      String?
+  assignee        User?               @relation("RecurringTemplateAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  contractId      String?
+  contract        Contract?           @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  // Audit
+  createdById     String
+  createdBy       User                @relation("RecurringTemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  tasks           Task[]
+
+  @@index([nextRunAt, isActive])
+  @@index([companyId])
 }
 
 model Note {

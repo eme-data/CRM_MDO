@@ -28,6 +28,7 @@ import {
   ChevronDown,
   KeyRound,
   FileBarChart,
+  Repeat,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logout } from '@/lib/auth';
@@ -90,6 +91,7 @@ const adminItems: NavItem[] = [
   { href: '/admin/time-billing', label: 'Facturation du temps', icon: Clock },
   { href: '/admin/flexible-asset-types', label: 'Templates assets flexibles', icon: Layers },
   { href: '/admin/runbooks', label: 'Runbooks / procedures', icon: ListChecks },
+  { href: '/admin/recurring-tasks', label: 'Taches recurrentes', icon: Repeat },
   { href: '/admin/activity', label: "Journal d'activite", icon: ClipboardList },
 ];
 
