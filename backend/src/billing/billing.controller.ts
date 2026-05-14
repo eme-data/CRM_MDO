@@ -22,6 +22,8 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { PushInvoiceDto } from './dto/push-invoice.dto';
+import { QontoSyncDto } from './dto/qonto-sync.dto';
 
 @ApiTags('Billing')
 @Controller('billing')
@@ -77,7 +79,7 @@ export class BillingController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'MANAGER')
   @Post('invoices/push')
-  pushInvoice(@Body() body: any) {
+  pushInvoice(@Body() body: PushInvoiceDto) {
     return this.billing.pushInvoiceNow(body);
   }
 
@@ -85,8 +87,8 @@ export class BillingController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'MANAGER')
   @Post('qonto/sync')
-  qontoSync(@Body() body: { sinceDays?: number }) {
-    return this.qonto.syncTransactions({ sinceDays: body?.sinceDays });
+  qontoSync(@Body() body: QontoSyncDto) {
+    return this.qonto.syncTransactions({ sinceDays: body.sinceDays });
   }
 
   // ---------- Webhook Sellsy (public, signature HMAC) ----------
