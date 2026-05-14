@@ -30,6 +30,13 @@ export class InvoicesController {
     return this.service.findAll({ status, companyId, from, to });
   }
 
+  // Aging report : factures impayees groupees par anciennete de la dueDate.
+  // Placee avant /:id pour ne pas etre interceptee par la route /:id.
+  @Get('aging')
+  aging() {
+    return this.service.aging();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) { return this.service.findOne(id); }
 

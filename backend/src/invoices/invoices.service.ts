@@ -103,6 +103,97 @@ export class InvoicesService {
     });
   }
 
+  /**
+   * Aging report : factures impayees groupees par anciennete de la dueDate.
+   * Buckets standard B2B : not due / 0-30 / 31-60 / 61-90 / 90+ jours de retard.
+   * Sert au pilotage cash flow et a la relance ciblee.
+   *
+   * On consid?re comme "impayee" toute facture sans paidAt avec un status
+   * dans (ISSUED, OVERDUE). DRAFT et CANCELLED sont exclues.
+   */
+  async aging(): Promise<{
+    asOf: string;
+    totals: { count: number; totalHt: number; totalTtc: number };
+    buckets: Array<{
+      key: 'notDue' | 'd0_30' | 'd31_60' | 'd61_90' | 'd90plus';
+      label: string;
+      count: number;
+      totalHt: number;
+      totalTtc: number;
+      invoices: Array<{
+        id: string;
+        number: string;
+        companyId: string;
+        companyName: string;
+        issueDate: Date;
+        dueDate: Date;
+        daysOverdue: number;
+        totalHt: number;
+        totalTtc: number;
+        status: InvoiceStatus;
+        externalUrl: string | null;
+      }>;
+    }>;
+  }> {
+    const now = new Date();
+    const unpaid = await this.prisma.invoice.findMany({
+      where: {
+        paidAt: null,
+        status: { in: [InvoiceStatus.ISSUED, InvoiceStatus.OVERDUE] },
+      },
+      include: {
+        company: { select: { id: true, name: true } },
+      },
+      orderBy: { dueDate: 'asc' },
+    });
+
+    const buckets = {
+      notDue: { key: 'notDue' as const, label: 'A echeance', invoices: [] as any[] },
+      d0_30: { key: 'd0_30' as const, label: '0-30 jours de retard', invoices: [] as any[] },
+      d31_60: { key: 'd31_60' as const, label: '31-60 jours de retard', invoices: [] as any[] },
+      d61_90: { key: 'd61_90' as const, label: '61-90 jours de retard', invoices: [] as any[] },
+      d90plus: { key: 'd90plus' as const, label: '90+ jours de retard', invoices: [] as any[] },
+    };
+
+    const dayMs = 24 * 3600 * 1000;
+    for (const inv of unpaid) {
+      const daysOverdue = Math.floor((now.getTime() - inv.dueDate.getTime()) / dayMs);
+      const entry = {
+        id: inv.id,
+        number: inv.number,
+        companyId: inv.companyId,
+        companyName: inv.company.name,
+        issueDate: inv.issueDate,
+        dueDate: inv.dueDate,
+        daysOverdue: Math.max(0, daysOverdue),
+        totalHt: Number(inv.totalHt),
+        totalTtc: Number(inv.totalTtc),
+        status: inv.status,
+        externalUrl: inv.externalUrl,
+      };
+      if (daysOverdue < 0) buckets.notDue.invoices.push(entry);
+      else if (daysOverdue <= 30) buckets.d0_30.invoices.push(entry);
+      else if (daysOverdue <= 60) buckets.d31_60.invoices.push(entry);
+      else if (daysOverdue <= 90) buckets.d61_90.invoices.push(entry);
+      else buckets.d90plus.invoices.push(entry);
+    }
+
+    // Calcul des totaux par bucket et globaux
+    const out = Object.values(buckets).map((b) => {
+      const totalHt = b.invoices.reduce((s, i) => s + i.totalHt, 0);
+      const totalTtc = b.invoices.reduce((s, i) => s + i.totalTtc, 0);
+      return { ...b, count: b.invoices.length, totalHt, totalTtc };
+    });
+
+    const totals = {
+      count: unpaid.length,
+      totalHt: out.reduce((s, b) => s + b.totalHt, 0),
+      totalTtc: out.reduce((s, b) => s + b.totalTtc, 0),
+    };
+
+    return { asOf: now.toISOString(), totals, buckets: out };
+  }
+
   async setStatus(id: string, status: InvoiceStatus) {
     const data: Prisma.InvoiceUpdateInput = { status };
     if (status === 'PAID') data.paidAt = new Date();

@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { toast } from 'sonner';
-import { Receipt, RefreshCw, Database, ExternalLink, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Receipt, RefreshCw, Database, ExternalLink, AlertCircle, CheckCircle2, AlertTriangle, Banknote } from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface BillingStatus {
@@ -56,6 +57,40 @@ export default function AdminBillingPage() {
           Synchronisation entre le CRM et l'outil de facturation electronique (PDP).
           Source de verite des factures : <strong>{providerLabel}</strong>.
         </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Link
+          href="/admin/billing/aging"
+          className="card p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-md bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300">
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <h2 className="font-semibold">Aging report</h2>
+              <p className="text-sm text-slate-500">Factures impayees par anciennete (0-30 / 31-60 / 61-90 / 90+ j)</p>
+            </div>
+          </div>
+          <ExternalLink size={16} className="text-slate-400" />
+        </Link>
+
+        <Link
+          href="/admin/billing/cashflow"
+          className="card p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+              <Banknote size={20} />
+            </div>
+            <div>
+              <h2 className="font-semibold">Cash flow</h2>
+              <p className="text-sm text-slate-500">Encaissements attendus 30/60/90j + flux Qonto 30j</p>
+            </div>
+          </div>
+          <ExternalLink size={16} className="text-slate-400" />
+        </Link>
       </div>
 
       <div className="card p-6 space-y-4">

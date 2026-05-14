@@ -15,6 +15,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { BillingService } from './billing.service';
+import { CashFlowService } from './cashflow.service';
 import { SellsyProvider } from './sellsy.provider';
 import { QontoProvider } from './qonto.provider';
 import { SettingsService } from '../settings/settings.service';
@@ -30,10 +31,19 @@ import { QontoSyncDto } from './dto/qonto-sync.dto';
 export class BillingController {
   constructor(
     private readonly billing: BillingService,
+    private readonly cashflow: CashFlowService,
     private readonly sellsy: SellsyProvider,
     private readonly qonto: QontoProvider,
     private readonly settings: SettingsService,
   ) {}
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'MANAGER')
+  @Get('cashflow')
+  getCashflow() {
+    return this.cashflow.overview();
+  }
 
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
