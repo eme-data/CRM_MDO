@@ -8,7 +8,10 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Request, Response } from 'express';
+import { randomBytes } from 'crypto';
 import { captureException } from '../observability/sentry';
+
+const IS_PROD = process.env.NODE_ENV === 'production';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -22,6 +25,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | string[] = 'Internal server error';
     let code: string | undefined;
+    let internalDetail: string | undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -44,31 +48,73 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message = 'Ressource introuvable';
         code = 'NOT_FOUND';
       } else {
+        // Codes Prisma inattendus : on log le detail mais on ne le revele pas
+        // au client (ex. P2003 foreign key violation peut laisser fuir des noms
+        // de tables internes).
         status = HttpStatus.BAD_REQUEST;
-        message = exception.message;
+        message = 'Requête invalide';
         code = exception.code;
+        internalDetail = exception.message;
       }
     } else if (exception instanceof Error) {
-      message = exception.message;
-      this.logger.error(exception.stack);
+      internalDetail = exception.message;
+      if (!IS_PROD) {
+        // Dev/test : on garde le message brut pour faciliter le debug
+        message = exception.message;
+      }
     }
 
-    // Sentry : on capture uniquement les 5xx pour eviter le bruit (4xx = erreur
-    // utilisateur attendue : validation, auth, not found, conflit ...).
+    // Correlation ID pour relier la reponse client au log/Sentry. On reutilise
+    // l'id de requete propage par pino-http si dispo, sinon on en genere un.
+    const correlationId =
+      (request.headers['x-request-id'] as string | undefined) ??
+      ((request as any).id as string | undefined) ??
+      randomBytes(8).toString('hex');
+
+    // Sentry + log : on capture toutes les 5xx (vraies erreurs serveur). Les
+    // 4xx restent silencieuses cote alerting pour eviter le bruit (validation,
+    // auth, not found, conflit ... = erreurs utilisateur attendues).
     if (status >= 500) {
+      this.logger.error(
+        {
+          correlationId,
+          path: request.url,
+          method: request.method,
+          statusCode: status,
+          userAgent: request.headers['user-agent'],
+          ip: request.ip,
+          err: exception instanceof Error
+            ? { name: exception.name, message: exception.message, stack: exception.stack }
+            : { value: String(exception) },
+        },
+        'Unhandled exception caught by global filter',
+      );
       captureException(exception, {
+        correlationId,
         path: request.url,
         method: request.method,
         statusCode: status,
       });
     }
 
-    response.status(status).json({
+    const payload: Record<string, unknown> = {
       statusCode: status,
       code,
       message,
       path: request.url,
       timestamp: new Date().toISOString(),
-    });
+      correlationId,
+    };
+
+    // Dev/test uniquement : on expose le detail interne pour faciliter le debug.
+    // En prod, le detail va dans les logs/Sentry (via correlationId) — JAMAIS au client.
+    if (!IS_PROD && internalDetail && status >= 500) {
+      payload.detail = internalDetail;
+    }
+
+    // Header utile pour les outils support (curl, navigateur) : on retrouve la
+    // requete dans les logs en cherchant ce correlationId.
+    response.setHeader('X-Correlation-Id', correlationId);
+    response.status(status).json(payload);
   }
 }

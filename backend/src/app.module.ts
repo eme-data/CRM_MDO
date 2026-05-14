@@ -53,7 +53,9 @@ import { M365Module } from './m365/m365.module';
 import { GdprModule } from './gdpr/gdpr.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
+import { MetricsService } from './common/observability/metrics.service';
 import { AppLoggerModule } from './common/observability/logger.module';
+import { CacheModule } from './common/cache/cache.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { MfaRequiredGuard } from './common/guards/mfa-required.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -65,6 +67,7 @@ import { RolesGuard } from './common/guards/roles.guard';
       load: [configuration],
     }),
     AppLoggerModule,
+    CacheModule,
     ScheduleModule.forRoot(),
     // Rate-limiting global. Definit deux paliers :
     //  - "short" : 60 req / minute (anti-burst)
@@ -133,6 +136,7 @@ import { RolesGuard } from './common/guards/roles.guard';
   ],
   controllers: [HealthController, MetricsController],
   providers: [
+    MetricsService,
     // ThrottlerGuard avant JwtAuthGuard : on rate-limit AVANT de tenter l'auth,
     // sinon un attaquant epuise le pool bcrypt en bombardant /auth/login.
     {

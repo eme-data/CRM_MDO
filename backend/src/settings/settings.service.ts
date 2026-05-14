@@ -1,14 +1,25 @@
 import { Injectable, Logger, OnModuleInit, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { CacheService } from '../common/cache/cache.service';
 import { SETTINGS_DEFS, findSettingDef, SettingDef } from './settings.seed';
 
 const SECRET_MASK = '********';
+
+// TTL court pour le cache : 60 s. Les settings changent rarement mais quand
+// ils changent, on veut que la valeur prenne effet rapidement meme sans
+// invalidation explicite (defense en profondeur). Le `update()` invalide
+// quand meme la cle pour propagation immediate dans le process courant.
+const SETTING_TTL_SECONDS = 60;
+const CACHE_KEY = (key: string) => `settings:${key}`;
 
 @Injectable()
 export class SettingsService implements OnModuleInit {
   private readonly logger = new Logger(SettingsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
+  ) {}
 
   async onModuleInit() {
     // Seed les settings manquants au demarrage avec la valeur env si disponible.
@@ -32,12 +43,16 @@ export class SettingsService implements OnModuleInit {
   }
 
   // Retourne la valeur d'un setting (BDD prio, fallback env var de la def).
+  // Cache in-memory 60s : `get()` est appele tres frequemment (mail, billing,
+  // portail, auth, etc.) sur des valeurs qui changent rarement.
   async get(key: string): Promise<string | null> {
-    const row = await this.prisma.setting.findUnique({ where: { key } });
-    if (row?.value !== null && row?.value !== undefined && row.value !== '') return row.value;
-    const def = findSettingDef(key);
-    if (def?.envVar && process.env[def.envVar]) return process.env[def.envVar] as string;
-    return def?.defaultValue ?? null;
+    return this.cache.getOrSet<string | null>(CACHE_KEY(key), SETTING_TTL_SECONDS, async () => {
+      const row = await this.prisma.setting.findUnique({ where: { key } });
+      if (row?.value !== null && row?.value !== undefined && row.value !== '') return row.value;
+      const def = findSettingDef(key);
+      if (def?.envVar && process.env[def.envVar]) return process.env[def.envVar] as string;
+      return def?.defaultValue ?? null;
+    });
   }
 
   async getBool(key: string): Promise<boolean> {
@@ -53,6 +68,7 @@ export class SettingsService implements OnModuleInit {
   }
 
   // Liste des settings groupes par categorie, secrets masques (juste un flag "isSet").
+  // Pas cachee : appelee seulement depuis l'UI admin Settings (faible volume).
   async listForAdmin() {
     const all = await this.prisma.setting.findMany({ orderBy: { key: 'asc' } });
     const enriched = all.map((s) => {
@@ -89,6 +105,9 @@ export class SettingsService implements OnModuleInit {
       where: { key },
       data: { value: stored, updatedById: userId },
     });
+    // Invalidation immediate : sans ca, la valeur restera obsolete jusqu'a
+    // expiration du TTL (60s) dans le process courant.
+    this.cache.del(CACHE_KEY(key));
     return { key, isSet: Boolean(stored) };
   }
 }
