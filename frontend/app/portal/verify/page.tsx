@@ -1,14 +1,28 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { portalApi, setPortalSession } from '@/lib/portal-api';
 
-// useSearchParams() doit s'executer cote client. Sans cette directive, Next.js 14
-// tente un prerender statique au build qui echoue avec "prerender-error".
+// useSearchParams() doit s'executer cote client ; Next.js 14 exige soit un
+// <Suspense> boundary parent, soit `dynamic = 'force-dynamic'`. On combine les
+// deux : force-dynamic empeche le prerender statique, Suspense fait office de
+// filet meme si la route etait servie statiquement (ex. cache CDN agressif).
 export const dynamic = 'force-dynamic';
 
-export default function PortalVerifyPage() {
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <div className="text-center text-slate-400">
+        <Loader2 size={32} className="animate-spin mx-auto mb-2" />
+        Connexion en cours...
+      </div>
+    </div>
+  );
+}
+
+// Le composant interne utilise useSearchParams et DOIT etre rendu sous Suspense.
+function PortalVerifyInner() {
   const router = useRouter();
   const params = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -42,12 +56,13 @@ export default function PortalVerifyPage() {
     );
   }
 
+  return <LoadingFallback />;
+}
+
+export default function PortalVerifyPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-      <div className="text-center text-slate-400">
-        <Loader2 size={32} className="animate-spin mx-auto mb-2" />
-        Connexion en cours...
-      </div>
-    </div>
+    <Suspense fallback={<LoadingFallback />}>
+      <PortalVerifyInner />
+    </Suspense>
   );
 }
