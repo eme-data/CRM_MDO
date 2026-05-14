@@ -11,13 +11,16 @@ import { Request, Response } from 'express';
 import { randomBytes } from 'crypto';
 import { captureException } from '../observability/sentry';
 
-const IS_PROD = process.env.NODE_ENV === 'production';
-
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
   catch(exception: unknown, host: ArgumentsHost) {
+    // Lecture inline (et pas const au top-level) pour deux raisons :
+    //  1. Permet aux tests de flipper NODE_ENV sans gymnastique jest.resetModules.
+    //  2. Permet un toggle a chaud sans rebuild si on devait passer en mode
+    //     debug temporaire en prod (rare mais possible).
+    const isProd = process.env.NODE_ENV === 'production';
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
@@ -58,7 +61,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     } else if (exception instanceof Error) {
       internalDetail = exception.message;
-      if (!IS_PROD) {
+      if (!isProd) {
         // Dev/test : on garde le message brut pour faciliter le debug
         message = exception.message;
       }
@@ -108,7 +111,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     // Dev/test uniquement : on expose le detail interne pour faciliter le debug.
     // En prod, le detail va dans les logs/Sentry (via correlationId) — JAMAIS au client.
-    if (!IS_PROD && internalDetail && status >= 500) {
+    if (!isProd && internalDetail && status >= 500) {
       payload.detail = internalDetail;
     }
 
