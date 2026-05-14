@@ -27,6 +27,7 @@ export class TasksService {
         contract: { select: { id: true, reference: true } },
       },
       orderBy: [{ status: 'asc' }, { dueDate: 'asc' }],
+      take: 500,
     });
   }
 

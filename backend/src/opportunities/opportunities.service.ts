@@ -31,6 +31,7 @@ export class OpportunitiesService {
         owner: { select: { id: true, firstName: true, lastName: true } },
       },
       orderBy: { updatedAt: 'desc' },
+      take: 500,
     });
   }
 

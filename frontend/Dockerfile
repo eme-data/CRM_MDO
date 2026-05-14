@@ -15,8 +15,20 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
+ENV HOSTNAME=0.0.0.0
+# wget pour HEALTHCHECK + dumb-init pour PID 1 propre
+RUN apk add --no-cache wget dumb-init
+
+# Reutilise l'utilisateur `node` (uid 1000) fourni par l'image officielle.
+COPY --from=builder --chown=node:node /app/public ./public
+COPY --from=builder --chown=node:node /app/.next/standalone ./
+COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+
+USER node
+
 EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget --quiet --spider http://127.0.0.1:3000/ || exit 1
+
+ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "server.js"]

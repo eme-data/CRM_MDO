@@ -1,5 +1,10 @@
 {
     email {$ACME_EMAIL}
+    servers {
+        # Le frontend Next.js est derriere Caddy ; sans `trusted_proxies` les
+        # logs et le rate-limit Caddy n'auraient pas l'IP client reelle.
+        trusted_proxies static private_ranges
+    }
 }
 
 {$DOMAIN} {
@@ -14,6 +19,32 @@
             roll_keep 5
         }
         format json
+    }
+
+    # Headers de securite appliques a TOUTES les reponses (front Next.js + API).
+    # Note : helmet sur le backend NestJS pose deja ces headers pour les reponses
+    # /api/* ; on les pose aussi a la sortie de Caddy pour couvrir le front et
+    # toute reponse statique servie par Caddy lui-meme. `header` en mode "set"
+    # ecrase si deja present → la valeur Caddy gagne (HSTS 2 ans avec preload).
+    header {
+        # HSTS : 2 ans, includeSubDomains pour proteger d'eventuels sous-domaines
+        # frontaux ; preload pour soumission a la HSTS preload list une fois en prod stable.
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        # Pas d'iframe possible (anti clickjacking) ; cohérent avec frame-ancestors 'none'.
+        X-Frame-Options "DENY"
+        # Empeche les sniff MIME (anti polyglotte HTML/JS).
+        X-Content-Type-Options "nosniff"
+        # Limite l'info envoyee en Referer cross-origin.
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Bloque acces inutile aux APIs sensibles du navigateur (camera, geoloc, etc.).
+        Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()"
+        # Isolation cross-origin (defense en profondeur contre Spectre/side-channel).
+        Cross-Origin-Opener-Policy "same-origin"
+        Cross-Origin-Resource-Policy "same-origin"
+        # Cache court par defaut. Les assets Next.js avec hash sont deja `immutable`
+        # via leurs propres headers, ce qui prend le pas.
+        # Retire le header Server (info banner).
+        -Server
     }
 
     # API backend - on conserve le prefixe /api (NestJS a setGlobalPrefix('api'))

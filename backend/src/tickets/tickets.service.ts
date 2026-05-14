@@ -73,6 +73,7 @@ export class TicketsService {
         assignee: { select: { id: true, firstName: true, lastName: true } },
       },
       orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+      take: 500,
     });
   }
 

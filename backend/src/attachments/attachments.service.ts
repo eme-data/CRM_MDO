@@ -10,6 +10,7 @@ import { promises as fs, createReadStream, ReadStream } from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
+import { describeAllowed, isAttachmentTypeAllowed } from './mime-allowlist';
 
 interface IncomingFile {
   originalname: string;
@@ -54,6 +55,14 @@ export class AttachmentsService implements OnModuleInit {
     if (file.size > this.maxBytes) {
       throw new BadRequestException(
         'Fichier trop volumineux (max ' + Math.round(this.maxBytes / 1024 / 1024) + ' Mo)',
+      );
+    }
+    // Defense en profondeur : le MulterModule applique deja un fileFilter mais
+    // tout appel direct a saveBuffer (mail inbound, imports CSV, ...) passerait
+    // sinon outre.
+    if (!isAttachmentTypeAllowed(file.mimetype, file.originalname)) {
+      throw new BadRequestException(
+        'Type de fichier refuse. Formats autorises : ' + describeAllowed(),
       );
     }
     const safeName = this.sanitizeFilename(file.originalname);

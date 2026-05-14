@@ -27,6 +27,7 @@ export class InterventionsService {
         technician: { select: { id: true, firstName: true, lastName: true } },
       },
       orderBy: { scheduledAt: 'desc' },
+      take: 500,
     });
   }
 

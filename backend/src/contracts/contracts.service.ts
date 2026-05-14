@@ -76,6 +76,10 @@ export class ContractsService {
         owner: { select: { id: true, firstName: true, lastName: true } },
       },
       orderBy: { endDate: 'asc' },
+      // Safety cap : evite qu'un appel brut a /contracts charge 10k lignes en
+      // memoire. Une pagination explicite (?page=/?pageSize=) sera ajoutee au
+      // Sprint 2 quand la table contracts depassera 500 lignes.
+      take: 500,
     });
   }
 

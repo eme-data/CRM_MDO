@@ -325,6 +325,9 @@ model Contract {
   @@index([ownerId])
   @@index([status])
   @@index([endDate])
+  // Compositie pour le cron renewal-alerts (filtre status=ACTIVE + endDate BETWEEN now AND now+90d)
+  // et pour stats() dashboard. Reduit le bookmark lookup quand on a >1000 contrats.
+  @@index([status, endDate])
 }
 
 model ContractRenewalAlert {
@@ -436,6 +439,11 @@ model Task {
   @@index([assigneeId])
   @@index([status])
   @@index([dueDate])
+  // Composite kanban : SELECT WHERE status=X ORDER BY dueDate (page tasks).
+  @@index([status, dueDate])
+  // FKs souvent filtrees mais sans index dedie (cascade depuis Company/Contact/...).
+  @@index([companyId])
+  @@index([contractId])
 }
 
 model Note {
@@ -604,6 +612,11 @@ model Ticket {
   @@index([status])
   @@index([priority])
   @@index([reference])
+  // Composite pour le kanban (ORDER BY priority DESC, createdAt DESC) et le
+  // filtre commun status+priority des dashboards techniciens.
+  @@index([status, priority])
+  // Composite pour le compteur "overdue" : status IN (...) AND dueDate < NOW.
+  @@index([status, dueDate])
 }
 
 model TicketMessage {
