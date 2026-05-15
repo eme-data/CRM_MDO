@@ -80,6 +80,7 @@ const sections: NavSection[] = [
       { href: '/uptime', label: 'Uptime sites', icon: Activity },
       { href: '/audit-dns', label: 'Audit DNS', icon: ShieldCheck },
       { href: '/email-security', label: 'Email security', icon: ShieldCheck },
+      { href: '/soc', label: 'Console SOC', icon: ShieldCheck },
     ],
   },
   {

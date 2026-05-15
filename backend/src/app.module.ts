@@ -70,6 +70,7 @@ import { ProductsModule } from './products/products.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { KbModule } from './kb/kb.module';
 import { EmailSecurityModule } from './email-security/email-security.module';
+import { SocModule } from './soc/soc.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { MetricsService } from './common/observability/metrics.service';
@@ -168,6 +169,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     OnboardingModule,
     KbModule,
     EmailSecurityModule,
+    SocModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,
