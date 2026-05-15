@@ -195,6 +195,7 @@ model Company {
   apiKeys        ApiKey[]
   onboardingRuns OnboardingRun[]
   kbArticles     KbArticle[]
+  emailSecurityChecks EmailSecurityCheck[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -2093,6 +2094,60 @@ model KbArticle {
   @@index([companyId])
   @@index([category])
   @@index([authorId])
+}
+
+// =================== EMAIL SECURITY MONITORING ===================
+//
+// Verifie SPF / DMARC / DKIM pour chaque domaine client. Sert de plus-value
+// cyber et complete le module surveillance (qui ne fait que SSL + WHOIS).
+//
+// Score 0-100 :
+//   SPF present              : 25 pts
+//   SPF politique stricte    : +10 (-all)
+//   DMARC present            : 30 pts
+//   DMARC policy=reject      : +15
+//   DMARC policy=quarantine  : +10
+//   DMARC policy=none        : +5
+//   DMARC rua (reporting)    : +5
+//   DKIM (selector trouve)   : +15
+//
+// Cron quotidien re-verifie tous les domaines (asset type=DOMAIN actifs).
+
+model EmailSecurityCheck {
+  id            String   @id @default(uuid())
+  // Domaine au format racine ("mdoservices.fr"). Pas de FK dure vers Asset
+  // car on peut re-verifier un domaine meme si l'asset est supprime entre-temps
+  // — utile pour conserver l'historique.
+  domain        String   @unique
+  // Si rattachable a une societe (via lookup Asset), on denormalise pour
+  // pouvoir filtrer par client cote UI.
+  companyId     String?
+  company       Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  // ----- SPF -----
+  spfRecord     String?  // valeur brute du record TXT v=spf1
+  spfPolicy     String?  // 'pass' (-all), 'softfail' (~all), 'neutral' (?all), 'all' (+all)
+
+  // ----- DMARC -----
+  dmarcRecord   String?  // valeur brute du record TXT v=DMARC1
+  dmarcPolicy   String?  // 'reject', 'quarantine', 'none'
+  dmarcRua      String?  // adresse(s) reporting agregee
+  dmarcSubdomainPolicy String?
+
+  // ----- DKIM -----
+  dkimSelector  String?  // selector trouve (default, selector1, google, ...)
+  dkimRecord    String?
+  dkimPresent   Boolean  @default(false)
+
+  scorePct      Int      @default(0)
+  // Erreur eventuelle (DNS timeout, NXDOMAIN, etc.)
+  error         String?
+
+  lastCheckedAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([companyId])
+  @@index([scorePct])
 }
 
 // =================== SIGNATURE ELECTRONIQUE ===================
