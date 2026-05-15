@@ -52,6 +52,9 @@ export class QontoProvider implements BillingProvider {
         Accept: 'application/json',
       },
       body: body ? JSON.stringify(body) : undefined,
+      // Sans timeout, un Qonto lent (incident) bloque le worker BullMQ
+      // indefiniment et cascade vers le cron syncTransactions horaire.
+      signal: AbortSignal.timeout(20_000),
     });
     if (!res.ok) {
       const txt = await res.text();

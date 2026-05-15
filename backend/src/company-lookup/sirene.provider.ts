@@ -37,6 +37,9 @@ export class SireneProvider {
     try {
       const res = await fetch(url, {
         headers: { 'X-INSEE-Api-Key-Integration': key, Accept: 'application/json' },
+        // INSEE peut etre lent. Sans timeout, l'autocomplete sociétés
+        // bloque le user pendant des minutes en cas d'incident API.
+        signal: AbortSignal.timeout(8_000),
       });
       if (!res.ok) {
         this.logger.warn('Sirene HTTP ' + res.status + ' ' + res.statusText);

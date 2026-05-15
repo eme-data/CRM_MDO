@@ -36,13 +36,18 @@ export class CallTranscriptionService {
     });
 
     try {
-      // 1. Telecharge le fichier audio
-      const audioRes = await fetch(call.recordingUrl);
+      // 1. Telecharge le fichier audio (60s timeout : un audio de 30 min
+      // pese ~30 MB, le download peut prendre quelques secondes mais pas
+      // plusieurs minutes — au-dela on suspecte un blocage reseau).
+      const audioRes = await fetch(call.recordingUrl, {
+        signal: AbortSignal.timeout(60_000),
+      });
       if (!audioRes.ok) throw new Error('Telechargement recording HTTP ' + audioRes.status);
       const audioBuf = Buffer.from(await audioRes.arrayBuffer());
       const audioBlob = new Blob([new Uint8Array(audioBuf)], { type: 'audio/mpeg' });
 
-      // 2. POST Whisper
+      // 2. POST Whisper (5 min timeout : Whisper peut etre lent sur les
+      // gros fichiers. Au-dela, on a un probleme cote OpenAI ou reseau).
       const fd = new FormData();
       fd.append('file', audioBlob, 'recording.mp3');
       fd.append('model', WHISPER_MODEL);
@@ -53,6 +58,7 @@ export class CallTranscriptionService {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + apiKey },
         body: fd as any,
+        signal: AbortSignal.timeout(300_000),
       });
       if (!wRes.ok) {
         const t = await wRes.text();

@@ -41,6 +41,9 @@ export class M365GraphClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
+      // Sans timeout, login.microsoftonline.com indisponible bloque
+      // indefiniment le worker. 15s couvre largement le cas nominal (~300ms).
+      signal: AbortSignal.timeout(15_000),
     });
     const data: any = await res.json();
     if (!res.ok || !data.access_token) {
@@ -68,6 +71,9 @@ export class M365GraphClient {
     while (next) {
       const res = await fetch(next, {
         headers: { Authorization: 'Bearer ' + token, ConsistencyLevel: 'eventual' },
+        // 30s par page (Graph est lent sur les grosses pages 999 items).
+        // Sans timeout, une page hangee = boucle infinie sur le sync tenant.
+        signal: AbortSignal.timeout(30_000),
       });
       if (!res.ok) {
         const errBody = await res.text();
