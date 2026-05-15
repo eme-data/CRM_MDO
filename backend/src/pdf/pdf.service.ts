@@ -107,6 +107,21 @@ export interface MonthlyReportData {
     byType: Array<{ type: string; count: number }>;
     list: Array<{ name: string; type: string; identifier: string | null; status: string; expiresAt: Date | null }>;
   };
+  // Section Cyber/Posture optionnelle (omise dans le PDF si null — rapports
+  // d'avant la refonte Cyber n'avaient pas ce bloc).
+  posture?: {
+    cyberScore: number | null;       // 0-100
+    healthScore: number | null;      // 0-100
+    healthRisk?: 'LOW' | 'MEDIUM' | 'HIGH';
+    healthAlerts: string[];          // 0-5 raisons cles
+    compliance: Array<{
+      framework: string;             // 'NIS2' | 'ISO27001' | ...
+      scorePct: number;
+      compliantCount: number;
+      totalControls: number;
+      nonCompliantCount: number;
+    }>;
+  };
 }
 
 @Injectable()
@@ -436,6 +451,42 @@ export class PdfService {
       this.kpiBox(doc, 310, kpiY, 'Uptime moyen', data.uptime.avgUptimePct !== null ? data.uptime.avgUptimePct.toFixed(2) + ' %' : 'N/A', data.uptime.monitors + ' site(s)');
       this.kpiBox(doc, 440, kpiY, 'Alertes envoyees', String(data.surveillance.alertsSent), data.surveillance.monitoredCount + ' actifs');
       doc.y = kpiY + 60;
+
+      // ===== Posture cyber & sante client (optionnel) =====
+      // Ce bloc remplace le rapport "purement operationnel" par un rapport
+      // qui aide aussi le client a comprendre sa posture globale et le travail
+      // de fond MDO sur la cyber/conformite.
+      if (data.posture) {
+        doc.moveDown();
+        this.sectionTitle(doc, 'Posture cyber et sante du compte');
+        const pY = doc.y + 4;
+        const cyberLabel = data.posture.cyberScore !== null ? data.posture.cyberScore + ' / 100' : 'N/A';
+        const healthLabel = data.posture.healthScore !== null ? data.posture.healthScore + ' / 100' : 'N/A';
+        const healthRisk = data.posture.healthRisk ?? '';
+        this.kpiBox(doc, 50, pY, 'Cyber score', cyberLabel, 'posture cybersecurite');
+        this.kpiBox(doc, 180, pY, 'Health score', healthLabel, healthRisk ? 'risque ' + healthRisk : 'engagement');
+        this.kpiBox(doc, 310, pY, 'Audits compliance', String(data.posture.compliance.length), data.posture.compliance.map((c) => c.framework).join(' · ') || 'aucun');
+        const totalEcarts = data.posture.compliance.reduce((s, c) => s + c.nonCompliantCount, 0);
+        this.kpiBox(doc, 440, pY, 'Ecarts compliance', String(totalEcarts), 'a corriger');
+        doc.y = pY + 60;
+
+        if (data.posture.compliance.length > 0) {
+          doc.moveDown(0.3);
+          doc.fontSize(10).fillColor('#1d4ed8').text('Detail des audits :');
+          for (const c of data.posture.compliance) {
+            doc.fontSize(10).fillColor('#000').text(
+              '  - ' + c.framework + ' : ' + c.scorePct + ' % (' + c.compliantCount + '/' + c.totalControls + ' controles conformes, ' + c.nonCompliantCount + ' ecarts)',
+            );
+          }
+        }
+        if (data.posture.healthAlerts.length > 0) {
+          doc.moveDown(0.3);
+          doc.fontSize(10).fillColor('#b45309').text('Points d\'attention :');
+          for (const a of data.posture.healthAlerts.slice(0, 5)) {
+            doc.fontSize(9).fillColor('#000').text('  - ' + a);
+          }
+        }
+      }
 
       // ===== Tickets =====
       doc.moveDown();

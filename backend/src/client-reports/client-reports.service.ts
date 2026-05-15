@@ -15,6 +15,8 @@ import { PrismaService } from '../database/prisma.service';
 import { PdfService, MonthlyReportData } from '../pdf/pdf.service';
 import { MailService } from '../mail/mail.service';
 import { SettingsService } from '../settings/settings.service';
+import { CyberScoreService } from '../cyber-score/cyber-score.service';
+import { HealthScoreService } from '../health-score/health-score.service';
 
 // Repertoire physique ou sont stockes les PDF (un sous-dossier d'UPLOADS_DIR).
 const SUBDIR = 'client-reports';
@@ -31,6 +33,8 @@ export class ClientReportsService {
     private readonly mail: MailService,
     private readonly settings: SettingsService,
     private readonly config: ConfigService,
+    private readonly cyber: CyberScoreService,
+    private readonly health: HealthScoreService,
   ) {}
 
   private getUploadsDir(): string {
@@ -420,6 +424,38 @@ export class ClientReportsService {
     const byTypeMap = new Map<string, number>();
     for (const a of inventory) byTypeMap.set(a.type, (byTypeMap.get(a.type) ?? 0) + 1);
 
+    // --- Posture (cyber + health + compliance) ---
+    // Best-effort : si l'un des trois echoue (donnees insuffisantes), on
+    // continue avec les autres pour ne pas bloquer la generation du rapport.
+    const [cyberRes, healthRes, complianceList] = await Promise.all([
+      this.cyber.computeForCompany(company.id).catch(() => null),
+      this.health.computeForCompany(company.id).catch(() => null),
+      this.prisma.complianceAssessment.findMany({
+        where: { companyId: company.id },
+        select: {
+          framework: { select: { code: true } },
+          scorePct: true,
+          compliantCount: true,
+          nonCompliantCount: true,
+          totalControls: true,
+        },
+      }),
+    ]);
+
+    const posture: MonthlyReportData['posture'] = {
+      cyberScore: cyberRes?.score ?? null,
+      healthScore: healthRes?.overall ?? null,
+      healthRisk: healthRes?.risk,
+      healthAlerts: healthRes?.alerts ?? [],
+      compliance: complianceList.map((c) => ({
+        framework: c.framework.code,
+        scorePct: c.scorePct,
+        compliantCount: c.compliantCount,
+        totalControls: c.totalControls,
+        nonCompliantCount: c.nonCompliantCount,
+      })),
+    };
+
     return {
       company: {
         name: company.name,
@@ -460,6 +496,7 @@ export class ClientReportsService {
         byType: Array.from(byTypeMap.entries()).map(([type, count]) => ({ type, count })),
         list: inventory.slice(0, 60),
       },
+      posture,
     };
   }
 }
