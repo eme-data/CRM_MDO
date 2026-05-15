@@ -5,17 +5,21 @@ import { Plus, Search, Users } from 'lucide-react';
 import { api } from '@/lib/api';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableRowSkeleton } from '@/components/ui/Skeleton';
+import { useReloadOnFocus } from '@/lib/useReloadOnFocus';
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  function load() {
     setLoading(true);
     const params = search ? '?search=' + encodeURIComponent(search) : '';
     api.get('/contacts' + params).then((res) => setContacts(res.items)).finally(() => setLoading(false));
-  }, [search]);
+  }
+
+  useEffect(() => { load(); }, [search]);
+  useReloadOnFocus(load);
 
   return (
     <div className="space-y-6">

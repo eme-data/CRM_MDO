@@ -8,6 +8,7 @@ import { formatDate, daysUntil } from '@/lib/utils';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableRowSkeleton } from '@/components/ui/Skeleton';
+import { useReloadOnFocus } from '@/lib/useReloadOnFocus';
 
 const TYPE_LABEL: Record<string, string> = {
   HARDWARE: 'Materiel', LICENSE: 'Licence', SOFTWARE: 'Logiciel',
@@ -37,6 +38,7 @@ export default function AssetsPage() {
     load();
     api.get('/companies?pageSize=500').then((r) => setCompanies(r.items));
   }, [filterType, filterExpiring]);
+  useReloadOnFocus(load);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

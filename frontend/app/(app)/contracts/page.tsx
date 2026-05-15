@@ -15,6 +15,7 @@ import {
   contractStatusLabel,
   contractStatusColor,
 } from '@/lib/utils';
+import { useReloadOnFocus } from '@/lib/useReloadOnFocus';
 
 interface Contract {
   id: string;
@@ -46,7 +47,7 @@ export default function ContractsPage() {
     setPage(1);
   }, [search, status, expiringInDays]);
 
-  useEffect(() => {
+  function load() {
     setLoading(true);
     const params = new URLSearchParams();
     if (search) params.set('search', search);
@@ -61,7 +62,10 @@ export default function ContractsPage() {
         setTotal(res.total);
       })
       .finally(() => setLoading(false));
-  }, [search, status, expiringInDays, page]);
+  }
+
+  useEffect(() => { load(); }, [search, status, expiringInDays, page]);
+  useReloadOnFocus(load);
 
   return (
     <div className="space-y-6">

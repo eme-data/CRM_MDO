@@ -9,6 +9,7 @@ import {
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { formatEuro, stageLabel } from '@/lib/utils';
+import { useReloadOnFocus } from '@/lib/useReloadOnFocus';
 
 const STAGES = ['QUALIFICATION', 'PROPOSITION', 'NEGOCIATION', 'GAGNE', 'PERDU'];
 const stageColor: Record<string, string> = {
@@ -26,6 +27,7 @@ export default function OpportunitiesPage() {
 
   async function load() { setKanban(await api.get('/opportunities/kanban')); }
   useEffect(() => { load(); }, []);
+  useReloadOnFocus(load);
 
   function findOpp(id: string): any {
     for (const col of kanban) {

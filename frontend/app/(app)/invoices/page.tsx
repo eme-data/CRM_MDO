@@ -6,6 +6,7 @@ import { FileText, Download, Play, ExternalLink } from 'lucide-react';
 import { api, downloadAttachment } from '@/lib/api';
 import { formatDate, formatEuro } from '@/lib/utils';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { useReloadOnFocus } from '@/lib/useReloadOnFocus';
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: 'Brouillon', ISSUED: 'Emise', PAID: 'Payee', OVERDUE: 'En retard', CANCELLED: 'Annulee',
@@ -44,6 +45,7 @@ export default function InvoicesPage() {
     setItems(await api.get('/invoices' + p));
   }
   useEffect(() => { load(); }, [status]);
+  useReloadOnFocus(load);
 
   async function generateMonthly() {
     const ok = await confirm({

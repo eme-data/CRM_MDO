@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableRowSkeleton } from '@/components/ui/Skeleton';
 import { formatDate, formatEuro, quoteStatusColor, quoteStatusLabel } from '@/lib/utils';
+import { useReloadOnFocus } from '@/lib/useReloadOnFocus';
 
 interface Quote {
   id: string;
@@ -23,7 +24,7 @@ export default function QuotesPage() {
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  function load() {
     setLoading(true);
     const p = new URLSearchParams();
     if (search) p.set('search', search);
@@ -31,7 +32,10 @@ export default function QuotesPage() {
     api.get('/quotes' + (p.toString() ? '?' + p.toString() : ''))
       .then(setQuotes)
       .finally(() => setLoading(false));
-  }, [search, status]);
+  }
+
+  useEffect(() => { load(); }, [search, status]);
+  useReloadOnFocus(load);
 
   return (
     <div className="space-y-6">

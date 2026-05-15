@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableRowSkeleton } from '@/components/ui/Skeleton';
+import { useReloadOnFocus } from '@/lib/useReloadOnFocus';
 
 const STATUS_COLOR: Record<string, string> = {
   PLANNED: 'bg-blue-100 text-blue-700',
@@ -16,7 +17,9 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function InterventionsPage() {
   const [items, setItems] = useState<any[] | null>(null);
-  useEffect(() => { api.get('/interventions').then(setItems); }, []);
+  function load() { api.get('/interventions').then(setItems); }
+  useEffect(() => { load(); }, []);
+  useReloadOnFocus(load);
 
   return (
     <div className="space-y-6">

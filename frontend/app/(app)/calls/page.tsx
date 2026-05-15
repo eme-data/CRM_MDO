@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableRowSkeleton } from '@/components/ui/Skeleton';
 import { formatDateTime } from '@/lib/utils';
+import { useReloadOnFocus } from '@/lib/useReloadOnFocus';
 
 interface Call {
   id: string;
@@ -42,16 +43,16 @@ export default function CallsPage() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
 
-  useEffect(() => {
-    api.get('/calls/stats').then(setStats).catch(() => {});
-  }, []);
-
-  useEffect(() => {
+  function load() {
     setLoading(true);
+    api.get('/calls/stats').then(setStats).catch(() => {});
     api.get('/calls' + (direction ? '?direction=' + direction : ''))
       .then(setCalls)
       .finally(() => setLoading(false));
-  }, [direction]);
+  }
+
+  useEffect(() => { load(); }, [direction]);
+  useReloadOnFocus(load);
 
   return (
     <div className="space-y-6">

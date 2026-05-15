@@ -13,6 +13,7 @@ import { api } from '@/lib/api';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableRowSkeleton } from '@/components/ui/Skeleton';
+import { useReloadOnFocus } from '@/lib/useReloadOnFocus';
 import {
   formatDate,
   ticketStatusLabel,
@@ -80,6 +81,7 @@ export default function TicketsPage() {
 
   useEffect(() => { load(); }, [view, search, status, priority]);
   useEffect(() => { api.get('/users').then(setUsers); }, []);
+  useReloadOnFocus(load);
 
   function findTicket(id: string) {
     for (const col of kanban) {
