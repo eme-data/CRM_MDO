@@ -909,7 +909,16 @@ model Asset {
   acquiredAt     DateTime?
   warrantyUntil  DateTime?
   expiresAt      DateTime?     // pour licences/domains/certs
+  // EOSL : date de fin de support du vendor (HP/Cisco/Microsoft annonce
+  // formellement la fin de support — apres, plus de patches secu, NIS2 NOK).
+  // Different de warrantyUntil (qui est la fin de garantie commerciale).
+  supportEndDate DateTime?
   costHt         Decimal?      @db.Decimal(10, 2)
+  // Budget estime pour le remplacement (devis vendor, RDV technique, etc.).
+  // Utilise pour planifier le CAPEX client annuel.
+  replacementBudgetHt Decimal? @db.Decimal(10, 2)
+  // Contact SAV / revendeur (numero / email / portail). Texte libre.
+  vendorContact  String?
   notes          String?
   // Auto-monitoring SSL / WHOIS (DOMAIN, CERTIFICATE)
   // expiresAt est rempli automatiquement, lastMonitoredAt = horodatage du dernier check.

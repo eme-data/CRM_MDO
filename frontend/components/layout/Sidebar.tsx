@@ -74,6 +74,7 @@ const sections: NavSection[] = [
     title: 'Infogerance',
     items: [
       { href: '/assets', label: 'Assets clients', icon: Server },
+      { href: '/asset-lifecycle', label: 'Lifecycle materiel', icon: Server },
       { href: '/surveillance', label: 'Surveillance', icon: Shield },
       { href: '/uptime', label: 'Uptime sites', icon: Activity },
       { href: '/audit-dns', label: 'Audit DNS', icon: ShieldCheck },
