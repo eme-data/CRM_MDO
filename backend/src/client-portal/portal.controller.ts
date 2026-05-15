@@ -7,9 +7,11 @@ import {
   Post,
   Query,
   Req,
+  Res,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '../common/decorators/public.decorator';
@@ -18,6 +20,7 @@ import { PortalPublic } from './decorators/portal-public.decorator';
 import { CurrentPortalUser, PortalUser } from './decorators/current-portal-user.decorator';
 import { PortalAuthService } from './portal-auth.service';
 import { PortalDataService } from './portal-data.service';
+import { DocumentsService } from '../documents/documents.service';
 
 // Tout le portail client est sous `/portal/*`. On marque `@Public()` au niveau
 // controller pour BYPASSER les guards globaux (JwtAuth, MfaRequired, Roles),
@@ -32,6 +35,7 @@ export class PortalController {
   constructor(
     private readonly portalAuth: PortalAuthService,
     private readonly data: PortalDataService,
+    private readonly documents: DocumentsService,
   ) {}
 
   // ============================================================
@@ -164,5 +168,29 @@ export class PortalController {
   @Get('subprocessors')
   subprocessors() {
     return this.data.listSubprocessors();
+  }
+
+  // ============================================================
+  // GED documents partages : seulement ceux marques visibleToClient
+  // ============================================================
+  @Get('documents')
+  listDocuments(@CurrentPortalUser() user: PortalUser) {
+    return this.data.listDocuments(user.companyId);
+  }
+
+  @Get('documents/:id/download')
+  async downloadDocument(
+    @CurrentPortalUser() user: PortalUser,
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const d = await this.data.getDocumentForDownload(user.companyId, id);
+    const stream = this.documents.getReadStream(d.storageKey);
+    res.set({
+      'Content-Type': d.mimeType,
+      'Content-Disposition': 'attachment; filename="' + d.filename.replace(/"/g, '') + '"',
+      'Content-Length': String(d.sizeBytes),
+    });
+    return new StreamableFile(stream);
   }
 }

@@ -9,6 +9,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { CompanyForm } from '@/components/CompanyForm';
 import { ClientDocsSection } from '@/components/ClientDocsSection';
 import { ITGlueSection } from '@/components/ITGlueSection';
+import { CompanyDocumentsSection } from '@/components/CompanyDocumentsSection';
 import { RunbookRunsSection } from '@/components/RunbookRunsSection';
 import { MonthlyReportsSection } from '@/components/MonthlyReportsSection';
 import { M365Section } from '@/components/M365Section';
@@ -271,6 +272,8 @@ export default function CompanyDetailPage() {
       </div>
 
       <ITGlueSection companyId={id} />
+
+      <CompanyDocumentsSection companyId={id} />
 
       <ClientDocsSection companyId={id} />
 

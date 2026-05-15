@@ -55,6 +55,7 @@ model User {
   createdTickets     Ticket[]       @relation("TicketCreator")
   ticketMessages     TicketMessage[]
   uploadedAttachments Attachment[]  @relation("AttachmentUploader")
+  uploadedDocuments   CompanyDocument[] @relation("DocumentUploader")
   timeEntries        TimeEntry[]
   invoicedTimeEntries TimeEntry[]   @relation("TimeEntryInvoicer")
   notifications      Notification[]
@@ -206,6 +207,7 @@ model Company {
   dripEnrollments        DripEnrollment[]
   backupJobs             BackupJob[]
   webhookEndpoints       WebhookEndpoint[]
+  documents              CompanyDocument[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -3041,6 +3043,59 @@ enum AiCapability {
   TICKET_SUMMARY
   CLIENT_SUMMARY
   GENERIC
+}
+
+// =================== GED documents client ===================
+//
+// Stockage des documents lies a une societe : contrats signes, KBIS, RIB,
+// attestations, lettres de mission, schemas reseau, etc. Distinct des
+// Attachment (qui sont eux lies aux Tickets uniquement). Permet une vraie
+// gestion documentaire avec categorisation, expiration et exposition portail.
+enum DocumentCategory {
+  CONTRACT_SIGNED   // contrats signes (PDF revenu signe)
+  KYC               // KBIS, RIB, identite dirigeant
+  LEGAL             // lettres de mission, mandats, NDAs
+  COMPLIANCE        // attestations URSSAF, assurance RC pro, RGPD
+  TECHNICAL         // schemas reseau, plans serveurs, runbooks
+  COMMUNICATION     // courriers, mails archives importants
+  OTHER
+}
+
+model CompanyDocument {
+  id              String           @id @default(uuid())
+  companyId       String
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Stockage : meme repertoire physique que les attachments (uploads/), avec
+  // un prefixe de cle pour distinguer.
+  filename        String           // nom de fichier original (apres sanitize)
+  storageKey      String           @unique
+  mimeType        String
+  sizeBytes       Int
+
+  category        DocumentCategory @default(OTHER)
+  // Libelle editable, distinct du filename (ex: "KBIS Mai 2026" pour un fichier
+  // qui s'appellerait "scan_001.pdf").
+  title           String?
+  description     String?
+  // Date d'expiration : sert au cron qui alerte 30j avant (KBIS valide 3 mois,
+  // attestation URSSAF 6 mois, etc.).
+  expiresAt       DateTime?
+
+  // Exposition portail : si true, le client voit ce doc dans son espace
+  // /portal/documents. Defaut false : par securite, on n'expose RIEN
+  // tant qu'on a pas explicitement coche la visibilite.
+  visibleToClient Boolean          @default(false)
+
+  uploadedById    String?
+  uploadedBy      User?            @relation("DocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedAt      DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([companyId])
+  @@index([category])
+  @@index([expiresAt])
+  @@index([visibleToClient])
 }
 
 model AiUsage {

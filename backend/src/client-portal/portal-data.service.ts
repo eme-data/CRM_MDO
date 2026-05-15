@@ -331,4 +331,43 @@ export class PortalDataService {
       },
     });
   }
+
+  // ============================================================
+  // DOCUMENTS GED visibles client (visibleToClient=true uniquement)
+  // ============================================================
+  async listDocuments(companyId: string) {
+    return this.prisma.companyDocument.findMany({
+      where: { companyId, visibleToClient: true },
+      orderBy: [{ category: 'asc' }, { uploadedAt: 'desc' }],
+      select: {
+        id: true,
+        filename: true,
+        title: true,
+        description: true,
+        category: true,
+        mimeType: true,
+        sizeBytes: true,
+        expiresAt: true,
+        uploadedAt: true,
+      },
+    });
+  }
+
+  // Le portail telecharge le fichier physique. On verifie le scope companyId
+  // ET visibleToClient pour empecher tout download d'un doc qui ne serait pas
+  // marque visible (defense en profondeur).
+  async getDocumentForDownload(companyId: string, documentId: string) {
+    const d = await this.prisma.companyDocument.findUnique({
+      where: { id: documentId },
+      select: {
+        id: true, companyId: true, visibleToClient: true,
+        storageKey: true, filename: true, mimeType: true, sizeBytes: true,
+      },
+    });
+    if (!d) throw new NotFoundException();
+    if (d.companyId !== companyId || !d.visibleToClient) {
+      throw new NotFoundException();
+    }
+    return d;
+  }
 }
