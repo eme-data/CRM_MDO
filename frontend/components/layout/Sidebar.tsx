@@ -46,6 +46,7 @@ const sections: NavSection[] = [
     title: 'Pilotage',
     items: [
       { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
+      { href: '/health-overview', label: 'Sante clients', icon: Activity },
       { href: '/reports', label: 'Reporting', icon: BarChart3 },
     ],
   },

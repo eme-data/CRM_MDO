@@ -15,6 +15,7 @@ import { M365Section } from '@/components/M365Section';
 import { CyberScoreWidget } from '@/components/CyberScoreWidget';
 import { AiClientSummary } from '@/components/ai/AiClientSummary';
 import { ComplianceSection } from '@/components/ComplianceSection';
+import { HealthScoreWidget } from '@/components/HealthScoreWidget';
 import {
   formatEuro,
   formatDate,
@@ -157,7 +158,10 @@ export default function CompanyDetailPage() {
       {/* Cyber Risk Score : widget prominent en haut de la fiche client.
           Premier signal visuel a l'ouverture de la page, parfait pour les
           RDV commerciaux (justifie l'upgrade Essentiel -> Pro -> Souverain). */}
-      <CyberScoreWidget companyId={id} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CyberScoreWidget companyId={id} />
+        <HealthScoreWidget companyId={id} />
+      </div>
 
       <AiClientSummary companyId={id} />
 

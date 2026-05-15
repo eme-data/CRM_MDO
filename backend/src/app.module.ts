@@ -60,6 +60,7 @@ import { SignatureModule } from './signature/signature.module';
 import { CallsModule } from './calls/calls.module';
 import { AiModule } from './ai/ai.module';
 import { ComplianceModule } from './compliance/compliance.module';
+import { HealthScoreModule } from './health-score/health-score.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { MetricsService } from './common/observability/metrics.service';
@@ -148,6 +149,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     CallsModule,
     AiModule,
     ComplianceModule,
+    HealthScoreModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,
