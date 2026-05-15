@@ -99,6 +99,7 @@ const adminItems: NavItem[] = [
   { href: '/imports', label: 'Imports CSV', icon: Upload },
   { href: '/admin/settings', label: 'API, SMTP, IMAP', icon: KeyRound },
   { href: '/admin/billing', label: 'Facturation (Qonto)', icon: Receipt },
+  { href: '/admin/executive', label: 'Dashboard exec MSP', icon: BarChart3 },
   { href: '/admin/profitability', label: 'Marges / rentabilite', icon: BarChart3 },
   { href: '/admin/products', label: 'Catalogue produits', icon: Layers },
   { href: '/admin/api-keys', label: 'Cles API publique', icon: KeyRound },
