@@ -60,6 +60,34 @@ Messaging (Android) et APNS (iOS). Pour activer :
    FCM/APNS en plus du Web Push (futur — pour l'instant la WebView recoit les
    Web Push standards via le service worker `/sw.js`)
 
+## Scan code-barres / QR (optionnel)
+
+Le frontend expose un bouton "Scanner" sur la page Assets. Sans plugin natif,
+il utilise `BarcodeDetector` du navigateur (Chrome Android moderne) en
+fallback. Pour une experience native premium (overlay full-screen, multi-format,
+flash), ajouter le plugin ML Kit Google :
+
+```bash
+cd mobile
+npm install @capacitor-mlkit/barcode-scanning
+npm run sync                     # propage dans android/ et ios/
+npm run build:android-debug
+```
+
+Le plugin est detecte automatiquement par `frontend/lib/native.ts` : si
+`window.Capacitor.Plugins.BarcodeScanner` existe, il est prefere a la version
+Web. Aucun changement frontend requis.
+
+Android : ajouter dans `android/app/src/main/AndroidManifest.xml` :
+```xml
+<uses-permission android:name="android.permission.CAMERA" />
+```
+iOS : ajouter dans `ios/App/App/Info.plist` :
+```xml
+<key>NSCameraUsageDescription</key>
+<string>Scanner les codes-barres des assets clients</string>
+```
+
 ## Mise a jour
 
 Quand le frontend evolue, **aucun rebuild de l'app mobile n'est necessaire** :

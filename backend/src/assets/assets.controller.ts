@@ -25,9 +25,10 @@ export class AssetsController {
     @Query('type') type?: AssetType,
     @Query('status') status?: AssetStatus,
     @Query('expiringInDays') expiringInDays?: string,
+    @Query('identifier') identifier?: string,
   ) {
     return this.service.findAll({
-      companyId, type, status,
+      companyId, type, status, identifier,
       expiringInDays: expiringInDays ? parseInt(expiringInDays, 10) : undefined,
     });
   }

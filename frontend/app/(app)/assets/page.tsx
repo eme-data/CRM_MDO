@@ -9,6 +9,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableRowSkeleton } from '@/components/ui/Skeleton';
 import { useReloadOnFocus } from '@/lib/useReloadOnFocus';
+import { BarcodeScanButton } from '@/components/BarcodeScanButton';
 
 const TYPE_LABEL: Record<string, string> = {
   HARDWARE: 'Materiel', LICENSE: 'Licence', SOFTWARE: 'Logiciel',
@@ -97,11 +98,31 @@ export default function AssetsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-3xl font-bold">Assets clients</h1>
-        <button onClick={() => setShowForm(!showForm)} className="btn btn-primary">
-          <Plus size={16} className="mr-1" /> Nouvel asset
-        </button>
+        <div className="flex gap-2">
+          <BarcodeScanButton
+            label="Scanner un asset"
+            onScan={(text) => {
+              // Filtre la liste sur l'identifiant scanne (numero de serie sur
+              // l'etiquette du materiel typiquement). Recherche cote serveur
+              // via le filtre identifier deja supporte par /assets.
+              const params = new URLSearchParams();
+              params.set('identifier', text);
+              api.get('/assets?' + params.toString()).then((r) => {
+                if (Array.isArray(r) && r.length > 0) {
+                  // Redirige sur la fiche du 1er asset matchant
+                  window.location.href = '/assets/' + r[0].id;
+                } else {
+                  toast.info('Aucun asset trouve avec l\'identifiant ' + text);
+                }
+              }).catch((err) => toast.error(err.message));
+            }}
+          />
+          <button onClick={() => setShowForm(!showForm)} className="btn btn-primary">
+            <Plus size={16} className="mr-1" /> Nouvel asset
+          </button>
+        </div>
       </div>
 
       {showForm && (

@@ -9,7 +9,13 @@ import { UpdateAssetDto } from './dto/update-asset.dto';
 export class AssetsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(params: { companyId?: string; type?: AssetType; status?: AssetStatus; expiringInDays?: number }) {
+  findAll(params: {
+    companyId?: string;
+    type?: AssetType;
+    status?: AssetStatus;
+    expiringInDays?: number;
+    identifier?: string;
+  }) {
     const where: Prisma.AssetWhereInput = {};
     if (params.companyId) where.companyId = params.companyId;
     if (params.type) where.type = params.type;
@@ -17,6 +23,10 @@ export class AssetsService {
     if (params.expiringInDays != null) {
       where.expiresAt = { gte: new Date(), lte: addDays(new Date(), params.expiringInDays) };
     }
+    // Recherche par numero de serie / identifiant : utile pour le scan de
+    // code-barres en intervention. On match exact (case-insensitive) plutot
+    // que contains pour eviter les collisions sur des suffixes courts.
+    if (params.identifier) where.identifier = { equals: params.identifier, mode: 'insensitive' };
     return this.prisma.asset.findMany({
       where,
       include: { company: { select: { id: true, name: true } }, contract: { select: { id: true, reference: true } } },

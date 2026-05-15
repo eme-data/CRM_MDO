@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { CommandPalette } from '@/components/CommandPalette';
 import { TimerWidget } from '@/components/TimerWidget';
 import { me, User } from '@/lib/auth';
+import { bootstrapNativePush } from '@/lib/native';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -15,6 +16,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     // Apply theme on mount (avant le render)
     const theme = localStorage.getItem('crm_mdo_theme');
     if (theme === 'dark') document.documentElement.classList.add('dark');
+    // Bootstrap notifications natives si on tourne dans l'app mobile Capacitor.
+    // No-op sur le Web. Recupere le token FCM/APNS pour le futur fallback push
+    // natif (cf lib/native.ts pour le statut "TODO backend register-native").
+    bootstrapNativePush();
   }, []);
 
   useEffect(() => {
