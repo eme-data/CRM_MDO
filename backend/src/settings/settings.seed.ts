@@ -467,6 +467,23 @@ export const SETTINGS_DEFS: SettingDef[] = [
     defaultValue:
       'Tu assistes MDO Services, MSP / cybersecurite en Occitanie. Tonalite : cordiale, claire, francais professionnel sans jargon excessif. Signature des emails : "L\'equipe MDO Services". Toujours signaler les actions necessitant une confirmation client.',
   },
+  {
+    key: 'ai.openaiApiKey',
+    category: 'ai',
+    label: 'OpenAI API key (Whisper transcription)',
+    description:
+      'Cle API OpenAI utilisee uniquement pour Whisper (transcription audio appels). Distincte de la cle Anthropic pour Claude.',
+    isSecret: true,
+    envVar: 'OPENAI_API_KEY',
+  },
+  {
+    key: 'ai.transcribeCallsAuto',
+    category: 'ai',
+    label: 'Transcrire automatiquement les appels avec recording',
+    description:
+      'Si actif, le cron 15min transcrit via Whisper les CallLog ayant un recordingUrl mais pas encore de transcript. Genere ensuite un resume Claude.',
+    defaultValue: 'false',
+  },
 
   // ---------- Rentabilite / marges ----------
   {

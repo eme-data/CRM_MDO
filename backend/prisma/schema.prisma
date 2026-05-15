@@ -2792,6 +2792,13 @@ model CallLog {
   // Optionnels (selon provider)
   recordingUrl  String?
   notes         String?
+  // ----- Transcription / resume IA (cf module CallTranscription) -----
+  transcript            String?          // texte integral (Whisper)
+  summary               String?          // resume Claude (3-5 puces + actions)
+  transcribedAt         DateTime?
+  transcriptionStatus   String?          // 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED'
+  transcriptionError    String?
+  transcriptionLanguage String?          // 'fr' | 'en' | autre detecte par Whisper
   // Provider technique (FREE_PRO|TEL_URI|MANUAL) pour debug.
   provider      String        @default("MANUAL")
   // Identifiant externe (call_id, sip_id) pour deduplication des webhooks.

@@ -100,7 +100,11 @@ export default function CallsPage() {
                 const iconColor = isMissed ? 'text-red-500' : c.direction === 'INBOUND' ? 'text-blue-500' : 'text-emerald-500';
                 return (
                   <tr key={c.id} className="border-t hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                    <td className="p-3"><Icon size={16} className={iconColor} /></td>
+                    <td className="p-3">
+                      <Link href={'/calls/' + c.id} title="Detail (transcript / resume)">
+                        <Icon size={16} className={iconColor} />
+                      </Link>
+                    </td>
                     <td className="p-3 font-mono text-xs">{c.fromNumber}</td>
                     <td className="p-3 font-mono text-xs">{c.toNumber}</td>
                     <td className="p-3">

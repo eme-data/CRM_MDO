@@ -79,6 +79,7 @@ import { DripModule } from './drip/drip.module';
 import { PatchManagementModule } from './patch-management/patch-management.module';
 import { BackupModule } from './backup/backup.module';
 import { SkillsModule } from './skills/skills.module';
+import { CallTranscriptionModule } from './call-transcription/call-transcription.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { MetricsService } from './common/observability/metrics.service';
@@ -186,6 +187,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     PatchManagementModule,
     BackupModule,
     SkillsModule,
+    CallTranscriptionModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,
