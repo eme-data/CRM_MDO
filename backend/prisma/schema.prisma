@@ -582,9 +582,23 @@ model Activity {
   metadata   Json?
   createdAt  DateTime @default(now())
 
+  // ===== Hash chaine (preuve d'integrite NIS2 / RGPD) =====
+  // currentHash = SHA256( prevHash || canonicalSerialize(entry) )
+  // - prevHash null sur la 1ere entry de la chaine (genesis)
+  // - currentHash null tant que pas encore scelle (cron toutes les 5 min)
+  // Une alteration retroactive sur entry N casse currentHash de N et
+  // toutes les entries N+1, N+2... car prevHash[N+1] != calc(N).
+  // Verifiable via POST /audit/verify.
+  prevHash   String?
+  currentHash String?
+  // Sequence numerique pour ordre stable (createdAt n'est pas garanti unique
+  // sur un meme tick). Auto-attribue lors du sealing.
+  sequence   Int?     @unique
+
   @@index([userId])
   @@index([entity, entityId])
   @@index([createdAt])
+  @@index([currentHash])
 }
 
 // =================== EMAILS ===================

@@ -63,6 +63,7 @@ import { ComplianceModule } from './compliance/compliance.module';
 import { HealthScoreModule } from './health-score/health-score.module';
 import { ProfitabilityModule } from './profitability/profitability.module';
 import { PushModule } from './push/push.module';
+import { AuditChainModule } from './audit-chain/audit-chain.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { MetricsService } from './common/observability/metrics.service';
@@ -154,6 +155,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     HealthScoreModule,
     ProfitabilityModule,
     PushModule,
+    AuditChainModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,
