@@ -82,6 +82,7 @@ import { SkillsModule } from './skills/skills.module';
 import { CallTranscriptionModule } from './call-transcription/call-transcription.module';
 import { SystemBackupModule } from './system-backup/system-backup.module';
 import { CronDashboardModule } from './cron-dashboard/cron-dashboard.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { MetricsService } from './common/observability/metrics.service';
@@ -192,6 +193,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     CallTranscriptionModule,
     SystemBackupModule,
     CronDashboardModule,
+    WebhooksModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,

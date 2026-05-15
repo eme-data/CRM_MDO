@@ -115,6 +115,7 @@ const adminItems: NavItem[] = [
   { href: '/admin/win-loss', label: 'Win / Loss analysis', icon: Target },
   { href: '/admin/drip', label: 'Drip campaigns email', icon: Mail },
   { href: '/admin/api-keys', label: 'Cles API publique', icon: KeyRound },
+  { href: '/admin/webhooks', label: 'Webhooks sortants', icon: Workflow },
   { href: '/admin/system-backup', label: 'Backup / Restore CRM', icon: Database },
   { href: '/admin/cron-jobs', label: 'Cron jobs / planificateur', icon: Clock },
   { href: '/admin/client-reports', label: 'Rapports clients mensuels', icon: FileBarChart },

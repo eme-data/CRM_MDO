@@ -83,6 +83,7 @@ model User {
   skills                  UserSkill[]
   systemBackupsCreated    SystemBackup[]                   @relation("SystemBackupCreator")
   systemBackupsRestored   SystemBackup[]                   @relation("SystemBackupRestorer")
+  webhookEndpointsCreated WebhookEndpoint[]                @relation("WebhookEndpointCreator")
   complianceAssessments  ComplianceAssessment[]            @relation("ComplianceOwner")
   controlReviews         ComplianceControlAssessment[]     @relation("ControlReviewer")
 
@@ -204,6 +205,7 @@ model Company {
   customerSuccessReviews CustomerSuccessReview[]
   dripEnrollments        DripEnrollment[]
   backupJobs             BackupJob[]
+  webhookEndpoints       WebhookEndpoint[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -2411,6 +2413,85 @@ model SystemBackup {
 
   @@index([kind, createdAt])
   @@index([status])
+}
+
+// =================== WEBHOOKS SORTANTS ===================
+//
+// Permet a une integration externe (Zapier, n8n, dashboard client custom)
+// de souscrire a des evenements CRM. A chaque event matche, un POST est
+// envoye a l'URL avec signature HMAC SHA-256 dans X-Webhook-Signature.
+//
+// Le retry est gere via la queue BullMQ existante avec backoff exponentiel
+// (1s, 5s, 30s, 5min, 30min — 5 tentatives max).
+
+enum WebhookEvent {
+  TICKET_CREATED
+  TICKET_RESOLVED
+  CONTRACT_SIGNED
+  CONTRACT_EXPIRING
+  INVOICE_OVERDUE
+  INVOICE_PAID
+  COMPANY_CREATED
+  QUOTE_ACCEPTED
+  QUOTE_REJECTED
+  BACKUP_FAILED
+}
+
+model WebhookEndpoint {
+  id          String        @id @default(uuid())
+  url         String        // URL HTTPS du webhook
+  description String?       // libelle pour identification UI
+  // Liste des events souscrits (array PostgreSQL)
+  events      WebhookEvent[]
+  // Si companyId non null, le webhook ne recoit QUE les events lies a
+  // cette societe (scope client). Sinon, il recoit TOUS les events
+  // (scope global, reserve aux integrations internes).
+  companyId   String?
+  company     Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Secret HMAC stocke en clair (necessaire pour signer chaque payload).
+  // Sera regenere si l'utilisateur clique sur "Regenerer le secret".
+  secret      String
+  isActive    Boolean       @default(true)
+  // Compteurs pour suivi UI (recalcules a chaque delivery)
+  successCount Int          @default(0)
+  failureCount Int          @default(0)
+  lastDeliveryAt DateTime?
+  lastSuccessAt  DateTime?
+  // Audit
+  createdById String
+  createdBy   User          @relation("WebhookEndpointCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  deliveries  WebhookDelivery[]
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([isActive])
+  @@index([companyId])
+}
+
+model WebhookDelivery {
+  id              String          @id @default(uuid())
+  endpointId      String
+  endpoint        WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  event           WebhookEvent
+  // Payload envoye (JSON serialise)
+  payload         Json
+  // Resultat HTTP du dernier essai
+  httpStatus      Int?
+  responseBody    String?         // tronque a 2000 chars
+  attemptCount    Int             @default(0)
+  // Si null, encore en attente / en cours de retry. Sinon = horodatage final.
+  succeededAt     DateTime?
+  // Si toutes les tentatives ont echoue (5 retries epuises)
+  failedPermanentlyAt DateTime?
+  errorMessage    String?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([endpointId, createdAt])
+  @@index([event])
 }
 
 // =================== ONBOARDING CLIENT ===================

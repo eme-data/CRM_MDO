@@ -6,6 +6,7 @@ import { CreateQuoteDto } from './dto/create-quote.dto';
 import { UpdateQuoteDto } from './dto/update-quote.dto';
 import { ConvertQuoteDto } from './dto/convert-quote.dto';
 import { QuoteLineDto } from './dto/quote-line.dto';
+import { WebhooksService } from '../webhooks/webhooks.service';
 
 interface ComputedLine {
   position: number;
@@ -22,7 +23,10 @@ interface ComputedLine {
 export class QuotesService {
   private readonly logger = new Logger(QuotesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly webhooks: WebhooksService,
+  ) {}
 
   // ============================================================
   // Generation reference DEV-YYYY-NNNN (calque sur Contract.reference)
@@ -275,7 +279,7 @@ export class QuotesService {
     if (q.status !== 'SENT') {
       throw new BadRequestException('Seul un devis SENT peut etre accepte (actuel : ' + q.status + ')');
     }
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const u = await tx.quote.update({
         where: { id },
         data: { status: 'ACCEPTED', acceptedAt: new Date() },
@@ -285,6 +289,11 @@ export class QuotesService {
       });
       return u;
     });
+    this.webhooks.emit('QUOTE_ACCEPTED', {
+      id: updated.id, reference: updated.reference, totalTtc: Number(updated.totalTtc),
+      companyId: updated.companyId,
+    }, updated.companyId).catch((err) => this.logger.warn('Webhook fail : ' + err.message));
+    return updated;
   }
 
   async reject(id: string, reason: string | undefined, userId: string) {
@@ -292,7 +301,7 @@ export class QuotesService {
     if (q.status !== 'SENT') {
       throw new BadRequestException('Seul un devis SENT peut etre refuse (actuel : ' + q.status + ')');
     }
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const u = await tx.quote.update({
         where: { id },
         data: { status: 'REJECTED', rejectedAt: new Date(), rejectionReason: reason },
@@ -308,6 +317,11 @@ export class QuotesService {
       });
       return u;
     });
+    this.webhooks.emit('QUOTE_REJECTED', {
+      id: updated.id, reference: updated.reference, reason: reason ?? null,
+      companyId: updated.companyId,
+    }, updated.companyId).catch((err) => this.logger.warn('Webhook fail : ' + err.message));
+    return updated;
   }
 
   // ============================================================

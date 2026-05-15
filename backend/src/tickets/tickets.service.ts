@@ -14,6 +14,7 @@ import { NpsService } from '../nps/nps.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { AddMessageDto } from './dto/add-message.dto';
+import { WebhooksService } from '../webhooks/webhooks.service';
 
 @Injectable()
 export class TicketsService {
@@ -26,6 +27,7 @@ export class TicketsService {
     private readonly sla: SlaService,
     private readonly notifications: NotificationsService,
     private readonly nps: NpsService,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   async generateReference(): Promise<string> {
@@ -183,6 +185,16 @@ export class TicketsService {
         url: '/tickets/' + ticket.id,
       });
     }
+
+    // Emit webhook TICKET_CREATED (best-effort, ne fait jamais echouer la creation)
+    this.webhooks.emit('TICKET_CREATED', {
+      id: ticket.id,
+      reference: ticket.reference,
+      title: ticket.title,
+      priority: ticket.priority,
+      category: ticket.category,
+      companyId: ticket.companyId,
+    }, ticket.companyId).catch((err) => this.logger.warn('Webhook emit failed : ' + err.message));
 
     return ticket;
   }
