@@ -34,6 +34,29 @@ interface ContractPdfParams {
   client: { name: string; address?: string; postalCode?: string; city?: string; siret?: string };
 }
 
+interface QuotePdfParams {
+  quote: {
+    reference: string;
+    title: string;
+    issueDate: Date;
+    validUntil: Date;
+    vatRate: number;
+    notes?: string | null;
+    terms?: string | null;
+    subtotalHt: number;
+    vatAmount: number;
+    totalTtc: number;
+    lines: Array<{
+      description: string;
+      quantity: number;
+      unitPriceHt: number;
+      discountPct: number;
+      lineTotalHt: number;
+    }>;
+  };
+  client: { name: string; address?: string; postalCode?: string; city?: string; siret?: string };
+}
+
 interface InterventionPdfParams {
   intervention: {
     title: string;
@@ -172,6 +195,99 @@ export class PdfService {
       doc.text('Total TTC', 350, yLine, { width: 120, align: 'right' });
       doc.text(totalTtc.toFixed(2) + ' EUR', 470, yLine, { width: 80, align: 'right' });
 
+      this.footer(doc);
+    });
+  }
+
+  // ============ DEVIS ============
+  async quote(params: QuotePdfParams): Promise<Buffer> {
+    return this.toBuffer((doc) => {
+      this.header(doc, 'DEVIS');
+      this.companyHeader(doc);
+
+      doc.moveDown(2);
+      const top = doc.y;
+
+      // Bloc client a droite
+      doc.fontSize(10).fillColor('#000').text('Client :', 350, top);
+      doc.fontSize(11).text(params.client.name, 350, top + 15);
+      let y = top + 30;
+      if (params.client.address) {
+        doc.fontSize(10).text(params.client.address, 350, y);
+        y += 12;
+      }
+      if (params.client.postalCode || params.client.city) {
+        doc.text((params.client.postalCode ?? '') + ' ' + (params.client.city ?? ''), 350, y);
+        y += 12;
+      }
+      if (params.client.siret) doc.text('SIRET : ' + params.client.siret, 350, y);
+
+      // Reference + dates a gauche
+      doc.fontSize(11).fillColor('#000');
+      doc.text('Devis ' + params.quote.reference, 50, top);
+      doc.fontSize(10).text('Objet : ' + params.quote.title, 50, top + 15, { width: 290 });
+      doc.text('Emis le : ' + format(params.quote.issueDate, 'PPP', { locale: fr }), 50, top + 45);
+      doc.text('Valable jusqu\'au : ' + format(params.quote.validUntil, 'PPP', { locale: fr }), 50, top + 60);
+
+      doc.moveDown(7);
+
+      // Tableau des lignes
+      const tableTop = doc.y;
+      doc.fontSize(10).fillColor('#1d4ed8');
+      doc.text('Description', 50, tableTop);
+      doc.text('Qte', 290, tableTop, { width: 40, align: 'right' });
+      doc.text('PU HT', 335, tableTop, { width: 60, align: 'right' });
+      doc.text('Remise', 400, tableTop, { width: 50, align: 'right' });
+      doc.text('Total HT', 455, tableTop, { width: 95, align: 'right' });
+      doc.moveTo(50, tableTop + 14).lineTo(550, tableTop + 14).strokeColor('#1d4ed8').stroke();
+      doc.fillColor('#000');
+
+      let yLine = tableTop + 22;
+      for (const line of params.quote.lines) {
+        this.ensureSpace(doc, 24);
+        doc.fontSize(10);
+        doc.text(line.description, 50, yLine, { width: 235 });
+        doc.text(String(line.quantity), 290, yLine, { width: 40, align: 'right' });
+        doc.text(line.unitPriceHt.toFixed(2) + ' EUR', 335, yLine, { width: 60, align: 'right' });
+        doc.text(line.discountPct > 0 ? line.discountPct.toFixed(0) + ' %' : '-', 400, yLine, { width: 50, align: 'right' });
+        doc.text(line.lineTotalHt.toFixed(2) + ' EUR', 455, yLine, { width: 95, align: 'right' });
+        const h = doc.heightOfString(line.description, { width: 235 });
+        yLine += Math.max(h, 14) + 4;
+      }
+
+      doc.moveTo(290, yLine + 4).lineTo(550, yLine + 4).strokeColor('#000').stroke();
+      yLine += 12;
+      doc.fontSize(10);
+      doc.text('Sous-total HT', 290, yLine, { width: 160, align: 'right' });
+      doc.text(params.quote.subtotalHt.toFixed(2) + ' EUR', 455, yLine, { width: 95, align: 'right' });
+      yLine += 14;
+      doc.text('TVA (' + params.quote.vatRate + ' %)', 290, yLine, { width: 160, align: 'right' });
+      doc.text(params.quote.vatAmount.toFixed(2) + ' EUR', 455, yLine, { width: 95, align: 'right' });
+      yLine += 14;
+      doc.fontSize(12).fillColor('#1d4ed8');
+      doc.text('Total TTC', 290, yLine, { width: 160, align: 'right' });
+      doc.text(params.quote.totalTtc.toFixed(2) + ' EUR', 455, yLine, { width: 95, align: 'right' });
+      doc.y = yLine + 24;
+      doc.fillColor('#000');
+
+      if (params.quote.notes) {
+        doc.moveDown();
+        doc.fontSize(10).fillColor('#1d4ed8').text('Notes');
+        doc.fontSize(10).fillColor('#000').text(params.quote.notes, { align: 'justify' });
+      }
+
+      if (params.quote.terms) {
+        doc.moveDown();
+        doc.fontSize(10).fillColor('#1d4ed8').text('Conditions');
+        doc.fontSize(9).fillColor('#000').text(params.quote.terms, { align: 'justify' });
+      }
+
+      doc.moveDown(2);
+      doc.fontSize(10).fillColor('#666').text(
+        'Bon pour accord — Date et signature du client',
+        { underline: true },
+      );
+      doc.moveDown(4);
       this.footer(doc);
     });
   }

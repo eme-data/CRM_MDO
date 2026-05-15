@@ -64,6 +64,7 @@ model User {
   recurringTemplatesAssigned RecurringTaskTemplate[] @relation("RecurringTemplateAssignee")
   workflowRulesCreated   WorkflowRule[]  @relation("WorkflowRuleCreator")
   workflowRulesAssigned  WorkflowRule[]  @relation("WorkflowRuleAssignee")
+  ownedQuotes            Quote[]         @relation("QuoteOwner")
 
   @@index([teamId])
 }
@@ -171,6 +172,7 @@ model Company {
   portalUsers    ClientPortalUser[]
   m365Tenant     M365Tenant?
   recurringTemplates RecurringTaskTemplate[]
+  quotes         Quote[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -202,6 +204,7 @@ model Contact {
   notesRel    Note[]
   tickets     Ticket[]
   portalUsers ClientPortalUser[] @relation("ContactPortalUser")
+  quotes      Quote[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -241,6 +244,7 @@ model Opportunity {
   contracts         Contract[]
   tasks             Task[]
   notesRel          Note[]
+  quotes            Quote[]
 
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
@@ -328,6 +332,10 @@ model Contract {
   assets             Asset[]
   invoices           Invoice[]
   recurringTemplates RecurringTaskTemplate[]
+  // Quote dont la conversion a cree ce contrat (1-1, optional). Nomme via la
+  // relation "ContractFromQuote" pour eviter le conflit avec d'autres relations
+  // potentielles avec Quote a l'avenir.
+  fromQuote          Quote?         @relation("ContractFromQuote")
 
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
@@ -1703,4 +1711,93 @@ model WorkflowExecution {
   @@unique([ruleId, entityType, entityId])
   @@index([firedAt])
   @@index([entityType, entityId])
+}
+
+// =================== QUOTES (devis commerciaux) ===================
+//
+// Etape commerciale entre Opportunity (negociation) et Contract (signe).
+// Permet de generer un PDF presentable, de l'envoyer au client, de tracer son
+// acceptation puis de le convertir en 1-clic en Contract (toutes les valeurs
+// sont reportees, plus le rattachement convertedToContractId).
+//
+// Workflow : DRAFT -> SENT -> (ACCEPTED|REJECTED|EXPIRED). Un devis ACCEPTED
+// peut etre converti en Contract ; apres conversion, status reste ACCEPTED
+// (le devis n'est jamais "consume", il reste comme trace commerciale).
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+model Quote {
+  id            String      @id @default(uuid())
+  reference     String      @unique
+  title         String
+  status        QuoteStatus @default(DRAFT)
+  // Validite : dateLimite d'acceptation cote client. Au-dela, status passe a
+  // EXPIRED automatiquement par cron (job journalier dans QuotesService).
+  validUntil    DateTime
+  issueDate     DateTime    @default(now())
+  vatRate       Decimal     @default(20) @db.Decimal(5, 2)
+  notes         String?
+  // Conditions affichees en bas du PDF (delais paiement, RIB, mentions legales)
+  // Editable par devis ; valeur par defaut depuis Settings('quote.defaultTerms').
+  terms         String?
+
+  // Totaux denormalises (recalcules a chaque update lignes). Eviter les requetes
+  // d'agregation a chaque liste de devis.
+  subtotalHt    Decimal     @default(0) @db.Decimal(12, 2)
+  vatAmount     Decimal     @default(0) @db.Decimal(12, 2)
+  totalTtc      Decimal     @default(0) @db.Decimal(12, 2)
+
+  // Tracage workflow
+  sentAt        DateTime?
+  acceptedAt    DateTime?
+  rejectedAt    DateTime?
+  rejectionReason String?
+
+  companyId     String
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contactId     String?
+  contact       Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  ownerId       String?
+  owner         User?       @relation("QuoteOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  // Si converti en contrat : reference vers le Contract cree. Permet "1 quote
+  // -> 1 contract max", on ne peut pas convertir 2 fois le meme devis.
+  convertedToContractId String?  @unique
+  convertedToContract   Contract? @relation("ContractFromQuote", fields: [convertedToContractId], references: [id], onDelete: SetNull)
+  convertedAt           DateTime?
+
+  lines         QuoteLine[]
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+  @@index([validUntil])
+  @@index([status, validUntil])
+}
+
+model QuoteLine {
+  id          String   @id @default(uuid())
+  quoteId     String
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  position    Int      @default(0)
+  description String
+  quantity    Decimal  @default(1) @db.Decimal(10, 2)
+  unitPriceHt Decimal  @db.Decimal(10, 2)
+  // Remise % appliquee a cette ligne uniquement (0..100). Calcule :
+  // lineTotalHt = quantity * unitPriceHt * (1 - discountPct/100).
+  discountPct Decimal  @default(0) @db.Decimal(5, 2)
+  // Pre-calcule pour la liste des devis et pour le PDF (evite recalcul cote front).
+  lineTotalHt Decimal  @db.Decimal(12, 2)
+
+  @@index([quoteId])
 }
