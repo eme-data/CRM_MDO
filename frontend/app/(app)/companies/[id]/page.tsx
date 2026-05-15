@@ -13,6 +13,7 @@ import { RunbookRunsSection } from '@/components/RunbookRunsSection';
 import { MonthlyReportsSection } from '@/components/MonthlyReportsSection';
 import { M365Section } from '@/components/M365Section';
 import { CyberScoreWidget } from '@/components/CyberScoreWidget';
+import { AiClientSummary } from '@/components/ai/AiClientSummary';
 import {
   formatEuro,
   formatDate,
@@ -156,6 +157,8 @@ export default function CompanyDetailPage() {
           Premier signal visuel a l'ouverture de la page, parfait pour les
           RDV commerciaux (justifie l'upgrade Essentiel -> Pro -> Souverain). */}
       <CyberScoreWidget companyId={id} />
+
+      <AiClientSummary companyId={id} />
 
       {editing ? (
         <CompanyForm company={company} />

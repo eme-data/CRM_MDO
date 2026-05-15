@@ -19,6 +19,7 @@ import { api, apiUpload, downloadAttachment } from '@/lib/api';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { TicketTimerButton } from '@/components/TicketTimerButton';
 import { TicketNpsSection } from '@/components/TicketNpsSection';
+import { AiTicketActions } from '@/components/ai/AiTicketActions';
 import {
   formatDate,
   formatDateTime,
@@ -236,6 +237,13 @@ export default function TicketDetailPage() {
             </div>
 
             <form onSubmit={submitMessage} className="space-y-2 border-t pt-4">
+              <AiTicketActions
+                ticketId={id}
+                ticketCategory={ticket.category}
+                ticketPriority={ticket.priority}
+                onApplyTriage={load}
+                onDraftReady={(d) => setNewMessage((prev) => (prev ? prev + '\n\n' + d : d))}
+              />
               <textarea
                 className="input min-h-[100px]"
                 placeholder="Repondre..."

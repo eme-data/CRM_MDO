@@ -67,6 +67,7 @@ model User {
   ownedQuotes            Quote[]         @relation("QuoteOwner")
   signatureRequests      SignatureRequest[] @relation("SignatureRequestCreator")
   callLogs               CallLog[]
+  aiUsage                AiUsage[]
 
   @@index([teamId])
 }
@@ -1947,4 +1948,48 @@ model CallLog {
   @@index([userId])
   @@index([startedAt])
   @@index([direction, status])
+}
+
+// =================== AI USAGE (suivi cout API Claude) ===================
+//
+// Trace chaque invocation IA pour pouvoir surveiller la facture Anthropic.
+// On stocke les tokens et le cout estime ; pas le prompt complet pour ne pas
+// gonfler la BDD (les prompts contiennent souvent du contenu client). Si
+// besoin de debug, activer ai.logFullPrompts en Settings (off par defaut).
+
+enum AiCapability {
+  TICKET_TRIAGE
+  TICKET_DRAFT
+  CLIENT_SUMMARY
+  GENERIC
+}
+
+model AiUsage {
+  id            String        @id @default(uuid())
+  capability    AiCapability
+  model         String        // 'claude-sonnet-4-6', etc.
+  // Tokens : reportes par l'API. cacheReadTokens et cacheCreationTokens si
+  // prompt caching active (les cache reads coutent 10x moins cher).
+  inputTokens   Int           @default(0)
+  outputTokens  Int           @default(0)
+  cacheReadTokens     Int     @default(0)
+  cacheCreationTokens Int     @default(0)
+  // Cout estime en USD (calcule cote service avec tarifs publies, peut diverger
+  // legerement de la facture reelle Anthropic).
+  costUsd       Decimal?      @db.Decimal(10, 6)
+  durationMs    Int?
+  // Entite cible si applicable (ticket id, company id, ...). Polymorphe.
+  entityType    String?
+  entityId      String?
+  // Erreur eventuelle (timeout, refus politique, etc.)
+  errorMessage  String?
+  userId        String?
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime      @default(now())
+
+  @@index([capability])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([userId])
 }

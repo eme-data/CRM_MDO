@@ -430,6 +430,43 @@ export const SETTINGS_DEFS: SettingDef[] = [
     isSecret: true,
     envVar: 'FREEPRO_WEBHOOK_SECRET',
   },
+
+  // ---------- IA / Claude ----------
+  {
+    key: 'ai.enabled',
+    category: 'ai',
+    label: 'Activer les fonctions IA',
+    description:
+      'Si false, tous les boutons IA (triage ticket, draft reponse, resume client) sont caches et les endpoints retournent 503.',
+    defaultValue: 'false',
+    envVar: 'AI_ENABLED',
+  },
+  {
+    key: 'ai.apiKey',
+    category: 'ai',
+    label: 'Anthropic API key',
+    description: 'Cle API obtenue sur console.anthropic.com (sk-ant-...).',
+    isSecret: true,
+    envVar: 'ANTHROPIC_API_KEY',
+  },
+  {
+    key: 'ai.model',
+    category: 'ai',
+    label: 'Modele Claude par defaut',
+    description:
+      'Identifiant API (claude-sonnet-4-6, claude-opus-4-7, claude-haiku-4-5-20251001). Sonnet 4.6 = meilleur rapport prix/perf.',
+    defaultValue: 'claude-sonnet-4-6',
+    envVar: 'ANTHROPIC_MODEL',
+  },
+  {
+    key: 'ai.companyContext',
+    category: 'ai',
+    label: 'Contexte MDO (system prompt)',
+    description:
+      'Description courte de MDO et du ton commercial. Inclus dans tous les prompts pour orienter les reponses (signature, formules, vocabulaire metier).',
+    defaultValue:
+      'Tu assistes MDO Services, MSP / cybersecurite en Occitanie. Tonalite : cordiale, claire, francais professionnel sans jargon excessif. Signature des emails : "L\'equipe MDO Services". Toujours signaler les actions necessitant une confirmation client.',
+  },
 ];
 
 export function findSettingDef(key: string): SettingDef | undefined {
