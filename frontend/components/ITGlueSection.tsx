@@ -63,7 +63,14 @@ function LocationsTab({ companyId }: { companyId: string }) {
   }
   async function save() {
     try {
-      const payload = { ...draft, companyId };
+      // Whitelist explicite : le DTO backend rejette toute propriete non listee
+      // (id, _count, createdAt, updatedAt...). Spread { ...draft } envoyait
+      // ces champs systeme et faisait echouer le PATCH avec "should not exist".
+      const allowed = ['name', 'address', 'city', 'postalCode', 'country', 'phone', 'isPrimary', 'notes'];
+      const payload: Record<string, any> = { companyId };
+      for (const k of allowed) {
+        if ((draft as any)[k] !== undefined) payload[k] = (draft as any)[k];
+      }
       if (editing === 'new') await api.post('/locations', payload);
       else await api.patch('/locations/' + editing.id, payload);
       toast.success('Site enregistre');
@@ -158,7 +165,13 @@ function NetworksTab({ companyId }: { companyId: string }) {
   function openEdit(n: any) { setDraft({ ...n, locationId: n.locationId ?? '' }); setEditing(n); }
   async function save() {
     try {
-      const payload: any = { ...draft, companyId };
+      // Whitelist explicite (cf locations) — sinon id, _count, createdAt...
+      // dans { ...draft } font echouer le PATCH cote DTO backend.
+      const allowed = ['name', 'kind', 'cidr', 'vlanId', 'gateway', 'dnsServers', 'description', 'locationId'];
+      const payload: Record<string, any> = { companyId };
+      for (const k of allowed) {
+        if ((draft as any)[k] !== undefined) payload[k] = (draft as any)[k];
+      }
       if (payload.vlanId === '' || payload.vlanId === null) delete payload.vlanId;
       else payload.vlanId = parseInt(payload.vlanId);
       if (!payload.locationId) payload.locationId = null;

@@ -147,13 +147,22 @@ function Form({ sub, onSave, onCancel }: { sub?: Subprocessor; onSave: () => voi
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const payload = {
-      ...data,
-      dataCategories: typeof data.dataCategories === 'string'
-        ? data.dataCategories.split(',').map((s: string) => s.trim()).filter(Boolean)
-        : data.dataCategories,
-      dpaSignedAt: data.dpaSignedAt || null,
-    };
+    // Whitelist : on n'envoie que les champs editables. Sinon spread { ...data }
+    // expedie id/createdAt/updatedAt qui font echouer le PATCH cote Prisma.
+    const allowed = [
+      'name', 'legalEntity', 'role', 'purpose', 'dataCategories',
+      'hostingCountry', 'headquarters', 'transfersOutsideEu', 'transferMechanism',
+      'dpaUrl', 'dpaSignedAt', 'vendorSubprocessorListUrl', 'startedAt', 'endedAt',
+      'isActive', 'notes',
+    ];
+    const payload: Record<string, any> = {};
+    for (const k of allowed) {
+      if ((data as any)[k] !== undefined) payload[k] = (data as any)[k];
+    }
+    payload.dataCategories = typeof data.dataCategories === 'string'
+      ? data.dataCategories.split(',').map((s: string) => s.trim()).filter(Boolean)
+      : (data.dataCategories ?? []);
+    payload.dpaSignedAt = data.dpaSignedAt || null;
     try {
       if (sub) await api.patch('/subprocessors/' + sub.id, payload);
       else await api.post('/subprocessors', payload);
