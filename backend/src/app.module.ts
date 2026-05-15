@@ -28,6 +28,7 @@ import { MailInboundModule } from './mail-inbound/mail-inbound.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { DocumentsModule } from './documents/documents.module';
 import { BrandingModule } from './branding/branding.module';
+import { TenantsModule } from './tenants/tenants.module';
 import { PdfModule } from './pdf/pdf.module';
 import { AssetsModule } from './assets/assets.module';
 import { ClientDocsModule } from './client-docs/client-docs.module';
@@ -132,6 +133,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     AttachmentsModule,
     DocumentsModule,
     BrandingModule,
+    TenantsModule,
     ClientDocsModule,
     MfaModule,
     AuthModule,

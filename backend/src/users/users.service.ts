@@ -69,8 +69,13 @@ export class UsersService {
     });
   }
 
-  async create(dto: CreateUserDto) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+  async create(dto: CreateUserDto, tenantId?: string | null) {
+    // Multi-tenant : email unique PAR tenant (cf schema @@unique([tenantId, email])).
+    // On verifie l'unicite scopee au tenant du createur. Sans tenantId, fallback
+    // sur match global (cas du seed initial avant que les tenants existent).
+    const existing = await this.prisma.user.findFirst({
+      where: tenantId ? { email: dto.email, tenantId } : { email: dto.email },
+    });
     if (existing) throw new ConflictException('Email deja utilise');
     assertStrongPassword(dto.password, await this.getMinPasswordLength());
     const passwordHash = await bcrypt.hash(dto.password, 12);
@@ -82,6 +87,7 @@ export class UsersService {
         lastName: dto.lastName,
         role: dto.role ?? 'SALES',
         teamId: dto.teamId,
+        tenantId: tenantId ?? undefined,
       },
       select: {
         id: true,

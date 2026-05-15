@@ -51,8 +51,11 @@ export class UsersController {
 
   @Roles('ADMIN')
   @Post()
-  create(@Body() dto: CreateUserDto) {
-    return this.usersService.create(dto);
+  create(@Body() dto: CreateUserDto, @CurrentUser() user: JwtUser) {
+    // Multi-tenant : on cree le user dans le meme tenant que l'admin createur.
+    // Empeche la creation cross-tenant accidentelle (un admin du tenant A ne
+    // peut pas creer un user dans le tenant B).
+    return this.usersService.create(dto, user.tenantId);
   }
 
   @Roles('ADMIN')

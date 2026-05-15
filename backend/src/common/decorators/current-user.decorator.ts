@@ -7,6 +7,12 @@ export interface JwtUser {
   firstName: string;
   lastName: string;
   mfaPending?: boolean;
+  // Multi-tenant : tenant d'appartenance du user. Null transitoire pour les
+  // users existants pre-migration, sera NOT NULL une fois la migration finie.
+  tenantId: string | null;
+  // Super-admin : peut acceder aux endpoints /tenants/* et switcher de
+  // contexte tenant. Mathieu uniquement par defaut.
+  isSuperAdmin: boolean;
 }
 
 export const CurrentUser = createParamDecorator(

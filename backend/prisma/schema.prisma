@@ -18,9 +18,57 @@ enum Role {
   READONLY
 }
 
+// =================== TENANT (multi-tenant logique) ===================
+//
+// Chaque tenant est une instance isolee : SES users, SES Companies, SES
+// Tickets, etc. Discrimination via customDomain (ex: crm.mairie-seysses.fr
+// → tenant 'seysses', crm.mdoservices.fr → tenant 'mdo'). Le middleware
+// TenantResolver lit le Host header et attache `req.tenant`.
+//
+// Branding par tenant : nom, logo, couleurs configurables ici plutot que
+// via env (qui restent comme fallback dans le module Branding).
+model Tenant {
+  id                  String    @id @default(uuid())
+  // Slug court : utilise dans les seeds + logs. Stable, jamais renommer.
+  slug                String    @unique
+  // Domaine custom (FQDN). Doit pointer vers le serveur via DNS A record
+  // + etre route par Caddy. Unique : 1 tenant par domaine.
+  customDomain        String    @unique
+  // Statut : si false, toutes les requetes sur ce tenant retournent 503.
+  // Permet de geler un tenant (impaye, maintenance, etc.) sans le supprimer.
+  isActive            Boolean   @default(true)
+
+  // ----- Branding (fallback ENV BRAND_* si non rempli ici) -----
+  brandName           String
+  brandShortName      String
+  brandTagline        String?
+  brandLogoUrl        String?
+  brandPrimaryColor   String?    // HEX, ex: "#0066CC"
+  brandSupportEmail   String?
+  brandDpoEmail       String?
+  brandWebsiteUrl     String?
+  brandFooterText     String?
+
+  // ----- Modules optionnels (a desactiver pour DSI publique sans facturation) -----
+  // Defaut true partout pour ne pas casser l'instance MDO existante.
+  enableContracts     Boolean   @default(true)
+  enableInvoices      Boolean   @default(true)
+  enableOpportunities Boolean   @default(true)
+  enableQuotes        Boolean   @default(true)
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  users               User[]
+  portalUsers         ClientPortalUser[]
+
+  @@index([customDomain])
+  @@index([slug])
+}
+
 model User {
   id              String    @id @default(uuid())
-  email           String    @unique
+  email           String
   passwordHash    String
   firstName       String
   lastName        String
@@ -41,6 +89,15 @@ model User {
   hourlyRate      Decimal?  @db.Decimal(8, 2)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  // ----- Multi-tenant -----
+  // tenantId : nullable transitoire (rempli au seed retro-compat). Une fois
+  // tous les users migres, on pourra le passer NOT NULL via une migration.
+  tenantId        String?
+  tenant          Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  // Super-admin : voit tous les tenants, peut creer/desactiver/switcher de
+  // contexte. Reserve a Mathieu pour le pilotage du SaaS.
+  isSuperAdmin    Boolean   @default(false)
 
   teamId          String?
   team            Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
@@ -88,7 +145,12 @@ model User {
   complianceAssessments  ComplianceAssessment[]            @relation("ComplianceOwner")
   controlReviews         ComplianceControlAssessment[]     @relation("ControlReviewer")
 
+  // Email unique PAR tenant : permet d'avoir le meme email dans 2 tenants
+  // differents (ex: mathieu@mdoservices.fr peut exister dans tenant 'mdo'
+  // ET dans tenant 'seysses' pour audit, sans conflit).
+  @@unique([tenantId, email])
   @@index([teamId])
+  @@index([tenantId])
 }
 
 model Team {
@@ -1493,7 +1555,11 @@ model UserMfa {
 
 model ClientPortalUser {
   id            String   @id @default(uuid())
-  email         String   @unique
+  email         String
+  // Multi-tenant : un portal user appartient au tenant de sa Company.
+  // Email unique PAR tenant (cf User : meme adresse possible dans 2 tenants).
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   companyId     String
   company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Lien optionnel vers le Contact CRM correspondant (rempli automatiquement si
@@ -1510,7 +1576,9 @@ model ClientPortalUser {
   magicLinks    ClientPortalMagicLink[]
   sessions      ClientPortalSession[]
 
+  @@unique([tenantId, email])
   @@index([companyId])
+  @@index([tenantId])
 }
 
 model ClientPortalMagicLink {

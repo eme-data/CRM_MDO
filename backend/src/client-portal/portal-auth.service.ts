@@ -77,7 +77,9 @@ export class PortalAuthService {
 
     // Cree (ou retrouve) le ClientPortalUser. Si un Contact CRM existe avec cet
     // email pour cette societe, on l'associe.
-    let user = await this.prisma.clientPortalUser.findUnique({
+    // Multi-tenant : findFirst (et non findUnique) car email unique par tenant.
+    // On scope sur le tenant de la Company (qui sera setup dans la vague 1).
+    let user = await this.prisma.clientPortalUser.findFirst({
       where: { email: cleanEmail },
     });
     if (!user) {

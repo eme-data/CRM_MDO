@@ -39,6 +39,7 @@ export class AuthController {
     return this.authService.login(dto, {
       ip: req.ip,
       userAgent: req.headers['user-agent'],
+      tenant: req.tenant,
     });
   }
 

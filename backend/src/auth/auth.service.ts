@@ -14,6 +14,7 @@ import { SettingsService } from '../settings/settings.service';
 import { assertStrongPassword } from '../common/validators/password.validator';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { Tenant } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -41,8 +42,20 @@ export class AuthService {
     return !(await this.mfa.isEnabledFor(userId));
   }
 
-  async login(dto: LoginDto, context: { ip?: string; userAgent?: string } = {}) {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+  async login(
+    dto: LoginDto,
+    context: { ip?: string; userAgent?: string; tenant?: Tenant } = {},
+  ) {
+    // Multi-tenant : on cherche l'utilisateur dans le tenant resolu par le
+    // domaine (le middleware TenantResolver l'a attache a req.tenant). Sans
+    // tenant, on refuse — empeche un user de tenter un login sans contexte
+    // valide.
+    if (!context.tenant) {
+      throw new UnauthorizedException('Domaine non reconnu');
+    }
+    const user = await this.prisma.user.findFirst({
+      where: { email: dto.email, tenantId: context.tenant.id },
+    });
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Identifiants invalides');
     }
@@ -71,7 +84,11 @@ export class AuthService {
     });
 
     const mfaPending = await this.computeMfaPending(user.id, user.role);
-    return this.issueTokens(user.id, user.email, user.role, mfaPending, context);
+    return this.issueTokens(
+      user.id, user.email, user.role,
+      user.tenantId, user.isSuperAdmin,
+      mfaPending, context,
+    );
   }
 
   async refresh(rawToken: string, context: { ip?: string; userAgent?: string } = {}) {
@@ -98,6 +115,8 @@ export class AuthService {
       existing.user.id,
       existing.user.email,
       existing.user.role,
+      existing.user.tenantId,
+      existing.user.isSuperAdmin,
       mfaPending,
       context,
     );
@@ -143,13 +162,19 @@ export class AuthService {
     userId: string,
     email: string,
     role: string,
+    tenantId: string | null,
+    isSuperAdmin: boolean,
     mfaPending = false,
     context: { ip?: string; userAgent?: string } = {},
   ) {
+    // tenantId et isSuperAdmin dans le payload : la JwtStrategy les valide
+    // contre le tenant resolu pour le domaine courant a chaque requete.
     const accessToken = await this.jwtService.signAsync({
       sub: userId,
       email,
       role,
+      tenantId,
+      isSuperAdmin,
       mfaPending,
     });
 
