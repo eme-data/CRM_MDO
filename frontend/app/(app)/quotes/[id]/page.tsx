@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Download, Send, Check, X, Trash2, FileSignature } from 'lucide-react';
+import { ArrowLeft, Download, Send, Check, X, Trash2, FileSignature, PenTool } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
@@ -20,10 +20,19 @@ export default function QuoteDetailPage() {
   const router = useRouter();
   const id = params.id as string;
   const [q, setQ] = useState<any>(null);
+  const [signatures, setSignatures] = useState<any[]>([]);
   const [converting, setConverting] = useState(false);
+  const [signing, setSigning] = useState(false);
   const confirm = useConfirm();
 
-  async function load() { setQ(await api.get('/quotes/' + id)); }
+  async function load() {
+    const [quote, sigs] = await Promise.all([
+      api.get('/quotes/' + id),
+      api.get('/signature?entityType=Quote&entityId=' + id).catch(() => []),
+    ]);
+    setQ(quote);
+    setSignatures(sigs);
+  }
   useEffect(() => { load(); }, [id]);
 
   async function downloadPdf() {
@@ -58,6 +67,28 @@ export default function QuoteDetailPage() {
     });
     if (!ok) return;
     try { await api.delete('/quotes/' + id); toast.success('Devis supprime'); router.replace('/quotes'); }
+    catch (err: any) { toast.error(err.message); }
+  }
+
+  async function handleSign(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = e.currentTarget;
+    const signerName = (f.elements.namedItem('signerName') as HTMLInputElement).value;
+    const signerEmail = (f.elements.namedItem('signerEmail') as HTMLInputElement).value;
+    const message = (f.elements.namedItem('message') as HTMLTextAreaElement).value || undefined;
+    try {
+      await api.post('/signature', { entityType: 'Quote', entityId: id, signerName, signerEmail, message });
+      toast.success('Demande de signature envoyee');
+      setSigning(false);
+      load();
+    } catch (err: any) { toast.error(err.message); }
+  }
+
+  async function handleCancelSig(sigId: string) {
+    if (!confirm) return;
+    const ok = await confirm({ title: 'Annuler la demande de signature ?', confirmLabel: 'Annuler', tone: 'danger' });
+    if (!ok) return;
+    try { await api.post('/signature/' + sigId + '/cancel'); toast.success('Demande annulee'); load(); }
     catch (err: any) { toast.error(err.message); }
   }
 
@@ -101,6 +132,9 @@ export default function QuoteDetailPage() {
           )}
           {q.status === 'SENT' && (
             <>
+              <button onClick={() => setSigning(!signing)} className="btn btn-secondary">
+                <PenTool size={16} className="mr-1" /> Envoyer signature
+              </button>
               <button onClick={handleAccept} className="btn btn-primary"><Check size={16} className="mr-1" /> Accepter</button>
               <button onClick={handleReject} className="btn btn-secondary"><X size={16} className="mr-1" /> Refuser</button>
             </>
@@ -125,6 +159,57 @@ export default function QuoteDetailPage() {
             </Link>{' '}
             le {formatDate(q.convertedAt)}.
           </p>
+        </div>
+      )}
+
+      {signing && (
+        <form onSubmit={handleSign} className="card p-6 space-y-4 border-mdo-200 bg-mdo-50">
+          <h2 className="font-semibold">Envoyer pour signature electronique</h2>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="label">Nom signataire *</label>
+              <input name="signerName" required className="input" defaultValue={q.contact ? (q.contact.firstName + ' ' + q.contact.lastName) : q.company.name} />
+            </div>
+            <div><label className="label">Email signataire *</label>
+              <input name="signerEmail" type="email" required className="input" defaultValue={q.contact?.email ?? q.company.email ?? ''} />
+            </div>
+          </div>
+          <div><label className="label">Message email (optionnel)</label>
+            <textarea name="message" className="input min-h-[60px]" placeholder="Bonjour, merci de signer ce devis..." />
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" className="btn btn-primary">Envoyer</button>
+            <button type="button" onClick={() => setSigning(false)} className="btn btn-secondary">Annuler</button>
+          </div>
+        </form>
+      )}
+
+      {signatures.length > 0 && (
+        <div className="card p-6 space-y-3">
+          <h2 className="font-semibold">Signatures electroniques</h2>
+          <ul className="text-sm space-y-2">
+            {signatures.map((s: any) => (
+              <li key={s.id} className="flex items-center justify-between border-b last:border-0 pb-2 last:pb-0">
+                <div>
+                  <span className="font-medium">{s.signerName}</span> &lt;{s.signerEmail}&gt;
+                  <span className="ml-2 text-xs text-slate-500">via {s.provider}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={'badge ' + (s.status === 'SIGNED' ? 'bg-emerald-100 text-emerald-700' : s.status === 'DECLINED' || s.status === 'EXPIRED' ? 'bg-red-100 text-red-700' : s.status === 'CANCELLED' ? 'bg-slate-100 text-slate-500' : 'bg-blue-100 text-blue-700')}>
+                    {s.status}
+                  </span>
+                  {s.providerSignerUrl && s.status !== 'SIGNED' && s.status !== 'CANCELLED' && (
+                    <a href={s.providerSignerUrl} target="_blank" rel="noreferrer" className="text-mdo-600 text-xs hover:underline">Lien signataire</a>
+                  )}
+                  {s.signedDocumentUrl && (
+                    <a href={s.signedDocumentUrl} target="_blank" rel="noreferrer" className="text-mdo-600 text-xs hover:underline">PDF signe</a>
+                  )}
+                  {!['SIGNED', 'CANCELLED'].includes(s.status) && (
+                    <button onClick={() => handleCancelSig(s.id)} className="text-red-500 text-xs hover:underline">Annuler</button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

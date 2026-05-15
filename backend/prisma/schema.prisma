@@ -65,6 +65,7 @@ model User {
   workflowRulesCreated   WorkflowRule[]  @relation("WorkflowRuleCreator")
   workflowRulesAssigned  WorkflowRule[]  @relation("WorkflowRuleAssignee")
   ownedQuotes            Quote[]         @relation("QuoteOwner")
+  signatureRequests      SignatureRequest[] @relation("SignatureRequestCreator")
 
   @@index([teamId])
 }
@@ -173,6 +174,7 @@ model Company {
   m365Tenant     M365Tenant?
   recurringTemplates RecurringTaskTemplate[]
   quotes         Quote[]
+  signatureRequests SignatureRequest[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -1800,4 +1802,80 @@ model QuoteLine {
   lineTotalHt Decimal  @db.Decimal(12, 2)
 
   @@index([quoteId])
+}
+
+// =================== SIGNATURE ELECTRONIQUE ===================
+//
+// Polymorphe : signe un Quote OU un Contract (entityType + entityId, pas de FK
+// dure car deux types possibles). Quand le provider notifie via webhook, on
+// retrouve le SignatureRequest via providerSubmissionId puis on met a jour
+// status + signedAt + on retropropage signedAt sur l'entite cible (Quote.acceptedAt
+// si quote, Contract.signedAt si contract).
+//
+// Providers supportes : DocuSeal (self-hosted, souverain — defaut) et Yousign
+// (cloud FR, eIDAS Avance). Selection via Settings('signature.provider').
+
+enum SignatureProvider {
+  DOCUSEAL
+  YOUSIGN
+}
+
+enum SignatureStatus {
+  PENDING       // creee, signataire pas encore venu
+  VIEWED        // signataire a ouvert le document
+  SIGNED        // signature finalisee
+  DECLINED      // signataire a refuse
+  EXPIRED       // delai de signature depasse
+  CANCELLED     // annulee cote MDO avant signature
+}
+
+model SignatureRequest {
+  id                String            @id @default(uuid())
+  // Polymorphe (pas de FK Prisma — l'entite est dereferencable a la main).
+  // Utiliser type discriminant ('Quote' | 'Contract') + id pour retrouver l'entite.
+  entityType        String            // 'Quote' | 'Contract'
+  entityId          String
+  provider          SignatureProvider @default(DOCUSEAL)
+  status            SignatureStatus   @default(PENDING)
+
+  // Identifiants externes du provider (varient selon le provider) :
+  //  - DocuSeal : submission id (numerique, on stocke en string)
+  //  - Yousign : signature_request id (UUID)
+  providerSubmissionId String?        @unique
+  // URL ouvrable par le signataire (envoyee par email)
+  providerSignerUrl    String?
+  // URL du document signe une fois finalise (CDN provider ou stockage local)
+  signedDocumentUrl    String?
+
+  // Signataire principal (un seul pour le MVP — la plupart de nos contrats
+  // ont un seul signataire client). Si besoin ulterieur de multi-signataires,
+  // ajouter une table SignatureSigner.
+  signerName        String
+  signerEmail       String
+  signerPhone       String?            // pour OTP SMS si provider supporte
+
+  requestedAt       DateTime          @default(now())
+  viewedAt          DateTime?
+  signedAt          DateTime?
+  declinedAt        DateTime?
+  declineReason     String?
+  expiresAt         DateTime?
+
+  // Audit trail : on garde tous les webhooks recus en JSON pour pouvoir
+  // re-jouer / debugger / prouver en cas de litige.
+  webhookEvents     Json[]            @default([])
+
+  // Companies/Contact pour faciliter le filtre cote UI (denormalise depuis
+  // l'entite cible — petit cout d'ecriture, gros gain en lecture).
+  companyId         String?
+  company           Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  createdById       String
+  createdBy         User              @relation("SignatureRequestCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([entityType, entityId])
+  @@index([status])
+  @@index([companyId])
 }

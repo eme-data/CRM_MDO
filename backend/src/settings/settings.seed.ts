@@ -327,6 +327,67 @@ export const SETTINGS_DEFS: SettingDef[] = [
       'Si actif, un mail demandant au contact de noter son experience (0-10) est envoye automatiquement quand un ticket passe en statut RESOLVED.',
     defaultValue: 'true',
   },
+
+  // ---------- Signature electronique ----------
+  {
+    key: 'signature.provider',
+    category: 'signature',
+    label: 'Provider de signature electronique',
+    description:
+      'DOCUSEAL (self-hosted, souverain) | YOUSIGN (cloud FR, eIDAS Avance) | DISABLED. Si DISABLED, les boutons signature sont caches.',
+    defaultValue: 'DISABLED',
+    envVar: 'SIGNATURE_PROVIDER',
+  },
+  {
+    key: 'signature.docuseal.apiUrl',
+    category: 'signature',
+    label: 'DocuSeal - URL API',
+    description: 'Base URL de l\'instance DocuSeal (ex. https://docuseal.mdoservices.fr/api).',
+    envVar: 'DOCUSEAL_API_URL',
+  },
+  {
+    key: 'signature.docuseal.apiKey',
+    category: 'signature',
+    label: 'DocuSeal - cle API',
+    description:
+      'Token API genere depuis DocuSeal > Settings > API. Doit avoir les droits submissions:create et submissions:read.',
+    isSecret: true,
+    envVar: 'DOCUSEAL_API_KEY',
+  },
+  {
+    key: 'signature.docuseal.webhookSecret',
+    category: 'signature',
+    label: 'DocuSeal - secret webhook (HMAC)',
+    description:
+      'Secret partage configure dans DocuSeal > Settings > Webhooks. Verifie la signature HMAC du header X-Docuseal-Signature.',
+    isSecret: true,
+    envVar: 'DOCUSEAL_WEBHOOK_SECRET',
+  },
+  {
+    key: 'signature.yousign.apiUrl',
+    category: 'signature',
+    label: 'Yousign - URL API',
+    description:
+      'Base URL Yousign (sandbox : https://api-sandbox.yousign.app/v3 ; production : https://api.yousign.app/v3).',
+    defaultValue: 'https://api.yousign.app/v3',
+    envVar: 'YOUSIGN_API_URL',
+  },
+  {
+    key: 'signature.yousign.apiKey',
+    category: 'signature',
+    label: 'Yousign - cle API',
+    description: 'Bearer API key de l\'organisation Yousign.',
+    isSecret: true,
+    envVar: 'YOUSIGN_API_KEY',
+  },
+  {
+    key: 'signature.yousign.webhookSecret',
+    category: 'signature',
+    label: 'Yousign - secret webhook',
+    description: 'Secret du webhook Yousign (verification de signature).',
+    isSecret: true,
+    envVar: 'YOUSIGN_WEBHOOK_SECRET',
+  },
 ];
 
 export function findSettingDef(key: string): SettingDef | undefined {
