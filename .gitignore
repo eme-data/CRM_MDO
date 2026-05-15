@@ -39,8 +39,9 @@ redis-data/
 traefik-data/
 letsencrypt/
 
-# Backups
-backups/
+# Backups (dumps SQL au niveau racine — pattern ancre pour ne pas
+# matcher d'eventuels dossiers frontend/app/.../backups dans le code)
+/backups/
 *.sql.gz
 
 # OS

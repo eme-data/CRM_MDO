@@ -200,6 +200,7 @@ model Company {
   phishingCampaigns PhishingCampaign[]
   customerSuccessReviews CustomerSuccessReview[]
   dripEnrollments        DripEnrollment[]
+  backupJobs             BackupJob[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -2198,6 +2199,94 @@ model PatchManagedDevice {
   @@unique([m365TenantId, externalId])
   @@index([m365TenantId, complianceState])
   @@index([userPrincipalName])
+}
+
+// =================== BACKUP VERIFICATION ===================
+//
+// Comble un trou critique du metier MSP : detecter quand un backup client
+// a echoue silencieusement.
+//
+// Architecture deliberement souple :
+//   - BackupJob : declaration d'un job a surveiller
+//   - BackupRun : execution individuelle (status + timestamps + taille)
+//
+// Ingestion (3 modes possibles) :
+//   1. POST /backup-jobs/:id/runs (manuel ou webhook signe avec ingestSecret)
+//   2. Import CSV via UI (export Veeam ou Datto)
+//   3. (Futur) parsing email IMAP des rapports Veeam quotidiens
+//
+// Cron quotidien : alerte les jobs sans SUCCESS dans la fenetre attendue.
+
+enum BackupSourceType {
+  M365            // Backup M365 mailbox/SharePoint/OneDrive
+  VM              // VM hyperviseur (Veeam, Vinchin, ...)
+  FILES           // Fichiers/serveurs (NAS, FileServer)
+  DATABASE        // SQL/Postgres/Mongo
+  ENDPOINT        // Postes utilisateurs (Datto, ...)
+  OTHER
+}
+
+enum BackupRunStatus {
+  RUNNING
+  SUCCESS
+  WARNING       // succes partiel (ex. 95 % des items, vendor genere un warning)
+  FAILED
+  SKIPPED
+}
+
+model BackupJob {
+  id                String           @id @default(uuid())
+  companyId         String
+  company           Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name              String           // libelle interne
+  vendor            String?          // 'Veeam', 'Acronis', 'Datto', 'Vinchin', '365 Backup'...
+  sourceType        BackupSourceType @default(OTHER)
+  // Identifiant chez le vendor (job id Veeam, plan id Acronis, ...)
+  sourceIdentifier  String?
+  // Frequence attendue : si pas de SUCCESS dans cette fenetre, on alerte.
+  // Defaut 26h (laisse 2h de marge sur un backup quotidien).
+  expectedFrequencyHours Int         @default(26)
+  // Secret pour authentifier les ingestions webhook. Genere a la creation,
+  // affiche UNE FOIS dans l'UI puis masque (hash stocke).
+  ingestSecret      String?
+  isActive          Boolean          @default(true)
+  // Compteurs miroirs (recalcules apres chaque ingestion)
+  lastRunStatus     BackupRunStatus?
+  lastRunAt         DateTime?
+  lastSuccessAt     DateTime?
+  lastSuccessSizeBytes BigInt?
+
+  runs              BackupRun[]
+
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([companyId])
+  @@index([isActive, lastSuccessAt])
+}
+
+model BackupRun {
+  id              String           @id @default(uuid())
+  jobId           String
+  job             BackupJob        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  status          BackupRunStatus
+  startedAt       DateTime
+  endedAt         DateTime?
+  durationSec     Int?
+  // Taille du backup en octets (BigInt — peut depasser 4 Go)
+  sizeBytes       BigInt?
+  itemsCount      Int?             // nombre d'items / fichiers / mailbox sauvegardes
+  // Message du vendor (texte libre, errors, warnings)
+  message         String?
+  // Identifiant de l'execution chez le vendor (run id) — dedup webhooks
+  externalRunId   String?
+  rawPayload      Json?            // payload brut webhook pour audit/debug
+
+  createdAt       DateTime         @default(now())
+
+  @@unique([jobId, externalRunId])
+  @@index([jobId, startedAt])
+  @@index([status])
 }
 
 // =================== ONBOARDING CLIENT ===================

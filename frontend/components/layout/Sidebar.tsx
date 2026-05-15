@@ -36,6 +36,7 @@ import {
   Target,
   Mail,
   Cpu,
+  HardDrive,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logout } from '@/lib/auth';
@@ -81,6 +82,7 @@ const sections: NavSection[] = [
       { href: '/assets', label: 'Assets clients', icon: Server },
       { href: '/asset-lifecycle', label: 'Lifecycle materiel', icon: Server },
       { href: '/patch-management', label: 'Patch management', icon: Cpu },
+      { href: '/backups', label: 'Backup verification', icon: HardDrive },
       { href: '/surveillance', label: 'Surveillance', icon: Shield },
       { href: '/uptime', label: 'Uptime sites', icon: Activity },
       { href: '/audit-dns', label: 'Audit DNS', icon: ShieldCheck },
