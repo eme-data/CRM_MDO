@@ -27,8 +27,10 @@ export default function CallDetailPage() {
   }
 
   async function saveNotes(notes: string) {
-    try { await api.patch('/calls/' + id + '/notes', { notes }); }
-    catch (err: any) { toast.error(err.message); }
+    try {
+      await api.patch('/calls/' + id + '/notes', { notes });
+      toast.success('Notes enregistrees', { duration: 1500 });
+    } catch (err: any) { toast.error(err.message); }
   }
 
   if (!c) return <div>Chargement...</div>;

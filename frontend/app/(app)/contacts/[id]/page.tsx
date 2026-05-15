@@ -15,7 +15,11 @@ export default function ContactDetailPage() {
   const [contact, setContact] = useState<any>(null);
   const confirm = useConfirm();
 
-  useEffect(() => { api.get('/contacts/' + id).then(setContact); }, [id]);
+  useEffect(() => {
+    api.get('/contacts/' + id)
+      .then(setContact)
+      .catch((err) => toast.error('Chargement contact : ' + err.message));
+  }, [id]);
 
   async function handleDelete() {
     const fullName = contact ? `${contact.firstName} ${contact.lastName}` : 'ce contact';

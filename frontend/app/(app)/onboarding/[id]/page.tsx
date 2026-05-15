@@ -23,8 +23,16 @@ export default function OnboardingRunPage() {
   const [run, setRun] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
 
-  async function load() { setRun(await api.get('/onboarding/runs/' + id)); }
-  useEffect(() => { load(); api.get('/users').then(setUsers); }, [id]);
+  async function load() {
+    try { setRun(await api.get('/onboarding/runs/' + id)); }
+    catch (err: any) { toast.error('Chargement onboarding : ' + err.message); }
+  }
+  useEffect(() => {
+    load();
+    api.get('/users')
+      .then(setUsers)
+      .catch((err) => toast.error('Chargement utilisateurs : ' + err.message));
+  }, [id]);
 
   async function updateStep(stepId: string, payload: any) {
     try { await api.patch('/onboarding/steps/' + stepId, payload); load(); }
