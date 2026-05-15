@@ -75,6 +75,7 @@ const sections: NavSection[] = [
     items: [
       { href: '/tickets', label: 'Support', icon: LifeBuoy },
       { href: '/interventions', label: 'Interventions', icon: Wrench },
+      { href: '/field', label: 'Mode terrain (tactile)', icon: Wrench },
       { href: '/calls', label: 'Appels', icon: Phone },
       { href: '/calendar', label: 'Calendrier', icon: Calendar },
     ],
