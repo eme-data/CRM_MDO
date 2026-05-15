@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { CommandPalette } from '@/components/CommandPalette';
+import { TimerWidget } from '@/components/TimerWidget';
 import { me, User } from '@/lib/auth';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -42,6 +43,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="p-8">{children}</div>
       </main>
       <CommandPalette />
+      <TimerWidget />
     </div>
   );
 }

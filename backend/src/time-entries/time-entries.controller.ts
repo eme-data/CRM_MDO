@@ -63,8 +63,11 @@ export class TimeEntriesController {
   }
 
   @Post('stop')
-  stop(@CurrentUser() user: JwtUser) {
-    return this.service.stopTimer(user.id);
+  stop(
+    @CurrentUser() user: JwtUser,
+    @Body() body?: { idleMinutes?: number },
+  ) {
+    return this.service.stopTimer(user.id, { idleMinutes: body?.idleMinutes });
   }
 
   @Post()

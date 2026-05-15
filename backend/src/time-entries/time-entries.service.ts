@@ -6,12 +6,39 @@ import {
 import { Prisma } from '@prisma/client';
 import { differenceInMinutes } from 'date-fns';
 import { PrismaService } from '../database/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import { CreateTimeEntryDto } from './dto/create-time-entry.dto';
 import { UpdateTimeEntryDto } from './dto/update-time-entry.dto';
 
 @Injectable()
 export class TimeEntriesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
+  ) {}
+
+  // Resout le taux horaire facturable a appliquer a une entree au moment du stop.
+  // Cascade : 1. taux deja saisi, 2. taux du contrat (TODO si on l'ajoute au
+  // model), 3. taux par defaut user (User.hourlyRate, c'est le COUT pas le prix
+  // de vente cf commentaire schema), 4. defaut global Settings 'profitability.
+  // defaultBillingRate'. Sans ce fallback, les entries restaient sans tarif
+  // et n'apparaissaient pas dans les exports facturation.
+  private async resolveBillingRate(params: {
+    userId: string;
+    contractId: string | null;
+  }): Promise<number | null> {
+    if (params.contractId) {
+      // Pour l'instant, le model Contract n'a pas de hourlyRate (la facturation
+      // au temps passe est hors-forfait, donc le rate vient du settings global).
+      // Si plus tard on ajoute Contract.hourlyRateHt, le lire ici.
+    }
+    const fromSettings = await this.settings.get('profitability.defaultBillingRate');
+    if (fromSettings) {
+      const n = parseFloat(fromSettings);
+      if (!isNaN(n) && n > 0) return n;
+    }
+    return null;
+  }
 
   // Demarrer un timer (endedAt=null jusqu'a stop)
   async startTimer(userId: string, body: { ticketId?: string; interventionId?: string; description?: string }) {
@@ -28,19 +55,31 @@ export class TimeEntriesService {
     });
   }
 
-  // Stopper le timer en cours
-  async stopTimer(userId: string) {
+  // Stopper le timer en cours. `idleMinutes` permet au frontend de "rendre" du
+  // temps quand il a detecte de l'inactivite : si le user etait idle 20 min
+  // pendant la session, on les soustrait de la duree facturable.
+  async stopTimer(userId: string, opts: { idleMinutes?: number } = {}) {
     const running = await this.prisma.timeEntry.findFirst({
       where: { userId, endedAt: null },
       orderBy: { startedAt: 'desc' },
     });
     if (!running) throw new NotFoundException('Aucun timer en cours');
     const ended = new Date();
-    const minutes = differenceInMinutes(ended, running.startedAt);
-    return this.prisma.timeEntry.update({
-      where: { id: running.id },
-      data: { endedAt: ended, durationMin: minutes },
-    });
+    const elapsed = differenceInMinutes(ended, running.startedAt);
+    // On soustrait l'idle au plafond de la duree mesuree (jamais negatif).
+    const idle = Math.max(0, Math.min(opts.idleMinutes ?? 0, elapsed));
+    const minutes = elapsed - idle;
+    // Auto-resolution du taux facturable si pas deja saisi : evite que les
+    // entries soient ignorees par les exports facturation.
+    const data: Prisma.TimeEntryUpdateInput = { endedAt: ended, durationMin: minutes };
+    if (running.hourlyRateHt == null) {
+      const rate = await this.resolveBillingRate({
+        userId,
+        contractId: running.contractId,
+      });
+      if (rate != null) data.hourlyRateHt = rate;
+    }
+    return this.prisma.timeEntry.update({ where: { id: running.id }, data });
   }
 
   async currentTimer(userId: string) {
