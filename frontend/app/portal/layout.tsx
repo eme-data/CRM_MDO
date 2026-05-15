@@ -2,7 +2,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, FileText, LifeBuoy, Server, LogOut, Building2, Menu, X } from 'lucide-react';
+import { LayoutDashboard, FileText, LifeBuoy, Server, LogOut, Building2, Menu, X, Receipt, Activity, ShieldCheck, HardDrive } from 'lucide-react';
 import { portalApi, getPortalSession, clearPortalSession } from '@/lib/portal-api';
 import { cn } from '@/lib/utils';
 
@@ -64,9 +64,14 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
 
   const nav = [
     { href: '/portal', label: 'Accueil', icon: LayoutDashboard },
-    { href: '/portal/tickets', label: 'Mes tickets', icon: LifeBuoy },
-    { href: '/portal/contracts', label: 'Mes contrats', icon: FileText },
-    { href: '/portal/assets', label: 'Mes assets', icon: Server },
+    { href: '/portal/tickets', label: 'Tickets', icon: LifeBuoy },
+    { href: '/portal/contracts', label: 'Contrats', icon: FileText },
+    { href: '/portal/invoices', label: 'Factures', icon: Receipt },
+    { href: '/portal/uptime', label: 'Uptime', icon: Activity },
+    { href: '/portal/cyber-score', label: 'Cyber Score', icon: ShieldCheck },
+    { href: '/portal/backups', label: 'Sauvegardes', icon: HardDrive },
+    { href: '/portal/assets', label: 'Assets', icon: Server },
+    { href: '/portal/subprocessors', label: 'Sous-traitants RGPD', icon: ShieldCheck },
   ];
 
   return (

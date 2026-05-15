@@ -125,4 +125,44 @@ export class PortalController {
   assets(@CurrentPortalUser() user: PortalUser) {
     return this.data.listAssets(user.companyId);
   }
+
+  // ============================================================
+  // Factures (lien profond Qonto pour le PDF)
+  // ============================================================
+  @Get('invoices')
+  invoices(@CurrentPortalUser() user: PortalUser) {
+    return this.data.listInvoices(user.companyId);
+  }
+
+  // ============================================================
+  // Uptime sites du client
+  // ============================================================
+  @Get('uptime')
+  uptime(@CurrentPortalUser() user: PortalUser) {
+    return this.data.listUptime(user.companyId);
+  }
+
+  // ============================================================
+  // Cyber Score Microsoft 365
+  // ============================================================
+  @Get('cyber-score')
+  cyberScore(@CurrentPortalUser() user: PortalUser) {
+    return this.data.cyberScore(user.companyId);
+  }
+
+  // ============================================================
+  // Backups : statut des sauvegardes du client
+  // ============================================================
+  @Get('backups')
+  backups(@CurrentPortalUser() user: PortalUser) {
+    return this.data.listBackups(user.companyId);
+  }
+
+  // ============================================================
+  // Sous-traitants RGPD (registre commun a tous les clients MDO)
+  // ============================================================
+  @Get('subprocessors')
+  subprocessors() {
+    return this.data.listSubprocessors();
+  }
 }

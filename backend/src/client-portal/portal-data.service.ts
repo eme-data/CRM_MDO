@@ -201,4 +201,134 @@ export class PortalDataService {
       },
     });
   }
+
+  // ============================================================
+  // FACTURES (lecture seule, lien profond vers PDF Qonto)
+  // ============================================================
+  async listInvoices(companyId: string) {
+    return this.prisma.invoice.findMany({
+      where: {
+        companyId,
+        // Pas les brouillons : un client n'a pas a voir une facture pas encore emise.
+        status: { in: ['ISSUED', 'PAID', 'OVERDUE', 'CANCELLED'] },
+      },
+      orderBy: { issueDate: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        issueDate: true,
+        dueDate: true,
+        paidAt: true,
+        totalHt: true,
+        totalTtc: true,
+        externalUrl: true,    // lien Qonto (consultation)
+        externalPdfUrl: true, // lien PDF direct (telechargement)
+      },
+    });
+  }
+
+  // ============================================================
+  // UPTIME : monitors publics (isPublic=true) + ceux du client
+  // ============================================================
+  async listUptime(companyId: string) {
+    return this.prisma.uptimeMonitor.findMany({
+      where: {
+        // Le client voit UNIQUEMENT ses monitors a lui (pas les autres clients
+        // ni les monitors internes MDO sans companyId).
+        companyId,
+        enabled: true,
+      },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        lastStatus: true,
+        lastCheckedAt: true,
+        lastResponseMs: true,
+        intervalMinutes: true,
+      },
+    });
+  }
+
+  // ============================================================
+  // CYBER SCORE : derniere note Microsoft Secure Score du tenant client
+  // ============================================================
+  async cyberScore(companyId: string) {
+    const tenant = await this.prisma.m365Tenant.findFirst({
+      where: { companyId },
+      select: {
+        id: true,
+        secureScore: true,
+        secureScoreMax: true,
+        secureScorePercent: true,
+        secureScoreSyncedAt: true,
+      },
+    });
+    if (!tenant) return null;
+    // Compteur alertes ouvertes : status != 'resolved' (cf M365SecurityAlert).
+    // Side query : pas de relation _count parce que le where porte sur un
+    // champ string, pas sur une date nullable.
+    const openAlerts = await this.prisma.m365SecurityAlert.count({
+      where: { m365TenantId: tenant.id, status: { notIn: ['resolved'] } },
+    });
+    return {
+      score: tenant.secureScore,
+      maxScore: tenant.secureScoreMax,
+      percent: tenant.secureScorePercent,
+      lastSyncAt: tenant.secureScoreSyncedAt,
+      openAlerts,
+    };
+  }
+
+  // ============================================================
+  // BACKUPS : statut du dernier run pour chaque job de sauvegarde
+  // ============================================================
+  async listBackups(companyId: string) {
+    return this.prisma.backupJob.findMany({
+      where: { companyId, isActive: true },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        vendor: true,
+        sourceType: true,
+        expectedFrequencyHours: true,
+        lastRunStatus: true,
+        lastRunAt: true,
+        lastSuccessAt: true,
+        // Pas d'exposition des credentials/secrets
+      },
+    });
+  }
+
+  // ============================================================
+  // SOUS-TRAITANTS RGPD : registre public des sous-traitants utilises
+  // par MDO pour traiter les donnees du client (article 28 RGPD).
+  // ============================================================
+  // Note : ce registre n'est pas scope par companyId — c'est la liste de
+  // TOUS les sous-traitants MDO actifs (commune a tous nos clients).
+  // Le client la consulte pour son audit RGPD/CNIL.
+  async listSubprocessors() {
+    return this.prisma.subprocessor.findMany({
+      where: { isActive: true },
+      orderBy: [{ role: 'asc' }, { name: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        legalEntity: true,
+        role: true,
+        purpose: true,
+        dataCategories: true,
+        hostingCountry: true,
+        transfersOutsideEu: true,
+        transferMechanism: true,
+        dpaUrl: true,
+        vendorSubprocessorListUrl: true,
+        startedAt: true,
+      },
+    });
+  }
 }
