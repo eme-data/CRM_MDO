@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Capacitor build artifacts
+www/
+
+# Android
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/captures/
+
+# iOS
+ios/App/build/
+ios/App/Pods/
+ios/App/Podfile.lock
+ios/DerivedData/
+
+# IDE
+.vscode/
+.idea/
+*.iml

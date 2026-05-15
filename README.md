@@ -91,6 +91,7 @@ Voir [docs/deploy.md](docs/deploy.md) pour les details.
 ```
 backend/        API NestJS + Prisma
 frontend/       Next.js 14 (App Router)
+mobile/         Wrapper Capacitor (Android + iOS) — voir mobile/README.md
 docker/         Init Postgres
 scripts/        install-ubuntu.sh, backup.sh, restore.sh
 docs/           deploy.md, data-model.md, architecture.md
