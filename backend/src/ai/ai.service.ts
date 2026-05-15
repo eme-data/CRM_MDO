@@ -2,12 +2,14 @@ import { BadRequestException, Injectable, Logger, ServiceUnavailableException } 
 import { AiCapability } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { SettingsService } from '../settings/settings.service';
-import { callAnthropic, estimateCostUsd } from './anthropic.client';
+import { callAnthropic, estimateCostUsd, AnthropicContentBlock } from './anthropic.client';
 
 interface InvokeParams {
   capability: AiCapability;
   systemPrompt: string;
-  userMessage: string;
+  // Texte simple (cas habituel) OU blocs typés (image + texte pour Claude
+  // Vision, document PDF + texte pour extraction documentaire).
+  userMessage: string | AnthropicContentBlock[];
   // Si vrai (defaut), le system prompt est cache (ephemeral 5 min). Mettre
   // false pour les invocations one-shot dont le system varie a chaque fois.
   cacheSystem?: boolean;
@@ -63,7 +65,9 @@ export class AiService {
         model,
         systemPrompt: fullSystem,
         cacheSystem: params.cacheSystem !== false,
-        messages: [{ role: 'user', content: params.userMessage }],
+        // userMessage peut etre une string OU des blocs typés (image, document).
+        // L'API Anthropic accepte les deux formats sur le meme champ content.
+        messages: [{ role: 'user', content: params.userMessage as any }],
         maxTokens: params.maxTokens ?? 1024,
         temperature: params.temperature,
       });

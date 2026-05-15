@@ -6,6 +6,7 @@ import { TicketTriageService } from './use-cases/ticket-triage.service';
 import { TicketDraftService } from './use-cases/ticket-draft.service';
 import { TicketSummaryService } from './use-cases/ticket-summary.service';
 import { ClientSummaryService } from './use-cases/client-summary.service';
+import { DocumentExtractService } from './use-cases/document-extract.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -22,6 +23,7 @@ export class AiController {
     private readonly draft: TicketDraftService,
     private readonly ticketSummary: TicketSummaryService,
     private readonly summary: ClientSummaryService,
+    private readonly documentExtract: DocumentExtractService,
   ) {}
 
   @Get('status')
@@ -60,6 +62,12 @@ export class AiController {
   @Post('summary/ticket/:id')
   summarizeTicket(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.ticketSummary.summarizeThread(id, user.id);
+  }
+
+  // ---------- Extraction OCR / IA d'un document GED ----------
+  @Post('extract/document/:id')
+  extractDocument(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.documentExtract.extract(id, user.id);
   }
 
   // ---------- Resume client ----------

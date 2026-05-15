@@ -11,10 +11,28 @@ import { Logger } from '@nestjs/common';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
+// Beta header pour le support des PDF en source. Stable depuis fin 2024,
+// mais marque "beta" — on l'envoie systematiquement, sans effet sur les
+// requetes texte/images.
+const ANTHROPIC_BETA_PDF = 'pdfs-2024-09-25';
+
+// Bloc de contenu typé. Permet d'envoyer image / PDF / texte dans le meme
+// message (Claude Vision + document). Compatibilité avec l'ancien format
+// "string" preservée (cf normalisation avant envoi).
+export type AnthropicContentBlock =
+  | { type: 'text'; text: string }
+  | {
+      type: 'image';
+      source: { type: 'base64'; media_type: string; data: string };
+    }
+  | {
+      type: 'document';
+      source: { type: 'base64'; media_type: 'application/pdf'; data: string };
+    };
 
 export interface AnthropicMessage {
   role: 'user' | 'assistant';
-  content: string | Array<{ type: 'text'; text: string }>;
+  content: string | AnthropicContentBlock[];
 }
 
 export interface AnthropicCallParams {
@@ -64,14 +82,25 @@ export async function callAnthropic(params: AnthropicCallParams): Promise<Anthro
     }
   }
 
+  // On detecte si un message contient un PDF pour activer le header beta.
+  // Pas de surcoût a l'ajouter systematiquement, mais on reste explicite.
+  const hasPdf = params.messages.some(
+    (m) => Array.isArray(m.content) && m.content.some((b) => b.type === 'document'),
+  );
+  const headers: Record<string, string> = {
+    'x-api-key': params.apiKey,
+    'anthropic-version': ANTHROPIC_VERSION,
+    'content-type': 'application/json',
+  };
+  if (hasPdf) headers['anthropic-beta'] = ANTHROPIC_BETA_PDF;
+
   const res = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',
-    headers: {
-      'x-api-key': params.apiKey,
-      'anthropic-version': ANTHROPIC_VERSION,
-      'content-type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(body),
+    // Vision + PDF peuvent prendre plusieurs secondes pour les gros fichiers.
+    // 90s couvre largement le pire cas.
+    signal: AbortSignal.timeout(90_000),
   });
   if (!res.ok) {
     const txt = await res.text();

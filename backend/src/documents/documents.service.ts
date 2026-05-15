@@ -158,6 +158,13 @@ export class DocumentsService implements OnModuleInit {
     return createReadStream(fullPath);
   }
 
+  // Lecture en buffer pour les usages programmatiques (ex. extraction OCR
+  // qui doit base64-encoder le fichier avant envoi a Claude Vision).
+  async readBuffer(storageKey: string): Promise<Buffer> {
+    const fullPath = path.join(this.uploadsDir, storageKey);
+    return fs.readFile(fullPath);
+  }
+
   // ============================================================
   // Update metadata + delete
   // ============================================================
