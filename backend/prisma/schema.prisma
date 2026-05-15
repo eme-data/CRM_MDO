@@ -199,6 +199,7 @@ model Company {
   emailSecurityChecks EmailSecurityCheck[]
   phishingCampaigns PhishingCampaign[]
   customerSuccessReviews CustomerSuccessReview[]
+  dripEnrollments        DripEnrollment[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -232,6 +233,7 @@ model Contact {
   portalUsers ClientPortalUser[] @relation("ContactPortalUser")
   quotes      Quote[]
   callLogs    CallLog[]
+  dripEnrollments DripEnrollment[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -2044,6 +2046,115 @@ model CustomerSuccessReview {
   @@index([companyId])
   @@index([scheduledAt, status])
   @@index([ownerId, status])
+}
+
+// =================== DRIP CAMPAIGNS (email sequences) ===================
+//
+// Sequences d'emails programmes pour transformer les leads tiedes :
+// J+0 bienvenue, J+3 cas d'usage, J+7 RDV, etc.
+//
+// Architecture :
+//   - DripCampaign : modele de sequence
+//   - DripCampaignStep : etape (subject + body + dayOffset)
+//   - DripEnrollment : instance pour un destinataire (lead/contact)
+//   - DripSentEmail : trace d'envoi par step
+//
+// Cron quotidien : pour chaque enrollment RUNNING, envoie le step matchant
+// (enrolledAt + dayOffset == aujourd'hui), avance au suivant.
+
+enum DripCampaignTrigger {
+  MANUAL              // enrollement manuel via UI
+  COMPANY_CREATED_AS_LEAD  // auto a la creation d'une Company avec status=LEAD
+}
+
+enum DripEnrollmentStatus {
+  RUNNING
+  COMPLETED
+  PAUSED
+  UNSUBSCRIBED
+}
+
+model DripCampaign {
+  id            String                @id @default(uuid())
+  name          String
+  description   String?
+  trigger       DripCampaignTrigger   @default(MANUAL)
+  isActive      Boolean               @default(true)
+
+  steps         DripCampaignStep[]
+  enrollments   DripEnrollment[]
+
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@index([isActive, trigger])
+}
+
+model DripCampaignStep {
+  id            String            @id @default(uuid())
+  campaignId    String
+  campaign      DripCampaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  position      Int               @default(0)
+  // Decalage en jours depuis l'enrollment. Step a J+0 part le jour meme.
+  dayOffset     Int               @default(0)
+  subject       String
+  // Corps HTML (avec placeholders {firstName}, {companyName} substitues a l'envoi)
+  bodyHtml      String
+
+  sentEmails    DripSentEmail[]
+
+  @@index([campaignId])
+}
+
+model DripEnrollment {
+  id              String                  @id @default(uuid())
+  campaignId      String
+  campaign        DripCampaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  // Destinataire identifie par email (peut etre un Contact, ou une adresse
+  // externe importee). Pas de FK dure pour rester souple.
+  recipientEmail  String
+  recipientName   String?
+  // Si lie a un Contact existant (contexte commercial)
+  contactId       String?
+  contact         Contact?                @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  // Company associee (utile pour les substitutions {companyName} et le filtre UI)
+  companyId       String?
+  company         Company?                @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  status          DripEnrollmentStatus    @default(RUNNING)
+  enrolledAt      DateTime                @default(now())
+  completedAt     DateTime?
+  // Index du prochain step a envoyer (0 = etape 1). Avance apres chaque envoi.
+  nextStepIndex   Int                     @default(0)
+
+  sentEmails      DripSentEmail[]
+
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  // Un meme email ne peut etre enroll qu'une fois par campagne (sauf
+  // re-enrollement manuel apres COMPLETED — supprimer puis recreer).
+  @@unique([campaignId, recipientEmail])
+  @@index([status])
+  @@index([contactId])
+  @@index([companyId])
+}
+
+model DripSentEmail {
+  id              String           @id @default(uuid())
+  enrollmentId    String
+  enrollment      DripEnrollment   @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  stepId          String
+  step            DripCampaignStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  sentAt          DateTime         @default(now())
+  // Status d'envoi (succes/echec) — texte libre pour stocker le message
+  // d'erreur SMTP eventuel.
+  sendStatus      String           @default("SENT")
+  sendError       String?
+
+  @@unique([enrollmentId, stepId])
+  @@index([enrollmentId])
+  @@index([sentAt])
 }
 
 // =================== ONBOARDING CLIENT ===================

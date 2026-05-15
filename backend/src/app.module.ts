@@ -75,6 +75,7 @@ import { PhishingModule } from './phishing/phishing.module';
 import { ExecutiveModule } from './executive/executive.module';
 import { QuoteTemplatesModule } from './quote-templates/quote-templates.module';
 import { CustomerSuccessModule } from './customer-success/customer-success.module';
+import { DripModule } from './drip/drip.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { MetricsService } from './common/observability/metrics.service';
@@ -178,6 +179,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     ExecutiveModule,
     QuoteTemplatesModule,
     CustomerSuccessModule,
+    DripModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,

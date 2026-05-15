@@ -33,6 +33,8 @@ import {
   Workflow,
   Phone,
   BookOpen,
+  Target,
+  Mail,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logout } from '@/lib/auth';
@@ -105,6 +107,7 @@ const adminItems: NavItem[] = [
   { href: '/admin/products', label: 'Catalogue produits', icon: Layers },
   { href: '/admin/quote-templates', label: 'Templates devis', icon: FileSignature },
   { href: '/admin/win-loss', label: 'Win / Loss analysis', icon: Target },
+  { href: '/admin/drip', label: 'Drip campaigns email', icon: Mail },
   { href: '/admin/api-keys', label: 'Cles API publique', icon: KeyRound },
   { href: '/admin/client-reports', label: 'Rapports clients mensuels', icon: FileBarChart },
   { href: '/admin/time-billing', label: 'Facturation du temps', icon: Clock },
