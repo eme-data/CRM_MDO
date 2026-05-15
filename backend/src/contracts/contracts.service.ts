@@ -15,6 +15,7 @@ import { QueryContractsDto } from './dto/query-contracts.dto';
 import { buildPageResult, toSkipTake } from '../common/pagination/pagination.dto';
 import { OnboardingService } from '../onboarding/onboarding.service';
 import { CacheService } from '../common/cache/cache.service';
+import { withUniqueRetry } from '../common/db/unique-retry';
 
 const OFFER_UNIT_PRICES: Record<ContractOffer, number> = {
   MDO_ESSENTIEL: 69,
@@ -131,47 +132,52 @@ export class ContractsService {
     const unitPrice =
       dto.unitPriceHt ?? OFFER_UNIT_PRICES[dto.offer ?? 'MDO_ESSENTIEL'] ?? 0;
     const monthlyAmountHt = unitPrice * quantity;
-    const reference = await this.generateReference();
 
-    const contract = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.contract.create({
-        data: {
-          reference,
-          title: dto.title,
-          offer: dto.offer ?? 'MDO_ESSENTIEL',
-          status: dto.status ?? 'DRAFT',
-          startDate: start,
-          endDate: end,
-          signedAt: dto.signedAt ? new Date(dto.signedAt) : null,
-          engagementMonths: dto.engagementMonths ?? 12,
-          billingPeriod: dto.billingPeriod ?? 'MONTHLY',
-          unitPriceHt: unitPrice,
-          quantity,
-          monthlyAmountHt,
-          setupFeeHt: dto.setupFeeHt,
-          vatRate: dto.vatRate ?? 20,
-          autoRenew: dto.autoRenew ?? true,
-          noticePeriodMonths: dto.noticePeriodMonths ?? 3,
-          description: dto.description,
-          companyId: dto.companyId,
-          opportunityId: dto.opportunityId,
-          ownerId: dto.ownerId ?? userId,
-        },
-      });
+    // Retry anti-TOCTOU : la contrainte @unique sur Contract.reference fait
+    // echouer en P2002 si 2 contrats sont crees en parallele avec le meme
+    // numero. On recalcule alors le prochain libre.
+    const contract = await withUniqueRetry(
+      () => this.generateReference(),
+      (reference) => this.prisma.$transaction(async (tx) => {
+        const created = await tx.contract.create({
+          data: {
+            reference,
+            title: dto.title,
+            offer: dto.offer ?? 'MDO_ESSENTIEL',
+            status: dto.status ?? 'DRAFT',
+            startDate: start,
+            endDate: end,
+            signedAt: dto.signedAt ? new Date(dto.signedAt) : null,
+            engagementMonths: dto.engagementMonths ?? 12,
+            billingPeriod: dto.billingPeriod ?? 'MONTHLY',
+            unitPriceHt: unitPrice,
+            quantity,
+            monthlyAmountHt,
+            setupFeeHt: dto.setupFeeHt,
+            vatRate: dto.vatRate ?? 20,
+            autoRenew: dto.autoRenew ?? true,
+            noticePeriodMonths: dto.noticePeriodMonths ?? 3,
+            description: dto.description,
+            companyId: dto.companyId,
+            opportunityId: dto.opportunityId,
+            ownerId: dto.ownerId ?? userId,
+          },
+        });
 
-      await this.createAlertsForContract(tx as any, created.id, end);
+        await this.createAlertsForContract(tx as any, created.id, end);
 
-      await tx.activity.create({
-        data: {
-          userId,
-          action: 'CREATE',
-          entity: 'Contract',
-          entityId: created.id,
-          metadata: { reference: created.reference, offer: created.offer },
-        },
-      });
-      return created;
-    });
+        await tx.activity.create({
+          data: {
+            userId,
+            action: 'CREATE',
+            entity: 'Contract',
+            entityId: created.id,
+            metadata: { reference: created.reference, offer: created.offer },
+          },
+        });
+        return created;
+      }),
+    );
 
     this.invalidateAggregates(contract.companyId);
     return contract;
@@ -253,12 +259,14 @@ export class ContractsService {
 
   async renew(id: string, dto: RenewContractDto, userId: string) {
     const previous = await this.findOne(id);
-    const reference = await this.generateReference();
     const quantity = dto.quantity ?? previous.quantity;
     const unitPrice = dto.unitPriceHt ?? Number(previous.unitPriceHt);
     const monthlyAmountHt = unitPrice * quantity;
 
-    const newContract = await this.prisma.$transaction(async (tx) => {
+    // Retry anti-TOCTOU sur reference (cf create()).
+    const newContract = await withUniqueRetry(
+      () => this.generateReference(),
+      (reference) => this.prisma.$transaction(async (tx) => {
       const created = await tx.contract.create({
         data: {
           reference,
@@ -297,7 +305,8 @@ export class ContractsService {
         },
       });
       return created;
-    });
+      }),
+    );
 
     this.invalidateAggregates(previous.companyId);
     return newContract;

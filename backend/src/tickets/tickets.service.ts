@@ -15,6 +15,7 @@ import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { AddMessageDto } from './dto/add-message.dto';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { withUniqueRetry } from '../common/db/unique-retry';
 
 @Injectable()
 export class TicketsService {
@@ -136,14 +137,18 @@ export class TicketsService {
   }
 
   async create(dto: CreateTicketDto, userId: string) {
-    const reference = await this.generateReference();
     const priority = dto.priority ?? 'NORMAL';
     // SLA : si pas de dueDate fournie, on calcule selon contrat actif + priorite
     let dueDate: Date | null = dto.dueDate ? new Date(dto.dueDate) : null;
     if (!dueDate) {
       dueDate = await this.sla.computeDueDate(dto.companyId, priority);
     }
-    const ticket = await this.prisma.$transaction(async (tx) => {
+    // Retry anti-TOCTOU : 2 ticket creations concurrents (UI + email entrant
+    // p.ex.) peuvent calculer la meme reference TKT-2026-00042. Le @unique
+    // sur Ticket.reference fait echouer en P2002, on retente.
+    const ticket = await withUniqueRetry(
+      () => this.generateReference(),
+      (reference) => this.prisma.$transaction(async (tx) => {
       const created = await tx.ticket.create({
         data: {
           reference,
@@ -171,7 +176,8 @@ export class TicketsService {
         },
       });
       return created;
-    });
+      }),
+    );
 
     // Notifier le technicien assigne (si different du createur)
     if (ticket.assigneeId && ticket.assigneeId !== userId) {

@@ -4,6 +4,7 @@ import { Prisma, InvoiceStatus } from '@prisma/client';
 import { addDays, startOfMonth, endOfMonth, format } from 'date-fns';
 import { PrismaService } from '../database/prisma.service';
 import { SettingsService } from '../settings/settings.service';
+import { withUniqueRetry } from '../common/db/unique-retry';
 
 @Injectable()
 export class InvoicesService {
@@ -76,31 +77,37 @@ export class InvoicesService {
     const vatRate = input.vatRate ?? 20;
     const totalHt = input.lines.reduce((s, l) => s + l.quantity * l.unitPriceHt, 0);
     const totalTtc = totalHt * (1 + vatRate / 100);
-    const number = await this.generateNumber(issueDate);
 
-    return this.prisma.invoice.create({
-      data: {
-        number,
-        status: 'DRAFT',
-        issueDate,
-        dueDate,
-        vatRate,
-        totalHt,
-        totalTtc,
-        notes: input.notes,
-        companyId: input.companyId,
-        contractId: input.contractId,
-        lines: {
-          create: input.lines.map((l) => ({
-            description: l.description,
-            quantity: l.quantity,
-            unitPriceHt: l.unitPriceHt,
-            totalHt: l.quantity * l.unitPriceHt,
-          })),
+    // Retry anti-TOCTOU : 2 requetes concurrentes peuvent calculer le meme
+    // numero entre le findFirst et le create. La contrainte @unique sur
+    // Invoice.number garantit qu'au moins une echoue (P2002), et on retente
+    // pour recalculer le prochain numero libre.
+    return withUniqueRetry(
+      () => this.generateNumber(issueDate),
+      (number) => this.prisma.invoice.create({
+        data: {
+          number,
+          status: 'DRAFT',
+          issueDate,
+          dueDate,
+          vatRate,
+          totalHt,
+          totalTtc,
+          notes: input.notes,
+          companyId: input.companyId,
+          contractId: input.contractId,
+          lines: {
+            create: input.lines.map((l) => ({
+              description: l.description,
+              quantity: l.quantity,
+              unitPriceHt: l.unitPriceHt,
+              totalHt: l.quantity * l.unitPriceHt,
+            })),
+          },
         },
-      },
-      include: { lines: true, company: true },
-    });
+        include: { lines: true, company: true },
+      }),
+    );
   }
 
   /**

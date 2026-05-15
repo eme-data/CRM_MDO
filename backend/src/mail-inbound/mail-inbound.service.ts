@@ -8,6 +8,7 @@ import { AttachmentsService } from '../attachments/attachments.service';
 import { SettingsService } from '../settings/settings.service';
 import { SlaService } from '../tickets/sla.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { withUniqueRetry } from '../common/db/unique-retry';
 
 const TICKET_REF_RE = /\[(TKT-\d{4}-\d{4,6})\]/i;
 
@@ -218,40 +219,45 @@ export class MailInboundService {
     }
 
     // 4. Creer le ticket + premier message + (optionnel) accuse de reception
-    const reference = await this.generateReference();
     const cleanTitle = this.cleanSubject(subject);
     const dueDate = await this.sla.computeDueDate(companyId, 'NORMAL');
-    const { ticket, firstMessage } = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.ticket.create({
-        data: {
-          reference,
-          title: cleanTitle,
-          description: textBody,
-          status: 'OPEN',
-          priority: 'NORMAL',
-          category: 'INCIDENT',
-          channel: 'EMAIL',
-          dueDate,
-          companyId,
-          contactId,
-          createdById: await this.systemUserId(),
-        },
-      });
-      const msg = await tx.ticketMessage.create({
-        data: {
-          ticketId: created.id,
-          authorId: null,
-          authorName: senderName || null,
-          authorEmail: senderEmail,
-          content: textBody,
-          isInternal: false,
-          messageId: incomingMessageId,
-          inReplyTo,
-          viaEmail: true,
-        },
-      });
-      return { ticket: created, firstMessage: msg };
-    });
+    const systemUserId = await this.systemUserId();
+    // Retry anti-TOCTOU sur reference (un email entrant + ticket cree manuel
+    // peuvent calculer la meme TKT-2026-XXXXX). Cf withUniqueRetry.
+    const { ticket, firstMessage } = await withUniqueRetry(
+      () => this.generateReference(),
+      (reference) => this.prisma.$transaction(async (tx) => {
+        const created = await tx.ticket.create({
+          data: {
+            reference,
+            title: cleanTitle,
+            description: textBody,
+            status: 'OPEN',
+            priority: 'NORMAL',
+            category: 'INCIDENT',
+            channel: 'EMAIL',
+            dueDate,
+            companyId,
+            contactId,
+            createdById: systemUserId,
+          },
+        });
+        const msg = await tx.ticketMessage.create({
+          data: {
+            ticketId: created.id,
+            authorId: null,
+            authorName: senderName || null,
+            authorEmail: senderEmail,
+            content: textBody,
+            isInternal: false,
+            messageId: incomingMessageId,
+            inReplyTo,
+            viaEmail: true,
+          },
+        });
+        return { ticket: created, firstMessage: msg };
+      }),
+    );
 
     await this.saveAttachments(parsed, ticket.id, firstMessage.id);
 
