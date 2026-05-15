@@ -53,7 +53,9 @@ export default function UptimePage() {
 
   useEffect(() => {
     load();
-    api.get('/companies?pageSize=500').then((r) => setCompanies(r.items));
+    api.get('/companies?pageSize=500')
+      .then((r) => setCompanies(r.items))
+      .catch((err) => toast.error('Chargement clients : ' + err.message));
   }, []);
 
   async function submit(e: React.FormEvent) {
