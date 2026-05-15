@@ -10,6 +10,7 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Invoices')
 @ApiBearerAuth()
@@ -23,12 +24,13 @@ export class InvoicesController {
 
   @Get()
   findAll(
+    @CurrentUser() user: JwtUser,
     @Query('status') status?: InvoiceStatus,
     @Query('companyId') companyId?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
-    return this.service.findAll({ status, companyId, from, to });
+    return this.service.findAll({ status, companyId, from, to }, user.tenantId);
   }
 
   // Aging report : factures impayees groupees par anciennete de la dueDate.
@@ -39,11 +41,13 @@ export class InvoicesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) { return this.service.findOne(id); }
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findOne(id, user.tenantId);
+  }
 
   @Get(':id/pdf')
-  async pdfDownload(@Param('id') id: string, @Res() res: Response) {
-    const inv = await this.service.findOne(id);
+  async pdfDownload(@Param('id') id: string, @Res() res: Response, @CurrentUser() user: JwtUser) {
+    const inv = await this.service.findOne(id, user.tenantId);
     const buffer = await this.pdf.invoice({
       reference: inv.contract?.reference ?? '',
       number: inv.number,
@@ -70,12 +74,12 @@ export class InvoicesController {
 
   @Roles('ADMIN', 'MANAGER')
   @Post()
-  create(@Body() body: CreateInvoiceDto) {
+  create(@Body() body: CreateInvoiceDto, @CurrentUser() user: JwtUser) {
     return this.service.create({
       ...body,
       issueDate: body.issueDate ? new Date(body.issueDate) : undefined,
       dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
-    });
+    }, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER')

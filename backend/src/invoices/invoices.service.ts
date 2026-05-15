@@ -15,10 +15,10 @@ export class InvoicesService {
     private readonly settings: SettingsService,
   ) {}
 
-  async generateNumber(date: Date): Promise<string> {
+  async generateNumber(date: Date, tenantId: string | null): Promise<string> {
     const ym = format(date, 'yyyy-MM');
     const last = await this.prisma.invoice.findFirst({
-      where: { number: { startsWith: ym + '-' } },
+      where: { tenantId, number: { startsWith: ym + '-' } },
       orderBy: { number: 'desc' },
       select: { number: true },
     });
@@ -30,8 +30,11 @@ export class InvoicesService {
     return ym + '-' + String(next).padStart(4, '0');
   }
 
-  findAll(params: { status?: InvoiceStatus; companyId?: string; from?: string; to?: string }) {
-    const where: Prisma.InvoiceWhereInput = {};
+  findAll(
+    params: { status?: InvoiceStatus; companyId?: string; from?: string; to?: string },
+    tenantId: string | null,
+  ) {
+    const where: Prisma.InvoiceWhereInput = { tenantId };
     if (params.status) where.status = params.status;
     if (params.companyId) where.companyId = params.companyId;
     if (params.from || params.to) {
@@ -50,9 +53,9 @@ export class InvoicesService {
     });
   }
 
-  async findOne(id: string) {
-    const inv = await this.prisma.invoice.findUnique({
-      where: { id },
+  async findOne(id: string, tenantId: string | null) {
+    const inv = await this.prisma.invoice.findFirst({
+      where: { id, tenantId },
       include: {
         company: true,
         contract: true,
@@ -71,19 +74,15 @@ export class InvoicesService {
     vatRate?: number;
     lines: Array<{ description: string; quantity: number; unitPriceHt: number }>;
     notes?: string;
-  }) {
+  }, tenantId: string | null = null) {
     const issueDate = input.issueDate ?? new Date();
     const dueDate = input.dueDate ?? addDays(issueDate, 30);
     const vatRate = input.vatRate ?? 20;
     const totalHt = input.lines.reduce((s, l) => s + l.quantity * l.unitPriceHt, 0);
     const totalTtc = totalHt * (1 + vatRate / 100);
 
-    // Retry anti-TOCTOU : 2 requetes concurrentes peuvent calculer le meme
-    // numero entre le findFirst et le create. La contrainte @unique sur
-    // Invoice.number garantit qu'au moins une echoue (P2002), et on retente
-    // pour recalculer le prochain numero libre.
     return withUniqueRetry(
-      () => this.generateNumber(issueDate),
+      () => this.generateNumber(issueDate, tenantId),
       (number) => this.prisma.invoice.create({
         data: {
           number,
@@ -96,12 +95,14 @@ export class InvoicesService {
           notes: input.notes,
           companyId: input.companyId,
           contractId: input.contractId,
+          tenantId: tenantId ?? undefined,
           lines: {
             create: input.lines.map((l) => ({
               description: l.description,
               quantity: l.quantity,
               unitPriceHt: l.unitPriceHt,
               totalHt: l.quantity * l.unitPriceHt,
+              tenantId: tenantId ?? undefined,
             })),
           },
         },

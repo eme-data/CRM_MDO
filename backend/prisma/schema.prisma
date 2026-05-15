@@ -69,6 +69,12 @@ model Tenant {
   timeEntries         TimeEntry[]
   attachments         Attachment[]
   documents           CompanyDocument[]
+  opportunities       Opportunity[]
+  contracts           Contract[]
+  invoices            Invoice[]
+  invoiceLines        InvoiceLine[]
+  quotes              Quote[]
+  quoteLines          QuoteLine[]
 
   @@index([customDomain])
   @@index([slug])
@@ -369,6 +375,9 @@ enum OpportunityWinReason {
 
 model Opportunity {
   id                String           @id @default(uuid())
+  // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
+  tenantId          String?
+  tenant            Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   title             String
   stage             OpportunityStage @default(QUALIFICATION)
   amountHt          Decimal          @default(0) @db.Decimal(12, 2)
@@ -400,9 +409,10 @@ model Opportunity {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
+  @@index([tenantId])
+  @@index([tenantId, stage])
   @@index([companyId])
   @@index([ownerId])
-  @@index([stage])
   @@index([lossReasonCode])
   @@index([winReasonCode])
 }
@@ -433,7 +443,11 @@ enum BillingPeriod {
 
 model Contract {
   id                 String         @id @default(uuid())
-  reference          String         @unique
+  // Multi-tenant : nullable transitoire. reference passe a unique par tenant
+  // (chaque tenant a sa sequence MDO-2026-XXXX independante).
+  tenantId           String?
+  tenant             Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  reference          String
   title              String
   offer              ContractOffer  @default(MDO_ESSENTIEL)
   status             ContractStatus @default(DRAFT)
@@ -494,12 +508,11 @@ model Contract {
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 
+  @@unique([tenantId, reference])
+  @@index([tenantId])
+  @@index([tenantId, status, endDate])
   @@index([companyId])
   @@index([ownerId])
-  @@index([status])
-  @@index([endDate])
-  // Compositie pour le cron renewal-alerts (filtre status=ACTIVE + endDate BETWEEN now AND now+90d)
-  // et pour stats() dashboard. Reduit le bookmark lookup quand on a >1000 contrats.
   @@index([status, endDate])
 }
 
@@ -1247,7 +1260,10 @@ enum BillingProviderKind {
 
 model Invoice {
   id             String        @id @default(uuid())
-  number         String        @unique  // ex : 2026-04-0001
+  // Multi-tenant : nullable transitoire. number passe a unique par tenant.
+  tenantId       String?
+  tenant         Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  number         String        // ex : 2026-04-0001 (unique par tenant)
   status         InvoiceStatus @default(DRAFT)
   issueDate      DateTime      @default(now())
   dueDate        DateTime
@@ -1276,6 +1292,9 @@ model Invoice {
   updatedAt      DateTime      @updatedAt
 
   @@unique([provider, externalId])
+  @@unique([tenantId, number])
+  @@index([tenantId])
+  @@index([tenantId, status, issueDate])
   @@index([companyId])
   @@index([contractId])
   @@index([status])
@@ -1285,6 +1304,9 @@ model Invoice {
 
 model InvoiceLine {
   id          String   @id @default(uuid())
+  // Multi-tenant : nullable transitoire (herite Invoice).
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   invoiceId   String
   invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   description String
@@ -1939,7 +1961,10 @@ enum QuoteStatus {
 
 model Quote {
   id            String      @id @default(uuid())
-  reference     String      @unique
+  // Multi-tenant : nullable transitoire. reference unique par tenant.
+  tenantId      String?
+  tenant        Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  reference     String
   title         String
   status        QuoteStatus @default(DRAFT)
   // Validite : dateLimite d'acceptation cote client. Au-dela, status passe a
@@ -1984,14 +2009,18 @@ model Quote {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
+  @@unique([tenantId, reference])
+  @@index([tenantId])
+  @@index([tenantId, status, validUntil])
   @@index([companyId])
   @@index([status])
-  @@index([validUntil])
-  @@index([status, validUntil])
 }
 
 model QuoteLine {
   id          String   @id @default(uuid())
+  // Multi-tenant : nullable transitoire (herite Quote).
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   quoteId     String
   quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   position    Int      @default(0)

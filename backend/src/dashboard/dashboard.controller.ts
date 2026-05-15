@@ -50,8 +50,8 @@ export class DashboardController {
           dueDate: { lte: addDays(now, 1) },
         },
       }),
-      this.contractsService.stats(),
-      this.contractsService.expiringSoon(90),
+      this.contractsService.stats(tenantId),
+      this.contractsService.expiringSoon(90, tenantId),
       this.ticketsService.stats(tenantId),
       this.prisma.activity.findMany({
         take: 15,

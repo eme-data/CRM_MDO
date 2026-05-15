@@ -13,8 +13,8 @@ export class OpportunitiesService {
     stage?: OpportunityStage;
     companyId?: string;
     ownerId?: string;
-  }) {
-    const where: Prisma.OpportunityWhereInput = {};
+  }, tenantId: string | null) {
+    const where: Prisma.OpportunityWhereInput = { tenantId };
     if (params.stage) where.stage = params.stage;
     if (params.companyId) where.companyId = params.companyId;
     if (params.ownerId) where.ownerId = params.ownerId;
@@ -35,7 +35,7 @@ export class OpportunitiesService {
     });
   }
 
-  async kanban() {
+  async kanban(tenantId: string | null) {
     const stages: OpportunityStage[] = [
       'QUALIFICATION',
       'PROPOSITION',
@@ -46,7 +46,7 @@ export class OpportunitiesService {
     const results = await Promise.all(
       stages.map(async (stage) => {
         const items = await this.prisma.opportunity.findMany({
-          where: { stage },
+          where: { tenantId, stage },
           include: {
             company: { select: { id: true, name: true } },
             owner: { select: { id: true, firstName: true, lastName: true } },
@@ -60,9 +60,9 @@ export class OpportunitiesService {
     return results;
   }
 
-  async findOne(id: string) {
-    const opp = await this.prisma.opportunity.findUnique({
-      where: { id },
+  async findOne(id: string, tenantId: string | null) {
+    const opp = await this.prisma.opportunity.findFirst({
+      where: { id, tenantId },
       include: {
         company: true,
         owner: { select: { id: true, firstName: true, lastName: true } },
@@ -73,7 +73,7 @@ export class OpportunitiesService {
     return opp;
   }
 
-  async create(dto: CreateOpportunityDto, userId: string) {
+  async create(dto: CreateOpportunityDto, userId: string, tenantId: string | null) {
     const opp = await this.prisma.opportunity.create({
       data: {
         title: dto.title,
@@ -84,6 +84,7 @@ export class OpportunitiesService {
         description: dto.description,
         companyId: dto.companyId,
         ownerId: dto.ownerId ?? userId,
+        tenantId: tenantId ?? undefined,
       },
     });
     await this.prisma.activity.create({
@@ -92,8 +93,8 @@ export class OpportunitiesService {
     return opp;
   }
 
-  async update(id: string, dto: UpdateOpportunityDto, userId: string) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateOpportunityDto, userId: string, tenantId: string | null) {
+    await this.findOne(id, tenantId);
     const data: Prisma.OpportunityUpdateInput = { ...dto } as any;
     if (dto.expectedCloseDate) data.expectedCloseDate = new Date(dto.expectedCloseDate);
     if (dto.closedAt) data.closedAt = new Date(dto.closedAt);
@@ -110,8 +111,9 @@ export class OpportunitiesService {
   // ============================================================
   // Win/loss analysis : aggregations sur opportunites cloturees
   // ============================================================
-  async winLossAnalysis(params: { from?: string; to?: string } = {}) {
+  async winLossAnalysis(params: { from?: string; to?: string } = {}, tenantId: string | null = null) {
     const where: Prisma.OpportunityWhereInput = {
+      tenantId,
       stage: { in: ['GAGNE', 'PERDU'] },
     };
     if (params.from || params.to) {
@@ -191,8 +193,8 @@ export class OpportunitiesService {
     };
   }
 
-  async remove(id: string, userId: string) {
-    await this.findOne(id);
+  async remove(id: string, userId: string, tenantId: string | null) {
+    await this.findOne(id, tenantId);
     await this.prisma.opportunity.delete({ where: { id } });
     await this.prisma.activity.create({
       data: { userId, action: 'DELETE', entity: 'Opportunity', entityId: id },

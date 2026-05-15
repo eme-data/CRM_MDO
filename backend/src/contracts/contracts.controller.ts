@@ -34,8 +34,8 @@ export class ContractsController {
   ) {}
 
   @Get(':id/pdf')
-  async downloadPdf(@Param('id') id: string, @Res() res: Response) {
-    const c = await this.service.findOne(id);
+  async downloadPdf(@Param('id') id: string, @Res() res: Response, @CurrentUser() user: JwtUser) {
+    const c = await this.service.findOne(id, user.tenantId);
     const buffer = await this.pdf.contract({
       contract: {
         reference: c.reference,
@@ -64,35 +64,35 @@ export class ContractsController {
   }
 
   @Get()
-  findAll(@Query() query: QueryContractsDto) {
-    return this.service.findAll(query);
+  findAll(@Query() query: QueryContractsDto, @CurrentUser() user: JwtUser) {
+    return this.service.findAll(query, user.tenantId);
   }
 
   @Get('stats')
-  stats() {
-    return this.service.stats();
+  stats(@CurrentUser() user: JwtUser) {
+    return this.service.stats(user.tenantId);
   }
 
   @Get('expiring-soon')
-  expiringSoon(@Query('days') days?: string) {
-    return this.service.expiringSoon(days ? parseInt(days, 10) : 90);
+  expiringSoon(@CurrentUser() user: JwtUser, @Query('days') days?: string) {
+    return this.service.expiringSoon(days ? parseInt(days, 10) : 90, user.tenantId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findOne(id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post()
   create(@Body() dto: CreateContractDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(dto, user.id);
+    return this.service.create(dto, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateContractDto, @CurrentUser() user: JwtUser) {
-    return this.service.update(id, dto, user.id);
+    return this.service.update(id, dto, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
@@ -102,18 +102,18 @@ export class ContractsController {
     @Body() body: { reason: string },
     @CurrentUser() user: JwtUser,
   ) {
-    return this.service.terminate(id, body.reason, user.id);
+    return this.service.terminate(id, body.reason, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post(':id/renew')
   renew(@Param('id') id: string, @Body() dto: RenewContractDto, @CurrentUser() user: JwtUser) {
-    return this.service.renew(id, dto, user.id);
+    return this.service.renew(id, dto, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.remove(id, user.id);
+    return this.service.remove(id, user.id, user.tenantId);
   }
 }

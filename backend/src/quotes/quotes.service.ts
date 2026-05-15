@@ -31,11 +31,12 @@ export class QuotesService {
   // ============================================================
   // Generation reference DEV-YYYY-NNNN (calque sur Contract.reference)
   // ============================================================
-  async generateReference(): Promise<string> {
+  async generateReference(tenantId: string | null): Promise<string> {
     const year = new Date().getFullYear();
     const prefix = `DEV-${year}-`;
+    // Multi-tenant : sequence par tenant.
     const last = await this.prisma.quote.findFirst({
-      where: { reference: { startsWith: prefix } },
+      where: { tenantId, reference: { startsWith: prefix } },
       orderBy: { reference: 'desc' },
       select: { reference: true },
     });
@@ -95,8 +96,8 @@ export class QuotesService {
     status?: QuoteStatus;
     companyId?: string;
     ownerId?: string;
-  }) {
-    const where: Prisma.QuoteWhereInput = {};
+  }, tenantId: string | null) {
+    const where: Prisma.QuoteWhereInput = { tenantId };
     if (params.status) where.status = params.status;
     if (params.companyId) where.companyId = params.companyId;
     if (params.ownerId) where.ownerId = params.ownerId;
@@ -117,9 +118,9 @@ export class QuotesService {
     });
   }
 
-  async findOne(id: string) {
-    const q = await this.prisma.quote.findUnique({
-      where: { id },
+  async findOne(id: string, tenantId: string | null) {
+    const q = await this.prisma.quote.findFirst({
+      where: { id, tenantId },
       include: {
         company: true,
         contact: true,
@@ -133,8 +134,8 @@ export class QuotesService {
     return q;
   }
 
-  async create(dto: CreateQuoteDto, userId: string) {
-    const reference = await this.generateReference();
+  async create(dto: CreateQuoteDto, userId: string, tenantId: string | null) {
+    const reference = await this.generateReference(tenantId);
     const computed = await this.computeLines(dto.lines);
     const vatRate = dto.vatRate ?? 20;
     const totals = this.computeTotals(computed, vatRate);
@@ -156,7 +157,8 @@ export class QuotesService {
           contactId: dto.contactId,
           opportunityId: dto.opportunityId,
           ownerId: dto.ownerId ?? userId,
-          lines: { create: computed },
+          tenantId: tenantId ?? undefined,
+          lines: { create: computed.map((c) => ({ ...c, tenantId: tenantId ?? undefined })) },
         },
       });
       await tx.activity.create({
@@ -167,8 +169,8 @@ export class QuotesService {
     return quote;
   }
 
-  async update(id: string, dto: UpdateQuoteDto, userId: string) {
-    const existing = await this.findOne(id);
+  async update(id: string, dto: UpdateQuoteDto, userId: string, tenantId: string | null) {
+    const existing = await this.findOne(id, tenantId);
     // Un devis SENT/ACCEPTED/REJECTED/EXPIRED ne peut plus etre modifie
     // (sauf retour a DRAFT explicite, hors scope MVP). Sinon on perdrait
     // la trace de ce qui a ete envoye au client.
@@ -238,8 +240,8 @@ export class QuotesService {
     return updated;
   }
 
-  async remove(id: string, userId: string) {
-    const existing = await this.findOne(id);
+  async remove(id: string, userId: string, tenantId: string | null) {
+    const existing = await this.findOne(id, tenantId);
     if (existing.convertedToContractId) {
       throw new BadRequestException(
         'Devis converti en contrat — impossible de le supprimer. Detachez d\'abord le contrat.',
@@ -257,8 +259,8 @@ export class QuotesService {
   // ============================================================
   // Workflow : send / accept / reject
   // ============================================================
-  async send(id: string, userId: string) {
-    const q = await this.findOne(id);
+  async send(id: string, userId: string, tenantId: string | null) {
+    const q = await this.findOne(id, tenantId);
     if (q.status !== 'DRAFT') {
       throw new BadRequestException('Seul un devis DRAFT peut etre envoye (actuel : ' + q.status + ')');
     }
@@ -274,8 +276,8 @@ export class QuotesService {
     });
   }
 
-  async accept(id: string, userId: string) {
-    const q = await this.findOne(id);
+  async accept(id: string, userId: string, tenantId: string | null) {
+    const q = await this.findOne(id, tenantId);
     if (q.status !== 'SENT') {
       throw new BadRequestException('Seul un devis SENT peut etre accepte (actuel : ' + q.status + ')');
     }
@@ -296,8 +298,8 @@ export class QuotesService {
     return updated;
   }
 
-  async reject(id: string, reason: string | undefined, userId: string) {
-    const q = await this.findOne(id);
+  async reject(id: string, reason: string | undefined, userId: string, tenantId: string | null) {
+    const q = await this.findOne(id, tenantId);
     if (q.status !== 'SENT') {
       throw new BadRequestException('Seul un devis SENT peut etre refuse (actuel : ' + q.status + ')');
     }
@@ -332,8 +334,8 @@ export class QuotesService {
   // pour que monthlyAmountHt = totalDevis / engagementMonths (le devis
   // represente le total contractuel HT sur la duree d'engagement).
   // ============================================================
-  async convertToContract(id: string, dto: ConvertQuoteDto, userId: string) {
-    const q = await this.findOne(id);
+  async convertToContract(id: string, dto: ConvertQuoteDto, userId: string, tenantId: string | null) {
+    const q = await this.findOne(id, tenantId);
     if (q.status !== 'ACCEPTED') {
       throw new BadRequestException('Seul un devis ACCEPTED peut etre converti (actuel : ' + q.status + ')');
     }
@@ -429,14 +431,14 @@ export class QuotesService {
   // ============================================================
   // Stats commerciales (dashboard)
   // ============================================================
-  async stats() {
+  async stats(tenantId: string | null) {
     const [drafts, sent, accepted, rejected, totalValueSent] = await Promise.all([
-      this.prisma.quote.count({ where: { status: 'DRAFT' } }),
-      this.prisma.quote.count({ where: { status: 'SENT' } }),
-      this.prisma.quote.count({ where: { status: 'ACCEPTED' } }),
-      this.prisma.quote.count({ where: { status: 'REJECTED' } }),
+      this.prisma.quote.count({ where: { tenantId, status: 'DRAFT' } }),
+      this.prisma.quote.count({ where: { tenantId, status: 'SENT' } }),
+      this.prisma.quote.count({ where: { tenantId, status: 'ACCEPTED' } }),
+      this.prisma.quote.count({ where: { tenantId, status: 'REJECTED' } }),
       this.prisma.quote.aggregate({
-        where: { status: 'SENT' },
+        where: { tenantId, status: 'SENT' },
         _sum: { totalTtc: true },
       }),
     ]);

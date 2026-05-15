@@ -28,44 +28,45 @@ export class OpportunitiesController {
 
   @Get()
   findAll(
+    @CurrentUser() user: JwtUser,
     @Query('search') search?: string,
     @Query('stage') stage?: OpportunityStage,
     @Query('companyId') companyId?: string,
     @Query('ownerId') ownerId?: string,
   ) {
-    return this.service.findAll({ search, stage, companyId, ownerId });
+    return this.service.findAll({ search, stage, companyId, ownerId }, user.tenantId);
   }
 
   @Get('kanban')
-  kanban() {
-    return this.service.kanban();
+  kanban(@CurrentUser() user: JwtUser) {
+    return this.service.kanban(user.tenantId);
   }
 
   @Get('win-loss-analysis')
-  winLossAnalysis(@Query('from') from?: string, @Query('to') to?: string) {
-    return this.service.winLossAnalysis({ from, to });
+  winLossAnalysis(@CurrentUser() user: JwtUser, @Query('from') from?: string, @Query('to') to?: string) {
+    return this.service.winLossAnalysis({ from, to }, user.tenantId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findOne(id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post()
   create(@Body() dto: CreateOpportunityDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(dto, user.id);
+    return this.service.create(dto, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateOpportunityDto, @CurrentUser() user: JwtUser) {
-    return this.service.update(id, dto, user.id);
+    return this.service.update(id, dto, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.remove(id, user.id);
+    return this.service.remove(id, user.id, user.tenantId);
   }
 }
