@@ -6,6 +6,7 @@ import { Response } from 'express';
 import { InvoiceStatus } from '@prisma/client';
 import { InvoicesService } from './invoices.service';
 import { PdfService } from '../pdf/pdf.service';
+import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -69,8 +70,12 @@ export class InvoicesController {
 
   @Roles('ADMIN', 'MANAGER')
   @Post()
-  create(@Body() body: any) {
-    return this.service.create(body);
+  create(@Body() body: CreateInvoiceDto) {
+    return this.service.create({
+      ...body,
+      issueDate: body.issueDate ? new Date(body.issueDate) : undefined,
+      dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
+    });
   }
 
   @Roles('ADMIN', 'MANAGER')
