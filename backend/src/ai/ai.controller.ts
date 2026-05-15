@@ -4,6 +4,7 @@ import { TicketCategory, TicketPriority } from '@prisma/client';
 import { AiService } from './ai.service';
 import { TicketTriageService } from './use-cases/ticket-triage.service';
 import { TicketDraftService } from './use-cases/ticket-draft.service';
+import { TicketSummaryService } from './use-cases/ticket-summary.service';
 import { ClientSummaryService } from './use-cases/client-summary.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -19,6 +20,7 @@ export class AiController {
     private readonly ai: AiService,
     private readonly triage: TicketTriageService,
     private readonly draft: TicketDraftService,
+    private readonly ticketSummary: TicketSummaryService,
     private readonly summary: ClientSummaryService,
   ) {}
 
@@ -52,6 +54,12 @@ export class AiController {
   @Post('draft/ticket/:id')
   draftTicket(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.draft.draftReply(id, user.id);
+  }
+
+  // ---------- Resume thread ticket (avant de repondre sur un fil long) ----------
+  @Post('summary/ticket/:id')
+  summarizeTicket(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.ticketSummary.summarizeThread(id, user.id);
   }
 
   // ---------- Resume client ----------

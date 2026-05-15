@@ -241,6 +241,7 @@ export default function TicketDetailPage() {
                 ticketId={id}
                 ticketCategory={ticket.category}
                 ticketPriority={ticket.priority}
+                messageCount={ticket.messages.length}
                 onApplyTriage={load}
                 onDraftReady={(d) => setNewMessage((prev) => (prev ? prev + '\n\n' + d : d))}
               />

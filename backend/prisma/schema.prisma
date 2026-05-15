@@ -3038,6 +3038,7 @@ model CallLog {
 enum AiCapability {
   TICKET_TRIAGE
   TICKET_DRAFT
+  TICKET_SUMMARY
   CLIENT_SUMMARY
   GENERIC
 }
