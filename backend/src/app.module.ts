@@ -73,6 +73,7 @@ import { EmailSecurityModule } from './email-security/email-security.module';
 import { SocModule } from './soc/soc.module';
 import { PhishingModule } from './phishing/phishing.module';
 import { ExecutiveModule } from './executive/executive.module';
+import { QuoteTemplatesModule } from './quote-templates/quote-templates.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { MetricsService } from './common/observability/metrics.service';
@@ -174,6 +175,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     SocModule,
     PhishingModule,
     ExecutiveModule,
+    QuoteTemplatesModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,

@@ -1907,6 +1907,7 @@ model Product {
   isActive        Boolean     @default(true)
 
   quoteLines      QuoteLine[]
+  quoteTemplateLines QuoteTemplateLine[]
 
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
@@ -1914,6 +1915,54 @@ model Product {
   @@index([isActive])
   @@index([vendor])
   @@index([type])
+}
+
+// =================== QUOTE TEMPLATES ===================
+//
+// Modeles pre-remplis de devis (offres standards MDO + add-ons cyber, audit,
+// formation...). Cliquer sur "Charger template X" sur la page nouveau devis
+// remplit toutes les lignes en une fois, avec snapshot productId si lie au
+// catalogue. Le commercial peut ensuite ajuster qte / prix / lignes.
+
+model QuoteTemplate {
+  id              String                @id @default(uuid())
+  name            String                // "Pack MDO Pro 10 utilisateurs", "Audit cyber initial"
+  description     String?
+  // Categorie pour grouper dans le selecteur ("Offres standards", "Add-ons", "Audits"...)
+  category        String?
+  // Offre cible si applicable — si renseignee, le template est pre-suggere
+  // dans le selecteur quand l'opportunite/devis est lie a cette offre.
+  offer           ContractOffer?
+  // Conditions / mentions par defaut pre-remplies sur le devis
+  defaultTerms    String?
+  isActive        Boolean               @default(true)
+
+  lines           QuoteTemplateLine[]
+
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([isActive, offer])
+}
+
+model QuoteTemplateLine {
+  id              String          @id @default(uuid())
+  templateId      String
+  template        QuoteTemplate   @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  position        Int             @default(0)
+  description     String
+  // Quantite par defaut. Le commercial peut overrider sur le devis genere.
+  quantity        Decimal         @default(1) @db.Decimal(10, 2)
+  // Prix unitaire HT par defaut (peut etre overrride si productId est defini —
+  // le sellingPriceHt du Product prend le dessus a la generation).
+  unitPriceHt     Decimal         @db.Decimal(10, 2)
+  discountPct     Decimal         @default(0) @db.Decimal(5, 2)
+  // Lien vers le catalogue produits — si renseigne, le snapshot purchasePrice
+  // est capture lors de la generation du devis (cf module products).
+  productId       String?
+  product         Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([templateId])
 }
 
 // =================== ONBOARDING CLIENT ===================

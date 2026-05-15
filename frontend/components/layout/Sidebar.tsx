@@ -102,6 +102,7 @@ const adminItems: NavItem[] = [
   { href: '/admin/executive', label: 'Dashboard exec MSP', icon: BarChart3 },
   { href: '/admin/profitability', label: 'Marges / rentabilite', icon: BarChart3 },
   { href: '/admin/products', label: 'Catalogue produits', icon: Layers },
+  { href: '/admin/quote-templates', label: 'Templates devis', icon: FileSignature },
   { href: '/admin/api-keys', label: 'Cles API publique', icon: KeyRound },
   { href: '/admin/client-reports', label: 'Rapports clients mensuels', icon: FileBarChart },
   { href: '/admin/time-billing', label: 'Facturation du temps', icon: Clock },

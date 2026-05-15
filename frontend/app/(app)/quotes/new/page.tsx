@@ -27,6 +27,7 @@ export default function NewQuotePage() {
   const [contacts, setContacts] = useState<any[]>([]);
   const [opps, setOpps] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
   const [data, setData] = useState<any>({
     title: '',
     companyId: sp.get('companyId') ?? '',
@@ -44,7 +45,29 @@ export default function NewQuotePage() {
     api.get('/companies?pageSize=500').then((r) => setCompanies(r.items));
     api.get('/opportunities').then(setOpps);
     api.get('/products').then(setProducts).catch(() => setProducts([]));
+    api.get('/quote-templates').then(setTemplates).catch(() => setTemplates([]));
   }, []);
+
+  // Charge un template : remplace les lignes existantes par celles du template
+  async function loadTemplate(templateId: string) {
+    if (!templateId) return;
+    try {
+      const r = await api.get('/quote-templates/' + templateId + '/expand');
+      setLines(r.lines.map((l: any) => ({
+        description: l.description,
+        quantity: l.quantity,
+        unitPriceHt: l.unitPriceHt,
+        discountPct: l.discountPct ?? 0,
+        productId: l.productId,
+      })));
+      // Pre-remplit les conditions si pas encore set
+      if (r.template.defaultTerms && !data.terms) {
+        setData((d: any) => ({ ...d, terms: r.template.defaultTerms }));
+      }
+    } catch (err: any) {
+      // toast.error pas importe ici, le selecteur se reset au prochain render
+    }
+  }
 
   function applyProduct(i: number, productId: string) {
     const p = products.find((x) => x.id === productId);
@@ -115,6 +138,23 @@ export default function NewQuotePage() {
     <div className="space-y-6 max-w-5xl">
       <h1 className="text-3xl font-bold">Nouveau devis</h1>
       <form onSubmit={submit} className="card p-6 space-y-4">
+        {templates.length > 0 && (
+          <div className="bg-mdo-50 border border-mdo-200 rounded-md p-3 flex items-center gap-3">
+            <span className="text-sm font-medium text-mdo-700">Charger depuis un template :</span>
+            <select
+              className="input flex-1 max-w-md"
+              defaultValue=""
+              onChange={(e) => { if (e.target.value) { loadTemplate(e.target.value); e.target.value = ''; } }}
+            >
+              <option value="">-- Choisir un template --</option>
+              {templates.map((t: any) => (
+                <option key={t.id} value={t.id}>
+                  {t.category ? '[' + t.category + '] ' : ''}{t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div><label className="label">Objet *</label>
           <input className="input" required value={data.title} onChange={(e) => set('title', e.target.value)} />
         </div>
