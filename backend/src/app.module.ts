@@ -84,6 +84,7 @@ import { SystemBackupModule } from './system-backup/system-backup.module';
 import { CronDashboardModule } from './cron-dashboard/cron-dashboard.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { SubprocessorsModule } from './subprocessors/subprocessors.module';
+import { SystemHealthModule } from './system-health/system-health.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { MetricsService } from './common/observability/metrics.service';
@@ -196,6 +197,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     CronDashboardModule,
     WebhooksModule,
     SubprocessorsModule,
+    SystemHealthModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,

@@ -44,6 +44,7 @@ import { cn } from '@/lib/utils';
 import { logout } from '@/lib/auth';
 import { NotificationBell } from './NotificationBell';
 import { ThemeToggle } from '../ThemeToggle';
+import { HealthBadge } from './HealthBadge';
 
 type NavItem = { href: string; label: string; icon: any };
 type NavSection = { title: string; items: NavItem[] };
@@ -118,6 +119,7 @@ const adminItems: NavItem[] = [
   { href: '/admin/webhooks', label: 'Webhooks sortants', icon: Workflow },
   { href: '/admin/system-backup', label: 'Backup / Restore CRM', icon: Database },
   { href: '/admin/cron-jobs', label: 'Cron jobs / planificateur', icon: Clock },
+  { href: '/admin/health', label: 'Health check systeme', icon: Activity },
   { href: '/admin/subprocessors', label: 'Sous-traitants RGPD (DPA)', icon: ShieldCheck },
   { href: '/admin/client-reports', label: 'Rapports clients mensuels', icon: FileBarChart },
   { href: '/admin/time-billing', label: 'Facturation du temps', icon: Clock },
@@ -191,6 +193,8 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
             </div>
           </div>
         ))}
+
+        {isAdmin && <HealthBadge />}
 
         {isAdmin && (
           <div className="mb-4">
