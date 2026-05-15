@@ -61,6 +61,8 @@ model Tenant {
 
   users               User[]
   portalUsers         ClientPortalUser[]
+  companies           Company[]
+  contacts            Contact[]
 
   @@index([customDomain])
   @@index([slug])
@@ -200,10 +202,15 @@ enum CompanySector {
 
 model Company {
   id          String        @id @default(uuid())
+  // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
+  tenantId    String?
+  tenant      Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name        String
   // Identifiants legaux (sources : Pappers / INSEE Sirene)
-  siret       String?       @unique
-  siren       String?       @unique
+  // Unicite par tenant : 2 tenants differents peuvent referencer la meme
+  // entreprise comme client (ex: SIRET 123 = client de mdo ET de seysses).
+  siret       String?
+  siren       String?
   apeCode     String?       // ex: "62.02A"
   apeLabel    String?       // ex: "Conseil en systemes et logiciels informatiques"
   legalForm   String?       // ex: "SARL", "SAS", "SASU"
@@ -274,14 +281,20 @@ model Company {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
+  @@unique([tenantId, siret])
+  @@unique([tenantId, siren])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, name])
   @@index([ownerId])
-  @@index([status])
-  @@index([name])
   @@index([siren])
 }
 
 model Contact {
   id          String   @id @default(uuid())
+  // Multi-tenant : nullable transitoire (cf Company).
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   firstName   String
   lastName    String
   email       String?
@@ -308,9 +321,10 @@ model Contact {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@index([tenantId])
+  @@index([tenantId, email])
   @@index([companyId])
   @@index([ownerId])
-  @@index([email])
 }
 
 // =================== OPPORTUNITIES ===================

@@ -34,10 +34,14 @@ export class ImportsService {
       const siret = this.s(row, 'siret');
       const siren = this.s(row, 'siren');
 
-      // Dedup par SIRET prio, sinon SIREN, sinon nom
+      // Dedup par SIRET prio, sinon SIREN, sinon nom.
+      // Multi-tenant : siret/siren ne sont plus uniques globalement (un meme
+      // SIRET peut exister dans 2 tenants differents). On utilise findFirst
+      // sans scope tenant ici — TODO vague 1+ : passer le tenantId du user
+      // qui declenche l'import pour scoper la deduplication.
       let existing: any = null;
-      if (siret) existing = await this.prisma.company.findUnique({ where: { siret } });
-      if (!existing && siren) existing = await this.prisma.company.findUnique({ where: { siren } });
+      if (siret) existing = await this.prisma.company.findFirst({ where: { siret } });
+      if (!existing && siren) existing = await this.prisma.company.findFirst({ where: { siren } });
       if (!existing) existing = await this.prisma.company.findFirst({ where: { name } });
 
       const data = {

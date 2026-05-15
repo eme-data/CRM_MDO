@@ -6,19 +6,21 @@ import { UpdateCompanyDto } from './dto/update-company.dto';
 import { QueryCompaniesDto } from './dto/query-companies.dto';
 import { buildPageResult, toSkipTake } from '../common/pagination/pagination.dto';
 
+// MULTI-TENANT : toutes les requetes scopees par tenantId. Le tenantId est
+// passe par le controller (via user.tenantId du JWT). Ne JAMAIS faire de
+// requete sur Company sans scope tenant — risque de leak inter-tenant.
+
 @Injectable()
 export class CompaniesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query: QueryCompaniesDto) {
-    // toSkipTake clamp pageSize a Max 200 (defense en profondeur meme si le
-    // DTO le valide deja) et normalise les defauts (page=1, pageSize=25 ici).
+  async findAll(query: QueryCompaniesDto, tenantId: string | null) {
     const { skip, take, page, pageSize } = toSkipTake({
       page: query.page,
       pageSize: query.pageSize ?? 25,
     });
 
-    const where: Prisma.CompanyWhereInput = {};
+    const where: Prisma.CompanyWhereInput = { tenantId };
     if (query.search) {
       where.OR = [
         { name: { contains: query.search, mode: 'insensitive' } },
@@ -45,15 +47,15 @@ export class CompaniesService {
       this.prisma.company.count({ where }),
     ]);
 
-    // buildPageResult ajoute pageCount = ceil(total / pageSize) que le frontend
-    // utilise pour rendre les controles "Page X / Y" et desactiver Next sur
-    // la derniere page.
     return buildPageResult(items, total, page, pageSize);
   }
 
-  async findOne(id: string) {
-    const company = await this.prisma.company.findUnique({
-      where: { id },
+  // Tenant scope strict : on cherche par id ET par tenantId, sinon NotFound.
+  // Empeche un user du tenant A de lire les details d'une societe du tenant B
+  // meme s'il devine l'UUID.
+  async findOne(id: string, tenantId: string | null) {
+    const company = await this.prisma.company.findFirst({
+      where: { id, tenantId },
       include: {
         owner: { select: { id: true, firstName: true, lastName: true } },
         contacts: { orderBy: { isPrimary: 'desc' } },
@@ -66,10 +68,10 @@ export class CompaniesService {
     return company;
   }
 
-  create(dto: CreateCompanyDto, userId: string) {
+  create(dto: CreateCompanyDto, userId: string, tenantId: string | null) {
     return this.prisma.$transaction(async (tx) => {
       const company = await tx.company.create({
-        data: { ...dto, ownerId: dto.ownerId ?? userId },
+        data: { ...dto, ownerId: dto.ownerId ?? userId, tenantId: tenantId ?? undefined },
       });
       await tx.activity.create({
         data: {
@@ -84,8 +86,8 @@ export class CompaniesService {
     });
   }
 
-  async update(id: string, dto: UpdateCompanyDto, userId: string) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateCompanyDto, userId: string, tenantId: string | null) {
+    await this.findOne(id, tenantId); // garantit le scope tenant
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.company.update({ where: { id }, data: dto });
       await tx.activity.create({
@@ -95,13 +97,12 @@ export class CompaniesService {
     });
   }
 
-  async remove(id: string, userId: string) {
-    await this.findOne(id);
-    // Garde-fou : la societe est rattachee a 26 cascades onDelete (contrats,
-    // factures, opportunites, time entries...). Un DELETE physique fait perdre
-    // tout l'historique financier et d'exploitation. On bloque tant qu'il
-    // existe de la donnee structurante. Pour archiver une societe inactive,
-    // changer son status en LOST/INACTIVE plutot que de supprimer.
+  async remove(id: string, userId: string, tenantId: string | null) {
+    await this.findOne(id, tenantId);
+    // Garde-fou : la societe est rattachee a beaucoup de cascades onDelete
+    // (contrats, factures, opportunites, time entries...). Un DELETE physique
+    // fait perdre tout l'historique. On bloque tant qu'il existe de la donnee.
+    // (Filtres scope tenant pour rester safe meme si findOne avait un bug)
     const [contracts, invoices, opportunities, interventions, tickets] = await Promise.all([
       this.prisma.contract.count({ where: { companyId: id } }),
       this.prisma.invoice.count({ where: { companyId: id } }),

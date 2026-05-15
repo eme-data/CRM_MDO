@@ -4,14 +4,19 @@ import { PrismaService } from '../database/prisma.service';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
 
+// MULTI-TENANT : toutes les requetes scopees par tenantId. Cf companies.service.
+
 @Injectable()
 export class ContactsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(params: { search?: string; companyId?: string; page?: number; pageSize?: number }) {
+  async findAll(
+    params: { search?: string; companyId?: string; page?: number; pageSize?: number },
+    tenantId: string | null,
+  ) {
     const page = params.page ?? 1;
     const pageSize = params.pageSize ?? 50;
-    const where: Prisma.ContactWhereInput = {};
+    const where: Prisma.ContactWhereInput = { tenantId };
     if (params.companyId) where.companyId = params.companyId;
     if (params.search) {
       where.OR = [
@@ -33,18 +38,18 @@ export class ContactsService {
     return { items, total, page, pageSize };
   }
 
-  async findOne(id: string) {
-    const contact = await this.prisma.contact.findUnique({
-      where: { id },
+  async findOne(id: string, tenantId: string | null) {
+    const contact = await this.prisma.contact.findFirst({
+      where: { id, tenantId },
       include: { company: true, owner: { select: { id: true, firstName: true, lastName: true } } },
     });
     if (!contact) throw new NotFoundException('Contact introuvable');
     return contact;
   }
 
-  async create(dto: CreateContactDto, userId: string) {
+  async create(dto: CreateContactDto, userId: string, tenantId: string | null) {
     const contact = await this.prisma.contact.create({
-      data: { ...dto, ownerId: dto.ownerId ?? userId },
+      data: { ...dto, ownerId: dto.ownerId ?? userId, tenantId: tenantId ?? undefined },
     });
     await this.prisma.activity.create({
       data: { userId, action: 'CREATE', entity: 'Contact', entityId: contact.id },
@@ -52,8 +57,8 @@ export class ContactsService {
     return contact;
   }
 
-  async update(id: string, dto: UpdateContactDto, userId: string) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateContactDto, userId: string, tenantId: string | null) {
+    await this.findOne(id, tenantId);
     const updated = await this.prisma.contact.update({ where: { id }, data: dto });
     await this.prisma.activity.create({
       data: { userId, action: 'UPDATE', entity: 'Contact', entityId: id },
@@ -61,8 +66,8 @@ export class ContactsService {
     return updated;
   }
 
-  async remove(id: string, userId: string) {
-    await this.findOne(id);
+  async remove(id: string, userId: string, tenantId: string | null) {
+    await this.findOne(id, tenantId);
     await this.prisma.contact.delete({ where: { id } });
     await this.prisma.activity.create({
       data: { userId, action: 'DELETE', entity: 'Contact', entityId: id },

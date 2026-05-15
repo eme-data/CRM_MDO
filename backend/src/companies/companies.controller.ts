@@ -31,31 +31,31 @@ export class CompaniesController {
   ) {}
 
   @Get()
-  findAll(@Query() query: QueryCompaniesDto) {
-    return this.service.findAll(query);
+  findAll(@Query() query: QueryCompaniesDto, @CurrentUser() user: JwtUser) {
+    return this.service.findAll(query, user.tenantId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findOne(id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post()
   create(@Body() dto: CreateCompanyDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(dto, user.id);
+    return this.service.create(dto, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateCompanyDto, @CurrentUser() user: JwtUser) {
-    return this.service.update(id, dto, user.id);
+    return this.service.update(id, dto, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.remove(id, user.id);
+    return this.service.remove(id, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')

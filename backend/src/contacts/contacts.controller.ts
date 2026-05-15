@@ -27,6 +27,7 @@ export class ContactsController {
 
   @Get()
   findAll(
+    @CurrentUser() user: JwtUser,
     @Query('search') search?: string,
     @Query('companyId') companyId?: string,
     @Query('page') page?: string,
@@ -37,29 +38,29 @@ export class ContactsController {
       companyId,
       page: page ? parseInt(page, 10) : 1,
       pageSize: pageSize ? parseInt(pageSize, 10) : 50,
-    });
+    }, user.tenantId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findOne(id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post()
   create(@Body() dto: CreateContactDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(dto, user.id);
+    return this.service.create(dto, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateContactDto, @CurrentUser() user: JwtUser) {
-    return this.service.update(id, dto, user.id);
+    return this.service.update(id, dto, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.remove(id, user.id);
+    return this.service.remove(id, user.id, user.tenantId);
   }
 }

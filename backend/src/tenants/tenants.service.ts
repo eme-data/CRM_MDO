@@ -89,6 +89,22 @@ export class TenantsService implements OnModuleInit {
     if (portalUsersUpdated.count > 0) {
       this.logger.log(`Retro-compat : ${portalUsersUpdated.count} portal user(s) assignes`);
     }
+    // Vague 1 : Companies + Contacts. Chaque vague successive ajoute ici les
+    // updateMany pour les nouveaux modeles avec tenantId.
+    const companiesUpdated = await this.prisma.company.updateMany({
+      where: { tenantId: null },
+      data: { tenantId: tenant.id },
+    });
+    if (companiesUpdated.count > 0) {
+      this.logger.log(`Retro-compat : ${companiesUpdated.count} company(ies) assignees`);
+    }
+    const contactsUpdated = await this.prisma.contact.updateMany({
+      where: { tenantId: null },
+      data: { tenantId: tenant.id },
+    });
+    if (contactsUpdated.count > 0) {
+      this.logger.log(`Retro-compat : ${contactsUpdated.count} contact(s) assignes`);
+    }
   }
 
   // ============================================================
