@@ -30,8 +30,8 @@ export class SettingsController {
   constructor(private readonly service: SettingsService) {}
 
   @Get()
-  list() {
-    return this.service.listForAdmin();
+  list(@CurrentUser() user: JwtUser) {
+    return this.service.listForAdmin(user.tenantId);
   }
 
   @Patch(':key')
@@ -40,17 +40,17 @@ export class SettingsController {
     @Body() body: { value: string | null },
     @CurrentUser() user: JwtUser,
   ) {
-    return this.service.update(key, body.value, user.id);
+    return this.service.update(key, body.value, user.id, user.tenantId);
   }
 
   @Post('test/smtp')
-  async testSmtp(@Body() body: { to?: string }) {
-    const host = await this.service.get('smtp.host');
-    const port = await this.service.getInt('smtp.port', 587);
-    const secure = await this.service.getBool('smtp.secure');
-    const user = await this.service.get('smtp.user');
-    const pass = await this.service.get('smtp.password');
-    const from = (await this.service.get('smtp.from')) || user || '';
+  async testSmtp(@Body() body: { to?: string }, @CurrentUser() me: JwtUser) {
+    const host = await this.service.get('smtp.host', me.tenantId);
+    const port = await this.service.getInt('smtp.port', 587, me.tenantId);
+    const secure = await this.service.getBool('smtp.secure', me.tenantId);
+    const user = await this.service.get('smtp.user', me.tenantId);
+    const pass = await this.service.get('smtp.password', me.tenantId);
+    const from = (await this.service.get('smtp.from', me.tenantId)) || user || '';
 
     if (!host || !user || !pass) {
       throw new HttpException('Config SMTP incomplete', HttpStatus.BAD_REQUEST);
@@ -88,13 +88,13 @@ export class SettingsController {
   }
 
   @Post('test/imap')
-  async testImap() {
-    const host = await this.service.get('imap.host');
-    const port = await this.service.getInt('imap.port', 993);
-    const secure = (await this.service.get('imap.secure')) !== 'false';
-    const user = await this.service.get('imap.user');
-    const pass = await this.service.get('imap.password');
-    const folder = (await this.service.get('imap.folder')) || 'INBOX';
+  async testImap(@CurrentUser() me: JwtUser) {
+    const host = await this.service.get('imap.host', me.tenantId);
+    const port = await this.service.getInt('imap.port', 993, me.tenantId);
+    const secure = (await this.service.get('imap.secure', me.tenantId)) !== 'false';
+    const user = await this.service.get('imap.user', me.tenantId);
+    const pass = await this.service.get('imap.password', me.tenantId);
+    const folder = (await this.service.get('imap.folder', me.tenantId)) || 'INBOX';
 
     if (!host || !user || !pass) {
       throw new HttpException('Config IMAP incomplete', HttpStatus.BAD_REQUEST);

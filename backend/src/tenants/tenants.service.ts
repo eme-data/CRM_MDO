@@ -1,13 +1,16 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
   OnModuleInit,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Tenant } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 
 // Service tenant : gere le CRUD + la resolution par domaine.
 //
@@ -33,6 +36,8 @@ export class TenantsService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    @Inject(forwardRef(() => SettingsService))
+    private readonly settings: SettingsService,
   ) {}
 
   // Au boot : cree le tenant 'mdo' s'il n'existe pas, et assigne a tous les
@@ -218,7 +223,14 @@ export class TenantsService implements OnModuleInit {
     if (!/^[a-z0-9][a-z0-9-]{1,30}$/.test(input.slug)) {
       throw new BadRequestException('slug doit etre lowercase, [a-z0-9-], 2-31 char');
     }
-    return this.prisma.tenant.create({ data: input });
+    const tenant = await this.prisma.tenant.create({ data: input });
+    // Seed les settings par defaut pour ce nouveau tenant. Sans ca, le tenant
+    // n'aurait aucune config (les fallback global sont reserves aux non-secrets,
+    // cf SettingsService.get).
+    await this.settings.seedForTenant(tenant.id).catch((err) =>
+      this.logger.warn(`seedForTenant failed pour ${tenant.slug}: ${err.message}`),
+    );
+    return tenant;
   }
 
   async update(id: string, input: Partial<{

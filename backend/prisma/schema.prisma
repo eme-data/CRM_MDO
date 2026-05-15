@@ -75,6 +75,7 @@ model Tenant {
   invoiceLines        InvoiceLine[]
   quotes              Quote[]
   quoteLines          QuoteLine[]
+  settings            Setting[]
 
   @@index([customDomain])
   @@index([slug])
@@ -776,7 +777,13 @@ enum EmailStatus {
 }
 
 model Setting {
-  key         String   @id
+  // Multi-tenant : la clef passe d'identifiant a unique compose. Permet
+  // que chaque tenant ait sa propre valeur pour ai.openaiApiKey, smtp.host,
+  // etc. Avant : 1 valeur globale partagee. Apres : 1 valeur par tenant.
+  id          String   @id @default(uuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  key         String
   value       String?
   isSecret    Boolean  @default(false)
   category    String   @default("general")
@@ -785,7 +792,9 @@ model Setting {
   updatedAt   DateTime @default(now()) @updatedAt
   updatedById String?
 
+  @@unique([tenantId, key])
   @@index([category])
+  @@index([tenantId])
 }
 
 model EmailLog {
