@@ -119,6 +119,12 @@ export class PortalDataService {
     const title = body.title.trim();
     const description = body.description.trim();
 
+    // Multi-tenant : recuperer le tenantId via la Company (qui est deja
+    // scope tenant via vague 1). Le ticket cree heritera de ce tenantId.
+    const company2 = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { tenantId: true },
+    });
     return this.tickets.create(
       {
         title,
@@ -130,6 +136,7 @@ export class PortalDataService {
         channel: 'PORTAL' as any,
       } as any,
       adminUser.id,
+      company2?.tenantId ?? null,
     );
   }
 

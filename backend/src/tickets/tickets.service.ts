@@ -31,11 +31,13 @@ export class TicketsService {
     private readonly webhooks: WebhooksService,
   ) {}
 
-  async generateReference(): Promise<string> {
+  async generateReference(tenantId: string | null): Promise<string> {
     const year = new Date().getFullYear();
     const prefix = `TKT-${year}-`;
+    // Multi-tenant : la numerotation est par tenant. Chaque tenant a sa propre
+    // sequence TKT-2026-00001, TKT-2026-00002... independante.
     const last = await this.prisma.ticket.findFirst({
-      where: { reference: { startsWith: prefix } },
+      where: { tenantId, reference: { startsWith: prefix } },
       orderBy: { reference: 'desc' },
       select: { reference: true },
     });
@@ -47,15 +49,18 @@ export class TicketsService {
     return `${prefix}${String(next).padStart(5, '0')}`;
   }
 
-  findAll(params: {
-    search?: string;
-    status?: TicketStatus;
-    priority?: TicketPriority;
-    category?: TicketCategory;
-    companyId?: string;
-    assigneeId?: string;
-  }) {
-    const where: Prisma.TicketWhereInput = {};
+  findAll(
+    params: {
+      search?: string;
+      status?: TicketStatus;
+      priority?: TicketPriority;
+      category?: TicketCategory;
+      companyId?: string;
+      assigneeId?: string;
+    },
+    tenantId: string | null,
+  ) {
+    const where: Prisma.TicketWhereInput = { tenantId };
     if (params.status) where.status = params.status;
     if (params.priority) where.priority = params.priority;
     if (params.category) where.category = params.category;
@@ -80,7 +85,7 @@ export class TicketsService {
     });
   }
 
-  async kanban(filters: { assigneeId?: string; companyId?: string }) {
+  async kanban(filters: { assigneeId?: string; companyId?: string }, tenantId: string | null) {
     const statuses: TicketStatus[] = [
       'OPEN',
       'IN_PROGRESS',
@@ -88,7 +93,7 @@ export class TicketsService {
       'RESOLVED',
       'CLOSED',
     ];
-    const where: Prisma.TicketWhereInput = {};
+    const where: Prisma.TicketWhereInput = { tenantId };
     if (filters.assigneeId) where.assigneeId = filters.assigneeId;
     if (filters.companyId) where.companyId = filters.companyId;
 
@@ -108,9 +113,9 @@ export class TicketsService {
     return cols;
   }
 
-  async findOne(id: string) {
-    const ticket = await this.prisma.ticket.findUnique({
-      where: { id },
+  async findOne(id: string, tenantId: string | null) {
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id, tenantId },
       include: {
         company: true,
         contact: true,
@@ -136,7 +141,7 @@ export class TicketsService {
     return ticket;
   }
 
-  async create(dto: CreateTicketDto, userId: string) {
+  async create(dto: CreateTicketDto, userId: string, tenantId: string | null) {
     const priority = dto.priority ?? 'NORMAL';
     // SLA : si pas de dueDate fournie, on calcule selon contrat actif + priorite
     let dueDate: Date | null = dto.dueDate ? new Date(dto.dueDate) : null;
@@ -144,10 +149,10 @@ export class TicketsService {
       dueDate = await this.sla.computeDueDate(dto.companyId, priority);
     }
     // Retry anti-TOCTOU : 2 ticket creations concurrents (UI + email entrant
-    // p.ex.) peuvent calculer la meme reference TKT-2026-00042. Le @unique
-    // sur Ticket.reference fait echouer en P2002, on retente.
+    // p.ex.) peuvent calculer la meme reference TKT-2026-00042. Le @@unique
+    // ([tenantId, reference]) fait echouer en P2002, on retente.
     const ticket = await withUniqueRetry(
-      () => this.generateReference(),
+      () => this.generateReference(tenantId),
       (reference) => this.prisma.$transaction(async (tx) => {
       const created = await tx.ticket.create({
         data: {
@@ -164,6 +169,7 @@ export class TicketsService {
           contractId: dto.contractId,
           assigneeId: dto.assigneeId,
           createdById: userId,
+          tenantId: tenantId ?? undefined,
         },
       });
       await tx.activity.create({
@@ -205,8 +211,8 @@ export class TicketsService {
     return ticket;
   }
 
-  async update(id: string, dto: UpdateTicketDto, userId: string) {
-    const existing = await this.findOne(id);
+  async update(id: string, dto: UpdateTicketDto, userId: string, tenantId: string | null) {
+    const existing = await this.findOne(id, tenantId);
     const data: Prisma.TicketUpdateInput = { ...dto } as any;
     if (dto.dueDate) data.dueDate = new Date(dto.dueDate);
     if (dto.firstResponseAt) data.firstResponseAt = new Date(dto.firstResponseAt);
@@ -264,8 +270,8 @@ export class TicketsService {
     return updated;
   }
 
-  async remove(id: string, userId: string) {
-    await this.findOne(id);
+  async remove(id: string, userId: string, tenantId: string | null) {
+    await this.findOne(id, tenantId);
     await this.prisma.$transaction(async (tx) => {
       await tx.ticket.delete({ where: { id } });
       await tx.activity.create({
@@ -275,8 +281,8 @@ export class TicketsService {
     return { success: true };
   }
 
-  async addMessage(ticketId: string, dto: AddMessageDto, userId: string) {
-    const ticket = await this.findOne(ticketId);
+  async addMessage(ticketId: string, dto: AddMessageDto, userId: string, tenantId: string | null) {
+    const ticket = await this.findOne(ticketId, tenantId);
     const isInternal = dto.isInternal ?? false;
 
     const message = await this.prisma.ticketMessage.create({
@@ -287,6 +293,7 @@ export class TicketsService {
         isInternal,
         cc: !isInternal ? dto.cc?.trim() || null : null,
         bcc: !isInternal ? dto.bcc?.trim() || null : null,
+        tenantId: tenantId ?? undefined,
       },
       include: {
         author: { select: { id: true, firstName: true, lastName: true } },
@@ -419,6 +426,7 @@ export class TicketsService {
     ids: string[],
     data: { status?: any; priority?: any; assigneeId?: string | null },
     userId: string,
+    tenantId: string | null,
   ) {
     if (!ids || ids.length === 0) return { count: 0 };
     const update: any = {};
@@ -426,7 +434,9 @@ export class TicketsService {
     if (data.priority) update.priority = data.priority;
     if (data.assigneeId !== undefined) update.assigneeId = data.assigneeId;
     const result = await this.prisma.ticket.updateMany({
-      where: { id: { in: ids } },
+      // Scope tenant : empeche de faire un bulk update sur des tickets d'un
+      // autre tenant en passant des UUIDs devines.
+      where: { id: { in: ids }, tenantId },
       data: update,
     });
     await this.prisma.activity.create({
@@ -440,10 +450,10 @@ export class TicketsService {
     return result;
   }
 
-  async bulkDelete(ids: string[], userId: string) {
+  async bulkDelete(ids: string[], userId: string, tenantId: string | null) {
     if (!ids || ids.length === 0) return { count: 0 };
     const result = await this.prisma.ticket.deleteMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, tenantId },
     });
     await this.prisma.activity.create({
       data: {
@@ -456,20 +466,22 @@ export class TicketsService {
     return result;
   }
 
-  async stats() {
+  async stats(tenantId: string | null) {
     const now = new Date();
     const [open, inProgress, waiting, overdue, resolvedThisMonth] = await Promise.all([
-      this.prisma.ticket.count({ where: { status: 'OPEN' } }),
-      this.prisma.ticket.count({ where: { status: 'IN_PROGRESS' } }),
-      this.prisma.ticket.count({ where: { status: 'WAITING_CUSTOMER' } }),
+      this.prisma.ticket.count({ where: { tenantId, status: 'OPEN' } }),
+      this.prisma.ticket.count({ where: { tenantId, status: 'IN_PROGRESS' } }),
+      this.prisma.ticket.count({ where: { tenantId, status: 'WAITING_CUSTOMER' } }),
       this.prisma.ticket.count({
         where: {
+          tenantId,
           status: { in: ['OPEN', 'IN_PROGRESS', 'WAITING_CUSTOMER'] },
           dueDate: { lt: now },
         },
       }),
       this.prisma.ticket.count({
         where: {
+          tenantId,
           status: { in: ['RESOLVED', 'CLOSED'] },
           resolvedAt: {
             gte: new Date(now.getFullYear(), now.getMonth(), 1),

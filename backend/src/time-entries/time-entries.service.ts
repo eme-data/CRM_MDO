@@ -41,7 +41,11 @@ export class TimeEntriesService {
   }
 
   // Demarrer un timer (endedAt=null jusqu'a stop)
-  async startTimer(userId: string, body: { ticketId?: string; interventionId?: string; description?: string }) {
+  async startTimer(
+    userId: string,
+    body: { ticketId?: string; interventionId?: string; description?: string },
+    tenantId: string | null,
+  ) {
     // Stopper d'eventuels timers en cours pour cet utilisateur
     await this.stopAllRunning(userId);
     return this.prisma.timeEntry.create({
@@ -51,6 +55,7 @@ export class TimeEntriesService {
         ticketId: body.ticketId,
         interventionId: body.interventionId,
         description: body.description,
+        tenantId: tenantId ?? undefined,
       },
     });
   }
@@ -92,7 +97,7 @@ export class TimeEntriesService {
     });
   }
 
-  async create(userId: string, dto: CreateTimeEntryDto) {
+  async create(userId: string, dto: CreateTimeEntryDto, tenantId: string | null) {
     const startedAt = new Date(dto.startedAt);
     const endedAt = dto.endedAt ? new Date(dto.endedAt) : null;
     let duration = dto.durationMin;
@@ -113,6 +118,7 @@ export class TimeEntriesService {
         ticketId: dto.ticketId,
         interventionId: dto.interventionId,
         contractId: dto.contractId,
+        tenantId: tenantId ?? undefined,
       },
     });
   }
@@ -142,15 +148,18 @@ export class TimeEntriesService {
     return { success: true };
   }
 
-  async findAll(params: {
-    userId?: string;
-    ticketId?: string;
-    interventionId?: string;
-    contractId?: string;
-    from?: string;
-    to?: string;
-  }) {
-    const where: Prisma.TimeEntryWhereInput = {};
+  async findAll(
+    params: {
+      userId?: string;
+      ticketId?: string;
+      interventionId?: string;
+      contractId?: string;
+      from?: string;
+      to?: string;
+    },
+    tenantId: string | null,
+  ) {
+    const where: Prisma.TimeEntryWhereInput = { tenantId };
     if (params.userId) where.userId = params.userId;
     if (params.ticketId) where.ticketId = params.ticketId;
     if (params.interventionId) where.interventionId = params.interventionId;

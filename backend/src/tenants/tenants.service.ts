@@ -105,6 +105,31 @@ export class TenantsService implements OnModuleInit {
     if (contactsUpdated.count > 0) {
       this.logger.log(`Retro-compat : ${contactsUpdated.count} contact(s) assignes`);
     }
+    // Vague 2 : Tickets + TicketMessage + Intervention + TimeEntry + Attachment + CompanyDocument.
+    const ticketsUpdated = await this.prisma.ticket.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (ticketsUpdated.count > 0) this.logger.log(`Retro-compat : ${ticketsUpdated.count} ticket(s) assignes`);
+    const ticketMessagesUpdated = await this.prisma.ticketMessage.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (ticketMessagesUpdated.count > 0) this.logger.log(`Retro-compat : ${ticketMessagesUpdated.count} ticket message(s) assignes`);
+    const interventionsUpdated = await this.prisma.intervention.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (interventionsUpdated.count > 0) this.logger.log(`Retro-compat : ${interventionsUpdated.count} intervention(s) assignees`);
+    const timeEntriesUpdated = await this.prisma.timeEntry.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (timeEntriesUpdated.count > 0) this.logger.log(`Retro-compat : ${timeEntriesUpdated.count} time entry(ies) assignees`);
+    const attachmentsUpdated = await this.prisma.attachment.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (attachmentsUpdated.count > 0) this.logger.log(`Retro-compat : ${attachmentsUpdated.count} attachment(s) assignes`);
+    const documentsUpdated = await this.prisma.companyDocument.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (documentsUpdated.count > 0) this.logger.log(`Retro-compat : ${documentsUpdated.count} document(s) assignes`);
   }
 
   // ============================================================

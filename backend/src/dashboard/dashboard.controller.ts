@@ -5,6 +5,7 @@ import { PrismaService } from '../database/prisma.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ContractsService } from '../contracts/contracts.service';
 import { TicketsService } from '../tickets/tickets.service';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Dashboard')
 @ApiBearerAuth()
@@ -18,8 +19,9 @@ export class DashboardController {
   ) {}
 
   @Get()
-  async get() {
+  async get(@CurrentUser() user: JwtUser) {
     const now = new Date();
+    const tenantId = user.tenantId;
     const [
       companiesTotal,
       customersTotal,
@@ -32,9 +34,11 @@ export class DashboardController {
       ticketsStats,
       recentActivities,
     ] = await Promise.all([
-      this.prisma.company.count(),
-      this.prisma.company.count({ where: { status: 'CUSTOMER' } }),
-      this.prisma.company.count({ where: { status: { in: ['LEAD', 'PROSPECT'] } } }),
+      this.prisma.company.count({ where: { tenantId } }),
+      this.prisma.company.count({ where: { tenantId, status: 'CUSTOMER' } }),
+      this.prisma.company.count({ where: { tenantId, status: { in: ['LEAD', 'PROSPECT'] } } }),
+      // Opportunity, Task, Contract, Activity : pas encore tenant-scoped
+      // (vagues 3, 4 a venir). Pour l'instant non scoped — sera complete.
       this.prisma.opportunity.count({ where: { stage: { notIn: ['GAGNE', 'PERDU'] } } }),
       this.prisma.opportunity.aggregate({
         where: { stage: { notIn: ['GAGNE', 'PERDU'] } },
@@ -48,7 +52,7 @@ export class DashboardController {
       }),
       this.contractsService.stats(),
       this.contractsService.expiringSoon(90),
-      this.ticketsService.stats(),
+      this.ticketsService.stats(tenantId),
       this.prisma.activity.findMany({
         take: 15,
         orderBy: { createdAt: 'desc' },

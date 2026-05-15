@@ -57,22 +57,23 @@ export class InterventionsController {
 
   @Get()
   findAll(
+    @CurrentUser() user: JwtUser,
     @Query('status') status?: InterventionStatus,
     @Query('companyId') companyId?: string,
     @Query('contractId') contractId?: string,
     @Query('technicianId') technicianId?: string,
   ) {
-    return this.service.findAll({ status, companyId, contractId, technicianId });
+    return this.service.findAll({ status, companyId, contractId, technicianId }, user.tenantId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findOne(id, user.tenantId);
   }
 
   @Get(':id/pdf')
-  async downloadPdf(@Param('id') id: string, @Res() res: Response) {
-    const i = await this.service.findOne(id);
+  async downloadPdf(@Param('id') id: string, @Res() res: Response, @CurrentUser() user: JwtUser) {
+    const i = await this.service.findOne(id, user.tenantId);
     const buf = await this.pdf.interventionReport({
       intervention: {
         title: i.title,
@@ -99,19 +100,19 @@ export class InterventionsController {
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post()
-  create(@Body() dto: CreateInterventionDto) {
-    return this.service.create(dto);
+  create(@Body() dto: CreateInterventionDto, @CurrentUser() user: JwtUser) {
+    return this.service.create(dto, user.tenantId);
   }
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateInterventionDto) {
-    return this.service.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateInterventionDto, @CurrentUser() user: JwtUser) {
+    return this.service.update(id, dto, user.tenantId);
   }
 
   @Roles(Role.ADMIN, Role.MANAGER)
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.remove(id, user.tenantId);
   }
 }

@@ -30,6 +30,7 @@ export class TimeEntriesController {
 
   @Get()
   findAll(
+    @CurrentUser() user: JwtUser,
     @Query('userId') userId?: string,
     @Query('ticketId') ticketId?: string,
     @Query('interventionId') interventionId?: string,
@@ -37,7 +38,7 @@ export class TimeEntriesController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
-    return this.service.findAll({ userId, ticketId, interventionId, contractId, from, to });
+    return this.service.findAll({ userId, ticketId, interventionId, contractId, from, to }, user.tenantId);
   }
 
   @Get('summary')
@@ -59,7 +60,7 @@ export class TimeEntriesController {
     @Body() body: { ticketId?: string; interventionId?: string; description?: string },
     @CurrentUser() user: JwtUser,
   ) {
-    return this.service.startTimer(user.id, body);
+    return this.service.startTimer(user.id, body, user.tenantId);
   }
 
   @Post('stop')
@@ -72,7 +73,7 @@ export class TimeEntriesController {
 
   @Post()
   create(@Body() dto: CreateTimeEntryDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(user.id, dto);
+    return this.service.create(user.id, dto, user.tenantId);
   }
 
   @Patch(':id')

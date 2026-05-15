@@ -160,7 +160,10 @@ export class MailInboundService {
       const refMatch = subject.match(TICKET_REF_RE);
       if (refMatch) {
         const reference = refMatch[1].toUpperCase();
-        const t = await this.prisma.ticket.findUnique({
+        // Multi-tenant : reference n'est plus unique seul (cf @@unique
+        // ([tenantId, reference])). On utilise findFirst en attendant que
+        // mail-inbound soit refactore pour scope tenant explicite.
+        const t = await this.prisma.ticket.findFirst({
           where: { reference },
           select: { id: true, reference: true, status: true, assigneeId: true, title: true },
         });

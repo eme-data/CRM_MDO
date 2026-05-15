@@ -33,6 +33,7 @@ export class TicketsController {
 
   @Get()
   findAll(
+    @CurrentUser() user: JwtUser,
     @Query('search') search?: string,
     @Query('status') status?: TicketStatus,
     @Query('priority') priority?: TicketPriority,
@@ -47,31 +48,32 @@ export class TicketsController {
       category,
       companyId,
       assigneeId,
-    });
+    }, user.tenantId);
   }
 
   @Get('kanban')
   kanban(
+    @CurrentUser() user: JwtUser,
     @Query('assigneeId') assigneeId?: string,
     @Query('companyId') companyId?: string,
   ) {
-    return this.service.kanban({ assigneeId, companyId });
+    return this.service.kanban({ assigneeId, companyId }, user.tenantId);
   }
 
   @Get('stats')
-  stats() {
-    return this.service.stats();
+  stats(@CurrentUser() user: JwtUser) {
+    return this.service.stats(user.tenantId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findOne(id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post()
   create(@Body() dto: CreateTicketDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(dto, user.id);
+    return this.service.create(dto, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
@@ -81,7 +83,7 @@ export class TicketsController {
     @Body() dto: UpdateTicketDto,
     @CurrentUser() user: JwtUser,
   ) {
-    return this.service.update(id, dto, user.id);
+    return this.service.update(id, dto, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
@@ -91,13 +93,13 @@ export class TicketsController {
     @Body() dto: AddMessageDto,
     @CurrentUser() user: JwtUser,
   ) {
-    return this.service.addMessage(id, dto, user.id);
+    return this.service.addMessage(id, dto, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.remove(id, user.id);
+    return this.service.remove(id, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
@@ -106,7 +108,7 @@ export class TicketsController {
     @Body() body: { ids: string[]; status?: TicketStatus; priority?: TicketPriority; assigneeId?: string | null },
     @CurrentUser() user: JwtUser,
   ) {
-    return this.service.bulkUpdate(body.ids, body, user.id);
+    return this.service.bulkUpdate(body.ids, body, user.id, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER')
@@ -115,6 +117,6 @@ export class TicketsController {
     @Body() body: { ids: string[] },
     @CurrentUser() user: JwtUser,
   ) {
-    return this.service.bulkDelete(body.ids, user.id);
+    return this.service.bulkDelete(body.ids, user.id, user.tenantId);
   }
 }

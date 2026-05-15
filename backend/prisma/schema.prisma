@@ -63,6 +63,12 @@ model Tenant {
   portalUsers         ClientPortalUser[]
   companies           Company[]
   contacts            Contact[]
+  tickets             Ticket[]
+  ticketMessages      TicketMessage[]
+  interventions       Intervention[]
+  timeEntries         TimeEntry[]
+  attachments         Attachment[]
+  documents           CompanyDocument[]
 
   @@index([customDomain])
   @@index([slug])
@@ -528,6 +534,9 @@ enum InterventionStatus {
 
 model Intervention {
   id           String             @id @default(uuid())
+  // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
+  tenantId     String?
+  tenant       Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   title        String
   type         InterventionType   @default(REMOTE)
   status       InterventionStatus @default(PLANNED)
@@ -555,10 +564,11 @@ model Intervention {
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
+  @@index([tenantId])
+  @@index([tenantId, scheduledAt])
   @@index([companyId])
   @@index([contractId])
   @@index([technicianId])
-  @@index([scheduledAt])
 }
 
 // =================== TASKS / NOTES / ACTIVITY ===================
@@ -820,7 +830,12 @@ enum TicketChannel {
 
 model Ticket {
   id              String         @id @default(uuid())
-  reference       String         @unique
+  // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
+  // reference passe de @unique global a unique par tenant : permet TKT-2026-0001
+  // dans 2 tenants differents sans collision.
+  tenantId        String?
+  tenant          Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  reference       String
   title           String
   description     String
   status          TicketStatus   @default(OPEN)
@@ -857,20 +872,21 @@ model Ticket {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
+  @@unique([tenantId, reference])
+  @@index([tenantId])
+  @@index([tenantId, status, priority])
+  @@index([tenantId, status, dueDate])
   @@index([companyId])
   @@index([assigneeId])
-  @@index([status])
-  @@index([priority])
   @@index([reference])
-  // Composite pour le kanban (ORDER BY priority DESC, createdAt DESC) et le
-  // filtre commun status+priority des dashboards techniciens.
-  @@index([status, priority])
-  // Composite pour le compteur "overdue" : status IN (...) AND dueDate < NOW.
-  @@index([status, dueDate])
 }
 
 model TicketMessage {
   id          String   @id @default(uuid())
+  // Multi-tenant : nullable transitoire. Hérité du Ticket parent — present
+  // pour scoper sans jointure les requetes globales (statistiques, etc.).
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   ticketId    String
   ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   authorId    String?
@@ -889,6 +905,7 @@ model TicketMessage {
   attachments Attachment[]
   createdAt   DateTime @default(now())
 
+  @@index([tenantId])
   @@index([ticketId])
   @@index([inReplyTo])
 }
@@ -897,6 +914,10 @@ model TicketMessage {
 
 model Attachment {
   id           String         @id @default(uuid())
+  // Multi-tenant : nullable transitoire. Herite du Ticket parent quand attache
+  // a un ticket. Present pour scope strict sans jointure.
+  tenantId     String?
+  tenant       Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   filename     String         // nom de fichier original cote client
   storageKey   String         @unique // chemin / UUID de stockage sur disque
   mimeType     String
@@ -915,6 +936,7 @@ model Attachment {
 
   createdAt    DateTime       @default(now())
 
+  @@index([tenantId])
   @@index([ticketId])
   @@index([ticketMessageId])
 }
@@ -923,6 +945,9 @@ model Attachment {
 
 model TimeEntry {
   id            String        @id @default(uuid())
+  // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
+  tenantId      String?
+  tenant        Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   userId        String
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   startedAt     DateTime
@@ -958,6 +983,8 @@ model TimeEntry {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
+  @@index([tenantId])
+  @@index([tenantId, userId, startedAt])
   @@index([userId, startedAt])
   @@index([ticketId])
   @@index([interventionId])
@@ -3146,6 +3173,9 @@ enum DocumentCategory {
 
 model CompanyDocument {
   id              String           @id @default(uuid())
+  // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
+  tenantId        String?
+  tenant          Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   companyId       String
   company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -3175,9 +3205,10 @@ model CompanyDocument {
   uploadedAt      DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
+  @@index([tenantId])
+  @@index([tenantId, expiresAt])
   @@index([companyId])
   @@index([category])
-  @@index([expiresAt])
   @@index([visibleToClient])
 }
 
