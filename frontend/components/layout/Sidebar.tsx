@@ -81,6 +81,7 @@ const sections: NavSection[] = [
       { href: '/audit-dns', label: 'Audit DNS', icon: ShieldCheck },
       { href: '/email-security', label: 'Email security', icon: ShieldCheck },
       { href: '/soc', label: 'Console SOC', icon: ShieldCheck },
+      { href: '/phishing', label: 'Phishing campagnes', icon: ShieldCheck },
     ],
   },
   {

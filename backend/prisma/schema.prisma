@@ -196,6 +196,7 @@ model Company {
   onboardingRuns OnboardingRun[]
   kbArticles     KbArticle[]
   emailSecurityChecks EmailSecurityCheck[]
+  phishingCampaigns PhishingCampaign[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -2148,6 +2149,87 @@ model EmailSecurityCheck {
 
   @@index([companyId])
   @@index([scorePct])
+}
+
+// =================== PHISHING SIMULATION ===================
+//
+// Tracker les campagnes de phishing simule (formation utilisateurs).
+// Plateforme externe (KnowBe4, GoPhish, Microsoft Attack Simulator, ...).
+//
+// Workflow : MDO importe les resultats CSV apres campagne. Le CRM stocke
+// les stats par campagne + resultat individuel par destinataire pour
+// identifier les utilisateurs qui ratent + cibler la formation.
+
+enum PhishingVendor {
+  KNOWBE4
+  GOPHISH
+  M365_ATTACK_SIM
+  CUSTOM
+}
+
+enum PhishingCampaignStatus {
+  DRAFT
+  RUNNING
+  COMPLETED
+  CANCELLED
+}
+
+model PhishingCampaign {
+  id              String                  @id @default(uuid())
+  name            String                  // libelle interne ("Phishing Q2 2026 Banque")
+  vendor          PhishingVendor          @default(GOPHISH)
+  externalId      String?                 // id externe chez le vendor
+
+  companyId       String
+  company         Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  status          PhishingCampaignStatus  @default(DRAFT)
+  sentAt          DateTime?               // date d'envoi des emails
+  completedAt     DateTime?               // date de cloture (analyse terminee)
+
+  // Compteurs (recalcules depuis les results a chaque import CSV)
+  totalRecipients   Int                   @default(0)
+  openedCount       Int                   @default(0)
+  clickedCount      Int                   @default(0)
+  reportedCount     Int                   @default(0)  // signale comme phishing par le user
+  dataEnteredCount  Int                   @default(0)  // a saisi des creds (le pire)
+
+  templateName    String?                 // nom du modele d'email phishing utilise
+  notes           String?
+
+  results         PhishingResult[]
+
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+}
+
+model PhishingResult {
+  id              String              @id @default(uuid())
+  campaignId      String
+  campaign        PhishingCampaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  userEmail       String              // identifiant unique dans la campagne
+  userName        String?
+
+  // Etats de progression : opened > clicked > dataEntered (escalade)
+  opened          Boolean             @default(false)
+  clicked         Boolean             @default(false)
+  reportedAsPhish Boolean             @default(false)
+  dataEntered     Boolean             @default(false)
+
+  openedAt        DateTime?
+  clickedAt       DateTime?
+  reportedAt      DateTime?
+  dataEnteredAt   DateTime?
+
+  createdAt       DateTime            @default(now())
+
+  @@unique([campaignId, userEmail])
+  @@index([campaignId])
+  @@index([userEmail])
 }
 
 // =================== SIGNATURE ELECTRONIQUE ===================
