@@ -80,6 +80,7 @@ model User {
   onboardingStepsClosed   OnboardingRunStep[]              @relation("OnboardingStepCloser")
   kbArticles              KbArticle[]                      @relation("KbArticleAuthor")
   customerSuccessReviews  CustomerSuccessReview[]          @relation("CustomerSuccessReviewOwner")
+  skills                  UserSkill[]
   complianceAssessments  ComplianceAssessment[]            @relation("ComplianceOwner")
   controlReviews         ComplianceControlAssessment[]     @relation("ControlReviewer")
 
@@ -2287,6 +2288,66 @@ model BackupRun {
   @@unique([jobId, externalRunId])
   @@index([jobId, startedAt])
   @@index([status])
+}
+
+// =================== SKILLS MATRIX ===================
+//
+// Matrice competences/certifications equipe technique. Permet :
+//  - Savoir qui sait quoi (assigner les bons techs aux bons tickets)
+//  - Suivre les dates d'expiration des certifs (badge "expire dans 30j")
+//  - Valoriser les budgets formation
+//
+// Skill = referentiel partage (catalogue gere par admin).
+// UserSkill = niveau d'un technicien sur un skill specifique.
+
+model Skill {
+  id          String      @id @default(uuid())
+  // Code unique court ("MS_AZ104", "ANSSI_SECNUM", "BD_GZ", "VEEAM_VMCE")
+  code        String      @unique
+  name        String      // "Azure Administrator AZ-104"
+  // Categorie : 'Microsoft' | 'Cybersecurity' | 'Backup' | 'Networking' | 'Cloud' | 'Other'
+  category    String?
+  // Organisme certificateur ('Microsoft', 'ANSSI', 'Bitdefender', 'Veeam', ...)
+  provider    String?
+  // Duree de validite par defaut en mois (Microsoft = 24, ANSSI = variable)
+  validityMonths Int?
+  description String?
+  isActive    Boolean     @default(true)
+
+  userSkills  UserSkill[]
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([category])
+}
+
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  EXPERT
+}
+
+model UserSkill {
+  id              String     @id @default(uuid())
+  userId          String
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillId         String
+  skill           Skill      @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  level           SkillLevel @default(INTERMEDIATE)
+  certifiedAt     DateTime?  // date de passage de la certif
+  expiresAt       DateTime?  // si vide : pas de date d'expiration ou validite a saisir
+  certificateUrl  String?    // lien vers le PDF de certif (Sharepoint, GED)
+  notes           String?
+
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@unique([userId, skillId])
+  @@index([userId])
+  @@index([skillId])
+  @@index([expiresAt])
 }
 
 // =================== ONBOARDING CLIENT ===================

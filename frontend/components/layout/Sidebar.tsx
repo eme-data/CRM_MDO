@@ -37,6 +37,7 @@ import {
   Mail,
   Cpu,
   HardDrive,
+  Award,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logout } from '@/lib/auth';
@@ -118,6 +119,7 @@ const adminItems: NavItem[] = [
   { href: '/admin/flexible-asset-types', label: 'Templates assets flexibles', icon: Layers },
   { href: '/admin/runbooks', label: 'Runbooks / procedures', icon: ListChecks },
   { href: '/admin/onboarding-templates', label: 'Templates onboarding', icon: ListChecks },
+  { href: '/admin/skills', label: 'Skills matrix equipe', icon: Award },
   { href: '/admin/recurring-tasks', label: 'Taches recurrentes', icon: Repeat },
   { href: '/admin/workflow-rules', label: 'Regles workflow', icon: Workflow },
   { href: '/admin/activity', label: "Journal d'activite", icon: ClipboardList },
