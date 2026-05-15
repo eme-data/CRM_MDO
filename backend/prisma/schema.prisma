@@ -75,6 +75,7 @@ model User {
   callLogs               CallLog[]
   aiUsage                AiUsage[]
   pushSubscriptions      PushSubscription[]
+  createdApiKeys         ApiKey[]                          @relation("ApiKeyCreator")
   complianceAssessments  ComplianceAssessment[]            @relation("ComplianceOwner")
   controlReviews         ComplianceControlAssessment[]     @relation("ControlReviewer")
 
@@ -188,6 +189,7 @@ model Company {
   signatureRequests SignatureRequest[]
   callLogs       CallLog[]
   complianceAssessments ComplianceAssessment[]
+  apiKeys        ApiKey[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -2169,6 +2171,57 @@ model ComplianceControlAssessment {
 // d'unicite (Push API : un endpoint par triplet device+browser+origine).
 //
 // VAPID keys partagees pour tout le service, stockees dans Settings.
+
+// =================== API KEYS (API publique externe) ===================
+//
+// Permet a des integrations tierces (Zapier, n8n, scripts client, dashboard
+// externe...) d'acceder en lecture/ecriture limitee a leur scope.
+//
+// Deux types de cles :
+//  - GLOBAL : creee par un ADMIN MDO, acces a tout (utilisation interne ou
+//    integrations puissantes type backup script).
+//  - CLIENT : scope = une societe specifique. Le client recoit la cle, ne
+//    peut acceder qu'a SES tickets, contrats, factures, assets.
+//
+// La cle complete n'est montree qu'UNE FOIS a la creation. On stocke
+// uniquement le SHA-256 + un prefix lisible pour l'identification UI.
+//
+// Usage : Authorization: Bearer mdo_live_<32_random_chars>
+
+enum ApiKeyScope {
+  GLOBAL_READ
+  GLOBAL_WRITE
+  CLIENT_READ
+  CLIENT_WRITE
+}
+
+model ApiKey {
+  id          String      @id @default(uuid())
+  name        String      // libelle pour identification ("Zapier prod", "Backup script")
+  scope       ApiKeyScope @default(CLIENT_READ)
+  // Hash SHA-256 de la cle complete. La cle elle-meme n'est jamais stockee.
+  keyHash     String      @unique
+  // Prefix lisible (premiers 12 chars de la cle) pour l'UI : "mdo_live_a3f"
+  prefix      String      @db.VarChar(20)
+  // Si scope = CLIENT_*, la cle est limitee a cette societe.
+  companyId   String?
+  company     Company?    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Audit
+  createdById String
+  createdBy   User        @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  lastUsedAt  DateTime?
+  lastUsedIp  String?
+  usageCount  Int         @default(0)
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+
+  createdAt   DateTime    @default(now())
+
+  @@index([companyId])
+  @@index([prefix])
+  @@index([keyHash])
+}
 
 model PushSubscription {
   id          String   @id @default(uuid())
