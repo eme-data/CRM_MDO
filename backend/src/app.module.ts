@@ -61,6 +61,7 @@ import { CallsModule } from './calls/calls.module';
 import { AiModule } from './ai/ai.module';
 import { ComplianceModule } from './compliance/compliance.module';
 import { HealthScoreModule } from './health-score/health-score.module';
+import { ProfitabilityModule } from './profitability/profitability.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { MetricsService } from './common/observability/metrics.service';
@@ -150,6 +151,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     AiModule,
     ComplianceModule,
     HealthScoreModule,
+    ProfitabilityModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,

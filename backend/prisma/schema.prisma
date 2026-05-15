@@ -33,6 +33,12 @@ model User {
   // supportent pas Bearer). NULL tant que l'utilisateur n'a pas active la
   // fonctionnalite ; revoquable via /users/me/ical/regenerate.
   icalToken       String?   @unique
+  // Taux horaire interne (cout du technicien pour MDO). Sert au calcul de
+  // marge / rentabilite (cf module profitability). Si null, on utilise la
+  // valeur par defaut Settings('profitability.defaultHourlyRate').
+  // Ne PAS confondre avec un eventuel taux horaire de facturation client —
+  // celui-ci est porte par le contrat / time entry.
+  hourlyRate      Decimal?  @db.Decimal(8, 2)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

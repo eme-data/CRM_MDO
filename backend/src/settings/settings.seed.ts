@@ -467,6 +467,26 @@ export const SETTINGS_DEFS: SettingDef[] = [
     defaultValue:
       'Tu assistes MDO Services, MSP / cybersecurite en Occitanie. Tonalite : cordiale, claire, francais professionnel sans jargon excessif. Signature des emails : "L\'equipe MDO Services". Toujours signaler les actions necessitant une confirmation client.',
   },
+
+  // ---------- Rentabilite / marges ----------
+  {
+    key: 'profitability.defaultHourlyRate',
+    category: 'profitability',
+    label: 'Taux horaire technicien par defaut (cout interne EUR/h)',
+    description:
+      'Cout charge moyen d\'une heure technicien (salaire + charges + outillage). Utilise pour calculer le cout total des time entries quand User.hourlyRate n\'est pas defini.',
+    defaultValue: '45',
+    envVar: 'DEFAULT_HOURLY_RATE',
+  },
+  {
+    key: 'profitability.defaultBillingRate',
+    category: 'profitability',
+    label: 'Taux horaire facture par defaut (revenu EUR/h)',
+    description:
+      'Taux horaire facture client par defaut pour les TimeEntry billable sans tarif explicite (utilise pour estimer les revenus en l\'absence de TimeEntry.billingRate).',
+    defaultValue: '90',
+    envVar: 'DEFAULT_BILLING_RATE',
+  },
 ];
 
 export function findSettingDef(key: string): SettingDef | undefined {
