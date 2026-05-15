@@ -14,6 +14,7 @@ import { MonthlyReportsSection } from '@/components/MonthlyReportsSection';
 import { M365Section } from '@/components/M365Section';
 import { CyberScoreWidget } from '@/components/CyberScoreWidget';
 import { AiClientSummary } from '@/components/ai/AiClientSummary';
+import { ComplianceSection } from '@/components/ComplianceSection';
 import {
   formatEuro,
   formatDate,
@@ -159,6 +160,8 @@ export default function CompanyDetailPage() {
       <CyberScoreWidget companyId={id} />
 
       <AiClientSummary companyId={id} />
+
+      <ComplianceSection companyId={id} />
 
       {editing ? (
         <CompanyForm company={company} />

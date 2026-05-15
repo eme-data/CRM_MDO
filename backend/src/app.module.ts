@@ -59,6 +59,7 @@ import { QuotesModule } from './quotes/quotes.module';
 import { SignatureModule } from './signature/signature.module';
 import { CallsModule } from './calls/calls.module';
 import { AiModule } from './ai/ai.module';
+import { ComplianceModule } from './compliance/compliance.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { MetricsService } from './common/observability/metrics.service';
@@ -146,6 +147,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     SignatureModule,
     CallsModule,
     AiModule,
+    ComplianceModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,
