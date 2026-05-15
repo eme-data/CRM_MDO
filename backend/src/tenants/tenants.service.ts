@@ -130,6 +130,31 @@ export class TenantsService implements OnModuleInit {
       where: { tenantId: null }, data: { tenantId: tenant.id },
     });
     if (documentsUpdated.count > 0) this.logger.log(`Retro-compat : ${documentsUpdated.count} document(s) assignes`);
+    // Vague 3 : Opportunities + Contracts + Invoices + Quotes (commercial).
+    const oppsUpdated = await this.prisma.opportunity.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (oppsUpdated.count > 0) this.logger.log(`Retro-compat : ${oppsUpdated.count} opportunity(ies) assignees`);
+    const contractsUpdated = await this.prisma.contract.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (contractsUpdated.count > 0) this.logger.log(`Retro-compat : ${contractsUpdated.count} contract(s) assignes`);
+    const invoicesUpdated = await this.prisma.invoice.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (invoicesUpdated.count > 0) this.logger.log(`Retro-compat : ${invoicesUpdated.count} invoice(s) assignees`);
+    const invoiceLinesUpdated = await this.prisma.invoiceLine.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (invoiceLinesUpdated.count > 0) this.logger.log(`Retro-compat : ${invoiceLinesUpdated.count} invoice line(s) assignees`);
+    const quotesUpdated = await this.prisma.quote.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (quotesUpdated.count > 0) this.logger.log(`Retro-compat : ${quotesUpdated.count} quote(s) assignes`);
+    const quoteLinesUpdated = await this.prisma.quoteLine.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (quoteLinesUpdated.count > 0) this.logger.log(`Retro-compat : ${quoteLinesUpdated.count} quote line(s) assignees`);
   }
 
   // ============================================================
