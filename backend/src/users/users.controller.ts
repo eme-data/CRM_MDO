@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -66,6 +67,11 @@ export class UsersController {
     return this.usersService.remove(id, user.id);
   }
 
+  // Rate limit serre : 5 reset/5min/IP. Sans cette limite, un ADMIN compromis
+  // pourrait reset les mdp de tous les autres ADMIN/MANAGER en boucle pour
+  // s'auto-locker l'org, ou un script automatisant les requetes pourrait
+  // rapidement degrader le service (chaque reset = bcrypt round 12 ~ 200ms CPU).
+  @Throttle({ auth: { limit: 5, ttl: 300_000 } })
   @Roles('ADMIN')
   @Post(':id/reset-password')
   resetPassword(@Param('id') id: string, @Body() body: { newPassword: string }) {
