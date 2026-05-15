@@ -101,6 +101,7 @@ const adminItems: NavItem[] = [
   { href: '/admin/time-billing', label: 'Facturation du temps', icon: Clock },
   { href: '/admin/flexible-asset-types', label: 'Templates assets flexibles', icon: Layers },
   { href: '/admin/runbooks', label: 'Runbooks / procedures', icon: ListChecks },
+  { href: '/admin/onboarding-templates', label: 'Templates onboarding', icon: ListChecks },
   { href: '/admin/recurring-tasks', label: 'Taches recurrentes', icon: Repeat },
   { href: '/admin/workflow-rules', label: 'Regles workflow', icon: Workflow },
   { href: '/admin/activity', label: "Journal d'activite", icon: ClipboardList },

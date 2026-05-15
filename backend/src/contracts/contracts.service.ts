@@ -13,6 +13,7 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 import { RenewContractDto } from './dto/renew-contract.dto';
 import { QueryContractsDto } from './dto/query-contracts.dto';
 import { buildPageResult, toSkipTake } from '../common/pagination/pagination.dto';
+import { OnboardingService } from '../onboarding/onboarding.service';
 
 const OFFER_UNIT_PRICES: Record<ContractOffer, number> = {
   MDO_ESSENTIEL: 69,
@@ -29,6 +30,7 @@ export class ContractsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly onboarding: OnboardingService,
   ) {
     this.alertDays = this.configService.get<number[]>('contract.alertDays') ?? [90, 60, 30, 7];
   }
@@ -194,6 +196,15 @@ export class ContractsService {
       });
       return u;
     });
+
+    // Auto-trigger onboarding : si le contrat vient de passer DRAFT -> ACTIVE,
+    // on cherche un template matchant l'offre et on demarre un run. Best-effort
+    // (n'echoue pas l'update si pas de template configure).
+    if (existing.status !== 'ACTIVE' && updated.status === 'ACTIVE') {
+      this.onboarding
+        .startForContract(updated.id)
+        .catch((err) => this.logger.warn('Auto-onboarding skip pour ' + updated.id + ' : ' + err.message));
+    }
 
     return updated;
   }

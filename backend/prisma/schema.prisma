@@ -76,6 +76,8 @@ model User {
   aiUsage                AiUsage[]
   pushSubscriptions      PushSubscription[]
   createdApiKeys         ApiKey[]                          @relation("ApiKeyCreator")
+  onboardingStepsAssigned OnboardingRunStep[]              @relation("OnboardingStepAssignee")
+  onboardingStepsClosed   OnboardingRunStep[]              @relation("OnboardingStepCloser")
   complianceAssessments  ComplianceAssessment[]            @relation("ComplianceOwner")
   controlReviews         ComplianceControlAssessment[]     @relation("ControlReviewer")
 
@@ -190,6 +192,7 @@ model Company {
   callLogs       CallLog[]
   complianceAssessments ComplianceAssessment[]
   apiKeys        ApiKey[]
+  onboardingRuns OnboardingRun[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -354,6 +357,7 @@ model Contract {
   // relation "ContractFromQuote" pour eviter le conflit avec d'autres relations
   // potentielles avec Quote a l'avenir.
   fromQuote          Quote?         @relation("ContractFromQuote")
+  onboardingRun      OnboardingRun?
 
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
@@ -1906,6 +1910,121 @@ model Product {
   @@index([isActive])
   @@index([vendor])
   @@index([type])
+}
+
+// =================== ONBOARDING CLIENT ===================
+//
+// Standardise le processus d'integration d'un nouveau client : creer compte
+// M365, deployer EDR, ajouter au monitoring, programmer kick-off, etc.
+//
+// Architecture a deux niveaux :
+//   - OnboardingTemplate : modele reutilisable, generalement 1 par offre
+//     (MDO_ESSENTIEL, MDO_PRO, MDO_SOUVERAIN, ou globale).
+//   - OnboardingRun : instance pour 1 contrat. Auto-declenchee a la signature
+//     du contrat (status passe a ACTIVE + signedAt) si un template matche
+//     l'offre, OU manuellement via bouton "Demarrer onboarding".
+
+enum OnboardingRunStatus {
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum OnboardingStepStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  SKIPPED
+}
+
+model OnboardingTemplate {
+  id          String              @id @default(uuid())
+  name        String
+  description String?
+  // Si null, le template est global (s'applique a toutes les offres). Sinon
+  // il ne sera auto-declenche que pour les contrats de cette offre.
+  offer       ContractOffer?
+  isActive    Boolean             @default(true)
+
+  steps       OnboardingTemplateStep[]
+  runs        OnboardingRun[]
+
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([offer, isActive])
+}
+
+model OnboardingTemplateStep {
+  id              String              @id @default(uuid())
+  templateId      String
+  template        OnboardingTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  position        Int                 @default(0)
+  title           String
+  description     String?
+  // Decalage en jours par rapport au demarrage du run pour calculer dueDate
+  // de la step. Permet "Etape 1 le jour J, etape 7 a J+30".
+  dueDateOffsetDays Int               @default(0)
+  // Role par defaut a qui la step est assignee (resolu cote service en
+  // prenant le premier user actif du role).
+  assigneeRole    Role?
+
+  @@index([templateId])
+}
+
+model OnboardingRun {
+  id           String                @id @default(uuid())
+  templateId   String
+  template     OnboardingTemplate    @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  // Contrat declencheur. Si null, c'est un onboarding manuel (sans contrat
+  // associe — rare mais possible).
+  contractId   String?               @unique
+  contract     Contract?             @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  // Societe cible (denormalise pour eviter la jointure quand on liste les
+  // onboardings par client cote UI).
+  companyId    String
+  company      Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  status       OnboardingRunStatus   @default(IN_PROGRESS)
+  startedAt    DateTime              @default(now())
+  completedAt  DateTime?
+
+  // Compteurs miroirs (recalcules a chaque update step) : evite agregation
+  // pour la liste et permet de derive un % d'avancement.
+  totalSteps    Int                  @default(0)
+  doneSteps     Int                  @default(0)
+  skippedSteps  Int                  @default(0)
+
+  steps        OnboardingRunStep[]
+
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+}
+
+model OnboardingRunStep {
+  id          String                @id @default(uuid())
+  runId       String
+  run         OnboardingRun         @relation(fields: [runId], references: [id], onDelete: Cascade)
+  position    Int                   @default(0)
+  title       String
+  description String?
+  status      OnboardingStepStatus  @default(PENDING)
+  dueDate     DateTime?
+  assigneeId  String?
+  assignee    User?                 @relation("OnboardingStepAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  doneAt      DateTime?
+  doneById    String?
+  doneBy      User?                 @relation("OnboardingStepCloser", fields: [doneById], references: [id], onDelete: SetNull)
+  notes       String?
+
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@index([runId])
+  @@index([assigneeId, status])
 }
 
 // =================== SIGNATURE ELECTRONIQUE ===================

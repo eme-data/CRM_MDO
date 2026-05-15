@@ -16,6 +16,7 @@ import { CyberScoreWidget } from '@/components/CyberScoreWidget';
 import { AiClientSummary } from '@/components/ai/AiClientSummary';
 import { ComplianceSection } from '@/components/ComplianceSection';
 import { HealthScoreWidget } from '@/components/HealthScoreWidget';
+import { OnboardingSection } from '@/components/OnboardingSection';
 import {
   formatEuro,
   formatDate,
@@ -166,6 +167,8 @@ export default function CompanyDetailPage() {
       <AiClientSummary companyId={id} />
 
       <ComplianceSection companyId={id} />
+
+      <OnboardingSection companyId={id} />
 
       {editing ? (
         <CompanyForm company={company} />
