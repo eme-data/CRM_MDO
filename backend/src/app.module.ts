@@ -68,6 +68,7 @@ import { AssetLifecycleModule } from './asset-lifecycle/asset-lifecycle.module';
 import { PublicApiModule } from './public-api/public-api.module';
 import { ProductsModule } from './products/products.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
+import { KbModule } from './kb/kb.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { MetricsService } from './common/observability/metrics.service';
@@ -164,6 +165,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     PublicApiModule,
     ProductsModule,
     OnboardingModule,
+    KbModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,

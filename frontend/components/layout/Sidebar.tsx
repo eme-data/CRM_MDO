@@ -32,6 +32,7 @@ import {
   Repeat,
   Workflow,
   Phone,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logout } from '@/lib/auth';
@@ -85,6 +86,7 @@ const sections: NavSection[] = [
     items: [
       { href: '/tasks', label: 'Taches', icon: CheckSquare },
       { href: '/templates', label: 'Templates', icon: ClipboardList },
+      { href: '/kb', label: 'Knowledge base', icon: BookOpen },
     ],
   },
 ];

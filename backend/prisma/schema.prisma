@@ -78,6 +78,7 @@ model User {
   createdApiKeys         ApiKey[]                          @relation("ApiKeyCreator")
   onboardingStepsAssigned OnboardingRunStep[]              @relation("OnboardingStepAssignee")
   onboardingStepsClosed   OnboardingRunStep[]              @relation("OnboardingStepCloser")
+  kbArticles              KbArticle[]                      @relation("KbArticleAuthor")
   complianceAssessments  ComplianceAssessment[]            @relation("ComplianceOwner")
   controlReviews         ComplianceControlAssessment[]     @relation("ControlReviewer")
 
@@ -193,6 +194,7 @@ model Company {
   complianceAssessments ComplianceAssessment[]
   apiKeys        ApiKey[]
   onboardingRuns OnboardingRun[]
+  kbArticles     KbArticle[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -2025,6 +2027,72 @@ model OnboardingRunStep {
 
   @@index([runId])
   @@index([assigneeId, status])
+}
+
+// =================== KNOWLEDGE BASE ===================
+//
+// Capture les resolutions recurrentes pour gagner du temps. Trois portees :
+//   INTERNAL : interne MDO (procedures, troubleshooting techniciens)
+//   CLIENT   : specifique a un client (ses creds, son env, ses incidents
+//              recurrents) — visible MDO + portail client si publie
+//   GLOBAL   : visible a tous les clients via portail (FAQ "Comment activer
+//              MFA M365 ?", "Reinitialiser mot de passe Outlook"...)
+//
+// Workflow : un tech resoud un ticket complexe -> "Transformer en article KB"
+// (bouton sur ticket) -> pre-rempli avec sujet + resolution + tags. Le tech
+// edite et publie. Les futurs tickets similaires affichent les KB matchant.
+
+enum KbScope {
+  INTERNAL
+  CLIENT
+  GLOBAL
+}
+
+model KbArticle {
+  id              String   @id @default(uuid())
+  title           String
+  // Slug URL-friendly auto-genere a la creation. Unique pour l'integration
+  // future avec un router /kb/[slug] cote portail.
+  slug            String   @unique
+  // Markdown — rendu cote frontend (pas de HTML pour eviter XSS sur portail).
+  content         String
+  // Resume court (1-2 phrases) pour les listes / cartes de recherche.
+  excerpt         String?
+
+  scope           KbScope  @default(INTERNAL)
+  // Si scope=CLIENT, l'article ne concerne que cette societe (visible
+  // techniciens MDO + portail de cette societe uniquement).
+  companyId       String?
+  company         Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  category        String?  // libre : "Email", "Backup", "MFA", "Reseau"...
+  tags            String[] @default([])
+
+  // Workflow publication : DRAFT -> PUBLISHED. Seuls les PUBLISHED sont
+  // visibles cote portail client. Les INTERNAL DRAFT restent visibles MDO.
+  isPublished     Boolean  @default(false)
+  publishedAt     DateTime?
+  // Date de derniere relecture/maj (pour signaler les KB obsoletes via
+  // badge "revue depuis > 12 mois").
+  lastReviewedAt  DateTime?
+
+  // Compteurs (incrementes par les endpoints de lecture)
+  viewCount       Int      @default(0)
+  helpfulCount    Int      @default(0)
+
+  // Si l'article a ete genere depuis un ticket (bouton "Convert to KB")
+  sourceTicketId  String?
+
+  authorId        String
+  author          User     @relation("KbArticleAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([scope, isPublished])
+  @@index([companyId])
+  @@index([category])
+  @@index([authorId])
 }
 
 // =================== SIGNATURE ELECTRONIQUE ===================
