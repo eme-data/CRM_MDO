@@ -66,6 +66,7 @@ import { PushModule } from './push/push.module';
 import { AuditChainModule } from './audit-chain/audit-chain.module';
 import { AssetLifecycleModule } from './asset-lifecycle/asset-lifecycle.module';
 import { PublicApiModule } from './public-api/public-api.module';
+import { ProductsModule } from './products/products.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { MetricsService } from './common/observability/metrics.service';
@@ -160,6 +161,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     AuditChainModule,
     AssetLifecycleModule,
     PublicApiModule,
+    ProductsModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,

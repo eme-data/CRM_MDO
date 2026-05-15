@@ -1840,7 +1840,72 @@ model QuoteLine {
   // Pre-calcule pour la liste des devis et pour le PDF (evite recalcul cote front).
   lineTotalHt Decimal  @db.Decimal(12, 2)
 
+  // Lien optionnel vers le catalogue produits (pour suivi marges revente).
+  // Si renseigne, le purchasePriceHt du Product est utilise pour calculer
+  // la marge reelle de cette ligne (cf module profitability + dashboard exec).
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  // Snapshot du prix d'achat AU MOMENT du devis (le Product peut evoluer apres,
+  // on veut que la marge historique reste calculee correctement).
+  purchasePriceHtSnapshot Decimal? @db.Decimal(10, 2)
+
   @@index([quoteId])
+  @@index([productId])
+}
+
+// =================== CATALOGUE PRODUITS ===================
+//
+// Catalogue des produits/services revendus par MDO : licences M365, Bitdefender,
+// Veeam Cloud Connect, materiel HPE, prestations specifiques, etc.
+//
+// Sert a :
+//  - Pre-remplir les lignes de devis (selecteur produit avec prix conseille)
+//  - Calculer les MARGES reelles (sellingPrice - purchasePrice) par ligne
+//  - Stats globales : top vendors, marge totale par categorie
+//  - Suivi engagements vendor (renouvellement licence cote MDO chez le vendor)
+
+enum ProductType {
+  LICENSE          // licence logicielle (M365, BD GravityZone, ...)
+  HARDWARE         // materiel revendu (NAS, switch, firewall, ...)
+  SERVICE          // prestation MDO (audit, formation, install, ...)
+  RECURRING        // abonnement (cloud, monitoring, supervision, ...)
+}
+
+model Product {
+  id              String      @id @default(uuid())
+  // Code interne court et unique (ex. "M365_BP", "BD_GZ_10", "VEEAM_O365_10").
+  // Affiche dans les listes de selection.
+  code            String      @unique
+  name            String
+  description     String?
+  vendor          String?     // 'Microsoft', 'Bitdefender', 'Veeam', 'HPE', ...
+  type            ProductType @default(SERVICE)
+  // Periodicite par defaut pour les RECURRING. Affiche dans le selecteur
+  // pour clarifier "9.10 €/utilisateur/mois" vs "275 € HT one-shot".
+  recurringPeriod String?     // 'mensuel', 'annuel', null pour ONE_OFF
+  // Prix d'achat HT (cout MDO chez le vendor). Sert au calcul de marge.
+  purchasePriceHt Decimal?    @db.Decimal(10, 2)
+  // Prix de vente conseille HT (proposition par defaut, le commercial peut
+  // l'overrider sur le devis).
+  sellingPriceHt  Decimal?    @db.Decimal(10, 2)
+  // Devise de reference (sera EUR pour 99 % des cas). Stocker pour eviter
+  // les surprises plus tard si tu importes un cataloque vendor en USD.
+  currency        String      @default("EUR")
+  vatRate         Decimal     @default(20) @db.Decimal(5, 2)
+  // Categorie libre pour grouper dans l'UI (Securite, Sauvegarde, M365, ...).
+  category        String?
+  // Tag obsolete : on garde le produit en BDD pour l'historique des devis,
+  // mais il n'apparait plus dans les selecteurs.
+  isActive        Boolean     @default(true)
+
+  quoteLines      QuoteLine[]
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([isActive])
+  @@index([vendor])
+  @@index([type])
 }
 
 // =================== SIGNATURE ELECTRONIQUE ===================

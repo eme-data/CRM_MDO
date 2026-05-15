@@ -28,4 +28,10 @@ export class QuoteLineDto {
   @IsInt()
   @Min(0)
   position?: number;
+
+  // Lien optionnel vers le catalogue. Si renseigne, le service capturera
+  // automatiquement purchasePriceHt comme snapshot pour le calcul des marges.
+  @IsOptional()
+  @IsString()
+  productId?: string;
 }

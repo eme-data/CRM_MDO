@@ -95,6 +95,7 @@ const adminItems: NavItem[] = [
   { href: '/admin/settings', label: 'API, SMTP, IMAP', icon: KeyRound },
   { href: '/admin/billing', label: 'Facturation (Qonto)', icon: Receipt },
   { href: '/admin/profitability', label: 'Marges / rentabilite', icon: BarChart3 },
+  { href: '/admin/products', label: 'Catalogue produits', icon: Layers },
   { href: '/admin/api-keys', label: 'Cles API publique', icon: KeyRound },
   { href: '/admin/client-reports', label: 'Rapports clients mensuels', icon: FileBarChart },
   { href: '/admin/time-billing', label: 'Facturation du temps', icon: Clock },

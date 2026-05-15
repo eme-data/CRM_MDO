@@ -11,6 +11,7 @@ interface Line {
   quantity: number;
   unitPriceHt: number;
   discountPct: number;
+  productId?: string;
 }
 
 const DEFAULT_VALIDITY_DAYS = 30;
@@ -25,6 +26,7 @@ export default function NewQuotePage() {
   const [companies, setCompanies] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
   const [opps, setOpps] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [data, setData] = useState<any>({
     title: '',
     companyId: sp.get('companyId') ?? '',
@@ -41,7 +43,19 @@ export default function NewQuotePage() {
   useEffect(() => {
     api.get('/companies?pageSize=500').then((r) => setCompanies(r.items));
     api.get('/opportunities').then(setOpps);
+    api.get('/products').then(setProducts).catch(() => setProducts([]));
   }, []);
+
+  function applyProduct(i: number, productId: string) {
+    const p = products.find((x) => x.id === productId);
+    if (!p) return;
+    setLines((arr) => arr.map((l, idx) => idx === i ? {
+      ...l,
+      productId,
+      description: p.name + (p.description ? '\n' + p.description : ''),
+      unitPriceHt: p.sellingPriceHt ? Number(p.sellingPriceHt) : l.unitPriceHt,
+    } : l));
+  }
 
   useEffect(() => {
     if (!data.companyId) { setContacts([]); return; }
@@ -84,6 +98,7 @@ export default function NewQuotePage() {
           quantity: Number(l.quantity),
           unitPriceHt: Number(l.unitPriceHt),
           discountPct: Number(l.discountPct ?? 0),
+          productId: l.productId,
         })),
       };
       const q = await api.post('/quotes', payload);
@@ -141,7 +156,22 @@ export default function NewQuotePage() {
             {lines.map((l, i) => {
               const lineTotal = l.quantity * l.unitPriceHt * (1 - (l.discountPct ?? 0) / 100);
               return (
-                <div key={i} className="grid grid-cols-12 gap-2 items-start">
+                <div key={i} className="space-y-1">
+                {products.length > 0 && (
+                  <select
+                    className="input text-xs py-1 max-w-md"
+                    value={l.productId ?? ''}
+                    onChange={(e) => e.target.value && applyProduct(i, e.target.value)}
+                  >
+                    <option value="">-- Selectionner depuis le catalogue (optionnel) --</option>
+                    {products.map((p: any) => (
+                      <option key={p.id} value={p.id}>
+                        [{p.code}] {p.name}{p.sellingPriceHt ? ' — ' + Number(p.sellingPriceHt) + ' EUR' : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <div className="grid grid-cols-12 gap-2 items-start">
                   <textarea
                     className="input col-span-5 min-h-[44px]"
                     placeholder="Description"
@@ -155,6 +185,7 @@ export default function NewQuotePage() {
                   <button type="button" onClick={() => removeLine(i)} className="col-span-1 text-red-500 hover:text-red-700 pt-2 flex justify-center" title="Supprimer">
                     <Trash2 size={16} />
                   </button>
+                </div>
                 </div>
               );
             })}

@@ -14,6 +14,8 @@ interface ComputedLine {
   unitPriceHt: number;
   discountPct: number;
   lineTotalHt: number;
+  productId?: string | null;
+  purchasePriceHtSnapshot?: number | null;
 }
 
 @Injectable()
@@ -46,7 +48,17 @@ export class QuotesService {
   // Les totaux sont stockes denormalises (Quote.subtotalHt/vatAmount/totalTtc)
   // pour eviter une jointure agregat a chaque liste/affichage.
   // ============================================================
-  private computeLines(lines: QuoteLineDto[]): ComputedLine[] {
+  private async computeLines(lines: QuoteLineDto[]): Promise<ComputedLine[]> {
+    // Resolution prix d'achat snapshot pour les lignes liees au catalogue
+    const productIds = lines.map((l) => l.productId).filter((x): x is string => !!x);
+    const products = productIds.length
+      ? await this.prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, purchasePriceHt: true },
+        })
+      : [];
+    const purchaseMap = new Map(products.map((p) => [p.id, p.purchasePriceHt ? Number(p.purchasePriceHt) : null]));
+
     return lines.map((l, i) => {
       const discount = l.discountPct ?? 0;
       const raw = l.quantity * l.unitPriceHt;
@@ -58,6 +70,8 @@ export class QuotesService {
         unitPriceHt: l.unitPriceHt,
         discountPct: discount,
         lineTotalHt: lineTotal,
+        productId: l.productId ?? null,
+        purchasePriceHtSnapshot: l.productId ? purchaseMap.get(l.productId) ?? null : null,
       };
     });
   }
@@ -117,7 +131,7 @@ export class QuotesService {
 
   async create(dto: CreateQuoteDto, userId: string) {
     const reference = await this.generateReference();
-    const computed = this.computeLines(dto.lines);
+    const computed = await this.computeLines(dto.lines);
     const vatRate = dto.vatRate ?? 20;
     const totals = this.computeTotals(computed, vatRate);
 
@@ -182,7 +196,7 @@ export class QuotesService {
 
     let computedLines: ComputedLine[] | null = null;
     if (dto.lines) {
-      computedLines = this.computeLines(dto.lines);
+      computedLines = await this.computeLines(dto.lines);
       recomputed = true;
     }
 
