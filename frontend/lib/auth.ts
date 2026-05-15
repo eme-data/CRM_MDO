@@ -6,6 +6,9 @@ export interface User {
   firstName: string;
   lastName: string;
   role: 'ADMIN' | 'MANAGER' | 'SALES' | 'READONLY';
+  // Multi-tenant
+  tenantId?: string | null;
+  isSuperAdmin?: boolean;
 }
 
 export async function login(email: string, password: string, totpCode?: string) {

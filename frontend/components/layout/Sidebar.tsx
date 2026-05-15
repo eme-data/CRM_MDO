@@ -152,10 +152,11 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   );
 }
 
-export function Sidebar({ user }: { user?: { firstName: string; lastName: string; role: string } }) {
+export function Sidebar({ user }: { user?: { firstName: string; lastName: string; role: string; isSuperAdmin?: boolean } }) {
   const pathname = usePathname();
   const router = useRouter();
   const isAdmin = user?.role === 'ADMIN';
+  const isSuperAdmin = user?.isSuperAdmin === true;
   const adminActive = isAdmin && adminItems.some((i) => pathname?.startsWith(i.href));
   const [adminOpen, setAdminOpen] = useState<boolean>(adminActive);
 
@@ -215,6 +216,23 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Section super-admin : visible UNIQUEMENT pour Mathieu (isSuperAdmin
+            sur User). Permet de creer/lister/editer/suspendre les tenants.
+            Cache pour les admins de tenant client. */}
+        {isSuperAdmin && (
+          <div className="mb-4 mt-2 pt-3 border-t border-slate-800">
+            <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-500">
+              Super-admin SaaS
+            </p>
+            <div className="space-y-0.5 mt-1">
+              <NavLink
+                item={{ href: '/super-admin/tenants', label: 'Tenants', icon: Building2 }}
+                active={isActive('/super-admin/tenants')}
+              />
+            </div>
           </div>
         )}
       </nav>
