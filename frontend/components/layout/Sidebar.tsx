@@ -35,6 +35,7 @@ import {
   BookOpen,
   Target,
   Mail,
+  Cpu,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logout } from '@/lib/auth';
@@ -79,6 +80,7 @@ const sections: NavSection[] = [
     items: [
       { href: '/assets', label: 'Assets clients', icon: Server },
       { href: '/asset-lifecycle', label: 'Lifecycle materiel', icon: Server },
+      { href: '/patch-management', label: 'Patch management', icon: Cpu },
       { href: '/surveillance', label: 'Surveillance', icon: Shield },
       { href: '/uptime', label: 'Uptime sites', icon: Activity },
       { href: '/audit-dns', label: 'Audit DNS', icon: ShieldCheck },

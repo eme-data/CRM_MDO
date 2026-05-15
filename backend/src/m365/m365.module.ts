@@ -6,6 +6,6 @@ import { M365Controller } from './m365.controller';
 @Module({
   providers: [M365Service, M365GraphClient],
   controllers: [M365Controller],
-  exports: [M365Service],
+  exports: [M365Service, M365GraphClient],
 })
 export class M365Module {}

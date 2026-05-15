@@ -1574,6 +1574,7 @@ model M365Tenant {
   users           M365User[]
   licenses        M365License[]
   alerts          M365SecurityAlert[]
+  managedDevices  PatchManagedDevice[]
 
   @@index([companyId])
 }
@@ -2155,6 +2156,48 @@ model DripSentEmail {
   @@unique([enrollmentId, stepId])
   @@index([enrollmentId])
   @@index([sentAt])
+}
+
+// =================== PATCH MANAGEMENT (devices Intune) ===================
+//
+// Synchronisation des appareils MDM depuis chaque tenant M365 (Intune).
+// Permet d'identifier les devices non patches / non conformes / non chiffres
+// par client, vendable comme prestation cyber distincte.
+//
+// Cron quotidien sync GET /deviceManagement/managedDevices via Graph API.
+// Permission requise : DeviceManagementManagedDevices.Read.All (admin
+// consent cote client + ajout dans le scope app M365).
+
+model PatchManagedDevice {
+  id                String      @id @default(uuid())
+  m365TenantId      String
+  m365Tenant        M365Tenant  @relation(fields: [m365TenantId], references: [id], onDelete: Cascade)
+  // Identifiant Intune (managedDevices.id)
+  externalId        String
+
+  deviceName        String
+  // OS string brute ("Windows", "iOS", "macOS", ...)
+  operatingSystem   String?
+  osVersion         String?
+  // 'compliant' | 'noncompliant' | 'unknown' | 'inGracePeriod' | 'configManager' | 'error'
+  complianceState   String?
+  // Type de management ('mdm' = Intune, 'eas' = ActiveSync seul, ...)
+  managementAgent   String?
+  // Date du dernier sync de l'appareil avec Intune
+  lastSyncDateTime  DateTime?
+  enrolledDateTime  DateTime?
+  isEncrypted       Boolean     @default(false)
+  isSupervised      Boolean     @default(false)
+  userPrincipalName String?
+  serialNumber      String?
+  manufacturer      String?
+  model             String?
+  // Date de notre dernier sync avec Graph
+  syncedAt          DateTime    @default(now())
+
+  @@unique([m365TenantId, externalId])
+  @@index([m365TenantId, complianceState])
+  @@index([userPrincipalName])
 }
 
 // =================== ONBOARDING CLIENT ===================
