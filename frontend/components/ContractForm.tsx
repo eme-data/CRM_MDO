@@ -74,19 +74,38 @@ export function ContractForm({
     }));
   }
 
+  // Whitelist explicite — le DTO backend est strict (forbidNonWhitelisted),
+  // toute propriete non listee fait echouer la requete avec
+  // "property X should not exist" (id, owner, company, alerts, ...).
+  function buildPayload(d: Contract): Record<string, any> {
+    const allowed: (keyof Contract)[] = [
+      'title', 'offer', 'status', 'startDate', 'endDate', 'signedAt',
+      'engagementMonths', 'billingPeriod', 'unitPriceHt', 'quantity',
+      'setupFeeHt', 'vatRate', 'autoRenew', 'noticePeriodMonths',
+      'companyId', 'description',
+    ];
+    const out: Record<string, any> = {};
+    for (const k of allowed) {
+      const v = (d as any)[k];
+      if (v === undefined || v === null) continue;
+      if (typeof v === 'string' && v.trim() === '') continue;
+      out[k] = v;
+    }
+    // Coercion des nombres apres whitelist
+    if ('unitPriceHt' in out) out.unitPriceHt = Number(out.unitPriceHt);
+    if ('quantity' in out) out.quantity = Number(out.quantity);
+    if ('engagementMonths' in out) out.engagementMonths = Number(out.engagementMonths);
+    if ('noticePeriodMonths' in out) out.noticePeriodMonths = Number(out.noticePeriodMonths);
+    if ('vatRate' in out) out.vatRate = Number(out.vatRate);
+    if ('setupFeeHt' in out) out.setupFeeHt = Number(out.setupFeeHt);
+    return out;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     try {
-      const payload = {
-        ...data,
-        unitPriceHt: Number(data.unitPriceHt ?? 0),
-        quantity: Number(data.quantity ?? 1),
-        engagementMonths: Number(data.engagementMonths ?? 12),
-        noticePeriodMonths: Number(data.noticePeriodMonths ?? 3),
-        vatRate: Number(data.vatRate ?? 20),
-        setupFeeHt: data.setupFeeHt ? Number(data.setupFeeHt) : undefined,
-      };
+      const payload = buildPayload(data);
       if (contract?.id) {
         await api.patch('/contracts/' + contract.id, payload);
         toast.success('Contrat mis a jour');

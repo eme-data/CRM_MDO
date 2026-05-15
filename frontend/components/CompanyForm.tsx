@@ -103,14 +103,38 @@ export function CompanyForm({ company }: { company?: Company }) {
     toast.success('Informations importees depuis ' + item.source);
   }
 
+  // Whitelist explicite des champs envoyes au backend.
+  // Le DTO backend est en mode strict (forbidNonWhitelisted: true) donc tout
+  // champ non liste fait echouer la requete avec "property X should not exist".
+  // Le state `data` peut contenir des champs charges depuis l'API en mode
+  // edition (id, createdAt, updatedAt, owner, contacts, contracts, ...) qu'il
+  // ne faut PAS renvoyer.
+  function buildPayload(d: Company): Record<string, any> {
+    const allowed: (keyof Company)[] = [
+      'name', 'siret', 'siren', 'apeCode', 'apeLabel', 'legalForm',
+      'capitalSocial', 'sector', 'status', 'employees', 'website',
+      'phone', 'email', 'address', 'postalCode', 'city', 'country', 'notes',
+    ];
+    const out: Record<string, any> = {};
+    for (const k of allowed) {
+      const v = (d as any)[k];
+      // Envoyer uniquement les champs definis non-vides (sauf bool/number = 0).
+      // String vide -> on n'envoie pas (sinon validation IsEmail/IsUrl peut refuser).
+      if (v === undefined || v === null) continue;
+      if (typeof v === 'string' && v.trim() === '') continue;
+      out[k] = v;
+    }
+    if (out.capitalSocial != null && out.capitalSocial !== '') {
+      out.capitalSocial = Number(out.capitalSocial);
+    }
+    return out;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     try {
-      const payload = { ...data };
-      if (payload.capitalSocial != null && payload.capitalSocial !== '') {
-        payload.capitalSocial = Number(payload.capitalSocial);
-      }
+      const payload = buildPayload(data);
       if (company?.id) {
         await api.patch('/companies/' + company.id, payload);
         toast.success('Societe mise a jour');
