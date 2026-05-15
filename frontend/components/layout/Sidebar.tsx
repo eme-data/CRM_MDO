@@ -48,6 +48,7 @@ const sections: NavSection[] = [
     items: [
       { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
       { href: '/health-overview', label: 'Sante clients', icon: Activity },
+      { href: '/customer-success', label: 'QBR / Customer Success', icon: Calendar },
       { href: '/reports', label: 'Reporting', icon: BarChart3 },
     ],
   },

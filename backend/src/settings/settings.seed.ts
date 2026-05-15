@@ -514,6 +514,32 @@ export const SETTINGS_DEFS: SettingDef[] = [
     defaultValue: 'mailto:mathieu@mdoservices.fr',
     envVar: 'VAPID_SUBJECT',
   },
+
+  // ---------- Customer Success ----------
+  {
+    key: 'customerSuccess.enabled',
+    category: 'customer-success',
+    label: 'Activer la programmation auto des QBR',
+    description:
+      'Si actif, le cron mensuel programme une revue trimestrielle pour chaque CUSTOMER actif dont la derniere review remonte a plus de N jours.',
+    defaultValue: 'true',
+  },
+  {
+    key: 'customerSuccess.frequencyDays',
+    category: 'customer-success',
+    label: 'Frequence des QBR (jours)',
+    description:
+      'Intervalle minimum entre 2 reviews trimestrielles. 90 = trimestriel, 180 = semestriel.',
+    defaultValue: '90',
+  },
+  {
+    key: 'customerSuccess.scheduleAheadDays',
+    category: 'customer-success',
+    label: 'Planifier la review combien de jours a l\'avance',
+    description:
+      'Quand le cron detecte qu\'une review est due, il la programme pour J + N jours (laisse le temps a l\'owner de caler le RDV).',
+    defaultValue: '7',
+  },
 ];
 
 export function findSettingDef(key: string): SettingDef | undefined {

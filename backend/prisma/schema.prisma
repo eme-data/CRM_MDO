@@ -79,6 +79,7 @@ model User {
   onboardingStepsAssigned OnboardingRunStep[]              @relation("OnboardingStepAssignee")
   onboardingStepsClosed   OnboardingRunStep[]              @relation("OnboardingStepCloser")
   kbArticles              KbArticle[]                      @relation("KbArticleAuthor")
+  customerSuccessReviews  CustomerSuccessReview[]          @relation("CustomerSuccessReviewOwner")
   complianceAssessments  ComplianceAssessment[]            @relation("ComplianceOwner")
   controlReviews         ComplianceControlAssessment[]     @relation("ControlReviewer")
 
@@ -197,6 +198,7 @@ model Company {
   kbArticles     KbArticle[]
   emailSecurityChecks EmailSecurityCheck[]
   phishingCampaigns PhishingCampaign[]
+  customerSuccessReviews CustomerSuccessReview[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -1997,6 +1999,51 @@ model QuoteTemplateLine {
   product         Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([templateId])
+}
+
+// =================== CUSTOMER SUCCESS REVIEWS (QBR) ===================
+//
+// Quarterly Business Reviews — revues clients programmees automatiquement
+// pour les CUSTOMER actifs. Cron mensuel : si la derniere review d'un client
+// remonte a plus de N jours (Settings customerSuccess.frequencyDays, defaut 90),
+// programme une nouvelle review pour J+7 et notifie l'owner.
+//
+// Anti-churn proactif : force le contact regulier avec le client meme quand
+// tout va bien (sinon on n'appelle que quand il y a des problemes).
+
+enum CustomerSuccessReviewStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+model CustomerSuccessReview {
+  id            String                       @id @default(uuid())
+  companyId     String
+  company       Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  scheduledAt   DateTime                     // date prevue
+  status        CustomerSuccessReviewStatus  @default(SCHEDULED)
+  heldAt        DateTime?                    // date effective de tenue
+  // Owner = generalement le commercial / customer success manager du client
+  ownerId       String?
+  owner         User?                        @relation("CustomerSuccessReviewOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  // Resume de la reunion (notes saisies apres tenue)
+  notes         String?
+  // Items d'agenda pre-generes par le service (Health alerts, contrats a
+  // renouveler, opportunites, etc.) — JSON pour flexibilite.
+  agendaItems   Json?
+  // Score satisfaction client a l'issue de la reunion (0-10, optionnel)
+  satisfactionScore Int?
+  // Tracking : a-t-on declenche une notif J-7 a l'owner ?
+  reminderSentAt DateTime?
+
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
+
+  @@index([companyId])
+  @@index([scheduledAt, status])
+  @@index([ownerId, status])
 }
 
 // =================== ONBOARDING CLIENT ===================

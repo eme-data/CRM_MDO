@@ -74,6 +74,7 @@ import { SocModule } from './soc/soc.module';
 import { PhishingModule } from './phishing/phishing.module';
 import { ExecutiveModule } from './executive/executive.module';
 import { QuoteTemplatesModule } from './quote-templates/quote-templates.module';
+import { CustomerSuccessModule } from './customer-success/customer-success.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { MetricsService } from './common/observability/metrics.service';
@@ -176,6 +177,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     PhishingModule,
     ExecutiveModule,
     QuoteTemplatesModule,
+    CustomerSuccessModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,
