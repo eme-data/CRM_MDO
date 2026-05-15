@@ -4,6 +4,7 @@ import { Queue } from 'bullmq';
 import { createHash, createHmac, randomBytes } from 'crypto';
 import { Prisma, WebhookEvent } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { assertSafePublicUrl } from '../common/http/safe-fetch';
 
 export const WEBHOOKS_QUEUE = 'webhooks';
 
@@ -58,6 +59,10 @@ export class WebhooksService {
     if (!input.events || input.events.length === 0) {
       throw new BadRequestException('Au moins un event a souscrire');
     }
+    // Anti-SSRF : refuse les URLs vers IP privee (ex. 169.254.169.254 metadata
+    // cloud, 127.0.0.1, services LAN). Recheck a chaque delivery contre le
+    // DNS rebinding (cf processDelivery).
+    await assertSafePublicUrl(input.url);
     const secret = 'whsec_' + randomBytes(24).toString('base64url');
     return this.prisma.webhookEndpoint.create({
       data: {
@@ -81,6 +86,7 @@ export class WebhooksService {
     const data: Prisma.WebhookEndpointUpdateInput = {};
     if (input.url !== undefined) {
       if (!input.url.startsWith('https://')) throw new BadRequestException('URL doit etre HTTPS');
+      await assertSafePublicUrl(input.url);
       data.url = input.url;
     }
     if (input.description !== undefined) data.description = input.description;
@@ -150,6 +156,10 @@ export class WebhooksService {
     let responseBody = '';
     let error: string | null = null;
     try {
+      // Recheck anti-SSRF a la livraison : un endpoint cree avant l'ajout du
+      // garde-fou peut etre malveillant, et un DNS rebinding peut faire
+      // pointer un domaine public vers une IP privee entre 2 deliveries.
+      await assertSafePublicUrl(url);
       const res = await fetch(url, {
         method: 'POST',
         headers: {
@@ -159,6 +169,9 @@ export class WebhooksService {
           'User-Agent': 'CRM-MDO-Webhooks/1.0',
         },
         body,
+        // redirect: 'manual' empeche fetch de suivre une redirection vers
+        // une IP interne (ex. 302 -> http://169.254.169.254).
+        redirect: 'manual',
         signal: AbortSignal.timeout(15_000),
       });
       httpStatus = res.status;

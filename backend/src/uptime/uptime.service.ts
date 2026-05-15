@@ -5,6 +5,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { MailService } from '../mail/mail.service';
 import { CreateMonitorDto } from './dto/create-monitor.dto';
 import { UpdateMonitorDto } from './dto/update-monitor.dto';
+import { assertSafePublicUrl } from '../common/http/safe-fetch';
 
 const HTTP_TIMEOUT_MS = 10_000;
 const FAIL_THRESHOLD_FOR_ALERT = 3; // 3 echecs consecutifs = incident + alerte
@@ -71,7 +72,11 @@ export class UptimeService {
     return { monitor, recentChecks, openIncidents, recentIncidents, uptime24h };
   }
 
-  create(dto: CreateMonitorDto) {
+  async create(dto: CreateMonitorDto) {
+    // Anti-SSRF des la creation : refuse les URLs vers IP privee/loopback.
+    // Recheck egalement a chaque probe (cf probe()) pour bloquer les attaques
+    // de DNS rebinding.
+    await assertSafePublicUrl(dto.url);
     return this.prisma.uptimeMonitor.create({
       data: {
         name: dto.name,
@@ -87,6 +92,7 @@ export class UptimeService {
 
   async update(id: string, dto: UpdateMonitorDto) {
     await this.get(id);
+    if (dto.url) await assertSafePublicUrl(dto.url);
     return this.prisma.uptimeMonitor.update({ where: { id }, data: dto as any });
   }
 
@@ -100,13 +106,24 @@ export class UptimeService {
 
   private async probe(monitor: { url: string; method: string; expectedStatus: number }): Promise<ProbeResult> {
     const start = Date.now();
+    // Anti-SSRF : verifie a CHAQUE check que l'URL ne resout pas vers une
+    // IP privee. Fait ici (pas seulement a la creation) pour bloquer les
+    // attaques de DNS rebinding (le DNS peut changer entre 2 checks).
+    try {
+      await assertSafePublicUrl(monitor.url);
+    } catch (err: any) {
+      return { isUp: false, httpCode: null, responseMs: 0, error: 'URL refusee : ' + err.message };
+    }
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), HTTP_TIMEOUT_MS);
     try {
       const r = await fetch(monitor.url, {
         method: monitor.method,
         signal: ctrl.signal,
-        redirect: 'follow',
+        // redirect: 'manual' empeche fetch de suivre une redirection vers
+        // une IP interne. Sinon un site publique peut renvoyer un 302 vers
+        // http://169.254.169.254/ et bypasser le check pre-fetch.
+        redirect: 'manual',
         headers: { 'User-Agent': 'CRM-MDO-Uptime/1.0' },
       });
       const responseMs = Date.now() - start;
