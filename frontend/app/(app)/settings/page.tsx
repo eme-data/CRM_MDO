@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { ShieldCheck, Shield, Copy, Download, X, AlertTriangle } from 'lucide-react';
 import { api, setTokens } from '@/lib/api';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { PushSubscribeButton } from '@/components/PushSubscribeButton';
 
 export default function SettingsPage() {
   const [pwd, setPwd] = useState({ oldPassword: '', newPassword: '' });
@@ -47,6 +48,16 @@ export default function SettingsPage() {
       <h1 className="text-3xl font-bold">Parametres</h1>
 
       <MfaSection />
+
+      <div className="card p-6 space-y-3">
+        <div>
+          <h2 className="font-semibold">Notifications navigateur</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Active les notifications push sur ce navigateur (alertes uptime, nouveaux tickets urgents, contrats qui expirent).
+          </p>
+        </div>
+        <PushSubscribeButton />
+      </div>
 
       <form onSubmit={submitSignature} className="card p-6 space-y-4">
         <div>

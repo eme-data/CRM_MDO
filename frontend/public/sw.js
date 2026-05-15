@@ -71,3 +71,43 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
+
+// =================== WEB PUSH ===================
+// Reception d'un push -> notification systeme. Le payload est un JSON
+// {title, body, url, tag, icon, data}.
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  let payload = {};
+  try { payload = event.data.json(); }
+  catch { payload = { title: 'CRM MDO', body: event.data.text() }; }
+  const title = payload.title || 'CRM MDO';
+  const opts = {
+    body: payload.body || '',
+    icon: payload.icon || '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: payload.tag,
+    data: { url: payload.url || '/dashboard', ...(payload.data || {}) },
+  };
+  event.waitUntil(self.registration.showNotification(title, opts));
+});
+
+// Click sur notification : focus sur un onglet existant si possible, sinon ouvre.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || '/dashboard';
+  event.waitUntil(
+    (async () => {
+      const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const c of allClients) {
+        if (c.url.includes(targetUrl) && 'focus' in c) {
+          await c.focus();
+          return;
+        }
+      }
+      // Pas d'onglet ouvert : on en cree un
+      if (self.clients.openWindow) {
+        await self.clients.openWindow(targetUrl);
+      }
+    })(),
+  );
+});

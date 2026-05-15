@@ -74,6 +74,7 @@ model User {
   signatureRequests      SignatureRequest[] @relation("SignatureRequestCreator")
   callLogs               CallLog[]
   aiUsage                AiUsage[]
+  pushSubscriptions      PushSubscription[]
   complianceAssessments  ComplianceAssessment[]            @relation("ComplianceOwner")
   controlReviews         ComplianceControlAssessment[]     @relation("ControlReviewer")
 
@@ -2132,4 +2133,38 @@ model ComplianceControlAssessment {
   @@unique([assessmentId, controlId])
   @@index([assessmentId])
   @@index([status])
+}
+
+// =================== WEB PUSH SUBSCRIPTIONS ===================
+//
+// Permet aux techniciens d'etre notifies dans leur navigateur (Chrome/Edge/
+// Firefox/Safari) sur les evenements critiques meme onglet ferme : nouveau
+// ticket urgent, intervention dans 1h, alerte uptime DOWN.
+//
+// Le user peut s'abonner depuis plusieurs appareils — un user peut avoir
+// N subscriptions (une par device + browser). Le endpoint sert de cle
+// d'unicite (Push API : un endpoint par triplet device+browser+origine).
+//
+// VAPID keys partagees pour tout le service, stockees dans Settings.
+
+model PushSubscription {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // URL de push specifique au browser/device. Format long, contient un ID
+  // opaque cote service push (FCM/Mozilla/etc.).
+  endpoint    String   @unique
+  // Cles necessaires au chiffrement E2E du payload (Push API specs).
+  p256dh      String
+  auth        String
+  // Etiquette informelle pour l'UI sessions (browser + OS sniffe au moment
+  // de l'inscription).
+  userAgent   String?
+  // Compteur d'echecs de push. Au-dela de 5 echecs (typiquement 410 Gone =
+  // l'utilisateur a desinstalle l'app), on supprime la subscription.
+  failureCount Int     @default(0)
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
 }

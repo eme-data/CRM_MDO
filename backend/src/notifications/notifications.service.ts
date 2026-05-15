@@ -1,8 +1,9 @@
-import { Global, Injectable } from '@nestjs/common';
+import { Global, Inject, Injectable, Optional, forwardRef } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { NotificationType, Prisma } from '@prisma/client';
 import { addDays, startOfDay, endOfDay } from 'date-fns';
 import { PrismaService } from '../database/prisma.service';
+import { PushService } from '../push/push.service';
 
 interface CreateNotifInput {
   userId: string;
@@ -16,10 +17,28 @@ interface CreateNotifInput {
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // Optional pour ne pas creer de cycle d'init si PushModule est absent
+    // (tests, environnement degrade). Si dispo, on pousse aussi en Web Push.
+    @Optional() private readonly pushService?: PushService,
+  ) {}
 
   async push(input: CreateNotifInput) {
-    return this.prisma.notification.create({ data: input });
+    const notif = await this.prisma.notification.create({ data: input });
+    // Best-effort web push : ne fait pas echouer la notif in-app si push fail
+    if (this.pushService) {
+      this.pushService
+        .send(input.userId, {
+          title: input.title,
+          body: input.body,
+          url: input.url,
+          tag: input.entity && input.entityId ? input.entity + ':' + input.entityId : undefined,
+          data: { entity: input.entity, entityId: input.entityId, notifId: notif.id },
+        })
+        .catch(() => {}); // silencieux : la notif in-app reste creee
+    }
+    return notif;
   }
 
   async pushMany(inputs: CreateNotifInput[]) {

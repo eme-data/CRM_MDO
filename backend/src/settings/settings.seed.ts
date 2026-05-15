@@ -487,6 +487,33 @@ export const SETTINGS_DEFS: SettingDef[] = [
     defaultValue: '90',
     envVar: 'DEFAULT_BILLING_RATE',
   },
+
+  // ---------- Web Push (notifications navigateur) ----------
+  {
+    key: 'push.vapidPublicKey',
+    category: 'push',
+    label: 'VAPID public key',
+    description:
+      'Cle publique VAPID partagee aux abonnements navigateur. Generee une fois via POST /push/admin/generate-vapid (ADMIN). Re-generer la rendrait toutes les souscriptions invalides.',
+    envVar: 'VAPID_PUBLIC_KEY',
+  },
+  {
+    key: 'push.vapidPrivateKey',
+    category: 'push',
+    label: 'VAPID private key',
+    description: 'Cle privee VAPID — JAMAIS exposee cote frontend.',
+    isSecret: true,
+    envVar: 'VAPID_PRIVATE_KEY',
+  },
+  {
+    key: 'push.vapidSubject',
+    category: 'push',
+    label: 'VAPID subject (mailto: ou URL)',
+    description:
+      'Identifiant administrateur push (RFC 8292). Conventions : mailto:admin@mdoservices.fr',
+    defaultValue: 'mailto:mathieu@mdoservices.fr',
+    envVar: 'VAPID_SUBJECT',
+  },
 ];
 
 export function findSettingDef(key: string): SettingDef | undefined {
