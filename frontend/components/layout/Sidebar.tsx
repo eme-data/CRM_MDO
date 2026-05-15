@@ -118,6 +118,7 @@ const adminItems: NavItem[] = [
   { href: '/admin/webhooks', label: 'Webhooks sortants', icon: Workflow },
   { href: '/admin/system-backup', label: 'Backup / Restore CRM', icon: Database },
   { href: '/admin/cron-jobs', label: 'Cron jobs / planificateur', icon: Clock },
+  { href: '/admin/subprocessors', label: 'Sous-traitants RGPD (DPA)', icon: ShieldCheck },
   { href: '/admin/client-reports', label: 'Rapports clients mensuels', icon: FileBarChart },
   { href: '/admin/time-billing', label: 'Facturation du temps', icon: Clock },
   { href: '/admin/flexible-asset-types', label: 'Templates assets flexibles', icon: Layers },

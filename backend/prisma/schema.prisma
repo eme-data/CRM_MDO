@@ -2494,6 +2494,75 @@ model WebhookDelivery {
   @@index([event])
 }
 
+// =================== SOUS-TRAITANTS RGPD (DPA — article 28) ===================
+//
+// Registre des sous-traitants de MDO Services. Le client (responsable de
+// traitement) DOIT savoir a qui MDO sous-traite ses donnees, ce que chaque
+// sous-traitant fait, ou se trouvent les donnees, et le mecanisme legal de
+// transfert hors UE le cas echeant.
+//
+// Liste typique : Microsoft (M365), Bitdefender (EDR), Veeam (backup),
+// Anthropic + OpenAI (IA), Free PRO (telephonie), Jotelulu (hebergement),
+// Yousign/DocuSeal (signature), Qonto (facturation), Stripe (paiement)...
+
+enum SubprocessorRole {
+  HOSTING            // hebergement infra
+  EMAIL              // email transactionnel/marketing
+  BACKUP             // sauvegarde
+  EDR                // antivirus/endpoint detection
+  AI                 // intelligence artificielle (LLM, transcription, ...)
+  PAYMENT            // paiement / facturation
+  COMMUNICATION      // telephonie, SMS, visio
+  SIGNATURE          // signature electronique
+  MONITORING         // monitoring/log/observabilite
+  OTHER
+}
+
+enum DataTransferMechanism {
+  ADEQUACY_DECISION  // pays adequats (CH, JP, NZ, ...)
+  SCC                // Standard Contractual Clauses (UE -> US/INDIA/...)
+  BCR                // Binding Corporate Rules
+  DEROGATION         // derogations specifiques (consent, contract necessity)
+  NOT_APPLICABLE     // donnees restant dans l'UE
+}
+
+model Subprocessor {
+  id              String                 @id @default(uuid())
+  name            String                 // "Microsoft Corporation"
+  legalEntity     String?                // raison sociale exacte si differente
+  role            SubprocessorRole       @default(OTHER)
+  purpose         String                 // description claire du role pour les donnees client
+  // Categories de donnees traitees (array libre : "PII", "EMAIL_CONTENT",
+  // "FINANCIAL", "AUTH", "TELEMETRY"...)
+  dataCategories  String[]               @default([])
+
+  // Localisation infrastructure / siege
+  hostingCountry  String?                // 'France', 'Irlande', 'USA'...
+  headquarters    String?                // adresse siege si applicable
+
+  // Transferts hors UE
+  transfersOutsideEu      Boolean        @default(false)
+  transferMechanism       DataTransferMechanism @default(NOT_APPLICABLE)
+
+  // DPA (Data Processing Agreement) signe
+  dpaUrl          String?                // lien vers le PDF du DPA signe
+  dpaSignedAt     DateTime?
+  // Lien pubic des sous-traitants du fournisseur (transparence)
+  vendorSubprocessorListUrl String?
+
+  // Cycle de vie
+  startedAt       DateTime               @default(now())
+  endedAt         DateTime?              // si on arrete la sous-traitance
+  isActive        Boolean                @default(true)
+  notes           String?
+
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([isActive])
+  @@index([role])
+}
+
 // =================== ONBOARDING CLIENT ===================
 //
 // Standardise le processus d'integration d'un nouveau client : creer compte
