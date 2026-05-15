@@ -10,6 +10,15 @@ import { initSentry } from './common/observability/sentry';
 // erreurs de bootstrap (ConfigModule, Prisma connect, etc.).
 initSentry();
 
+// Polyfill BigInt -> JSON. Sans ca, JSON.stringify({ x: 1n }) jette
+// "TypeError: Do not know how to serialize a BigInt". Or Prisma renvoie des
+// BigInt pour les colonnes Int64 (ex: SystemBackup.sizeBytes,
+// BackupRun.sizeBytes). On serialise en string pour ne pas perdre de
+// precision (Number max safe = 2^53, BigInt peut depasser).
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
