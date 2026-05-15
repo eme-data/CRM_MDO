@@ -249,6 +249,30 @@ enum OpportunityStage {
   PERDU
 }
 
+// Motifs structures pour les opportunites perdues. Permet l'agregation
+// statistique pour le module win/loss analysis. Le champ lostReason texte
+// libre existe deja en plus pour les details.
+enum OpportunityLossReason {
+  PRICE              // trop cher / hors budget
+  COMPETITOR         // concurrent retenu (cf competitorName)
+  TIMING             // pas le bon moment cote client
+  FEATURE            // manque une fonctionnalite
+  NO_RESPONSE        // ghost / pas de retour
+  BUDGET             // pas de budget
+  PROJECT_CANCELLED  // projet client annule
+  OTHER
+}
+
+enum OpportunityWinReason {
+  PRICE_LOWEST       // proposition la moins chere
+  REPUTATION         // notoriete MDO / recommandation
+  RELATIONSHIP       // relation existante / confiance
+  FEATURE            // fonctionnalite distinctive
+  PROXIMITY          // proximite geo / disponibilite
+  REFERRAL           // recommande par client existant
+  OTHER
+}
+
 model Opportunity {
   id                String           @id @default(uuid())
   title             String
@@ -257,7 +281,15 @@ model Opportunity {
   probability       Int              @default(50)
   expectedCloseDate DateTime?
   closedAt          DateTime?
+  // Champ historique texte libre — conserve pour ne pas perdre les motifs
+  // saisis avant l'introduction des enums structures.
   lostReason        String?
+  // ----- Win/loss analysis (motifs structures) -----
+  // Structure : a renseigner au passage en GAGNE/PERDU pour permettre
+  // l'agregation statistique (cf module win/loss + dashboard exec).
+  lossReasonCode    OpportunityLossReason?
+  winReasonCode     OpportunityWinReason?
+  competitorName    String?          // utile si lossReasonCode=COMPETITOR
   description       String?
 
   companyId         String
@@ -277,6 +309,8 @@ model Opportunity {
   @@index([companyId])
   @@index([ownerId])
   @@index([stage])
+  @@index([lossReasonCode])
+  @@index([winReasonCode])
 }
 
 // =================== CONTRACTS (core business need) ===================

@@ -107,6 +107,90 @@ export class OpportunitiesService {
     return updated;
   }
 
+  // ============================================================
+  // Win/loss analysis : aggregations sur opportunites cloturees
+  // ============================================================
+  async winLossAnalysis(params: { from?: string; to?: string } = {}) {
+    const where: Prisma.OpportunityWhereInput = {
+      stage: { in: ['GAGNE', 'PERDU'] },
+    };
+    if (params.from || params.to) {
+      where.closedAt = {};
+      if (params.from) (where.closedAt as any).gte = new Date(params.from);
+      if (params.to) (where.closedAt as any).lte = new Date(params.to);
+    }
+
+    const opps = await this.prisma.opportunity.findMany({
+      where,
+      select: {
+        stage: true,
+        amountHt: true,
+        lossReasonCode: true,
+        winReasonCode: true,
+        competitorName: true,
+        closedAt: true,
+      },
+    });
+
+    const won = opps.filter((o) => o.stage === 'GAGNE');
+    const lost = opps.filter((o) => o.stage === 'PERDU');
+
+    const winRate = opps.length > 0 ? +((won.length / opps.length) * 100).toFixed(1) : 0;
+    const wonAmount = +won.reduce((s, o) => s + Number(o.amountHt), 0).toFixed(2);
+    const lostAmount = +lost.reduce((s, o) => s + Number(o.amountHt), 0).toFixed(2);
+
+    // Group lossReasonCode
+    const byLossReason = new Map<string, { reason: string; count: number; amount: number }>();
+    for (const o of lost) {
+      const k = o.lossReasonCode ?? 'UNSPECIFIED';
+      const e = byLossReason.get(k) ?? { reason: k, count: 0, amount: 0 };
+      e.count += 1;
+      e.amount += Number(o.amountHt);
+      byLossReason.set(k, e);
+    }
+
+    // Group winReasonCode
+    const byWinReason = new Map<string, { reason: string; count: number; amount: number }>();
+    for (const o of won) {
+      const k = o.winReasonCode ?? 'UNSPECIFIED';
+      const e = byWinReason.get(k) ?? { reason: k, count: 0, amount: 0 };
+      e.count += 1;
+      e.amount += Number(o.amountHt);
+      byWinReason.set(k, e);
+    }
+
+    // Top concurrents (uniquement sur les pertes COMPETITOR)
+    const byCompetitor = new Map<string, { competitor: string; count: number; amount: number }>();
+    for (const o of lost) {
+      if (o.lossReasonCode !== 'COMPETITOR' || !o.competitorName) continue;
+      const k = o.competitorName.trim();
+      const e = byCompetitor.get(k) ?? { competitor: k, count: 0, amount: 0 };
+      e.count += 1;
+      e.amount += Number(o.amountHt);
+      byCompetitor.set(k, e);
+    }
+
+    return {
+      total: opps.length,
+      won: won.length,
+      lost: lost.length,
+      winRatePct: winRate,
+      wonAmount,
+      lostAmount,
+      avgDealSize: opps.length > 0 ? +(opps.reduce((s, o) => s + Number(o.amountHt), 0) / opps.length).toFixed(2) : 0,
+      byLossReason: Array.from(byLossReason.values())
+        .map((x) => ({ ...x, amount: +x.amount.toFixed(2) }))
+        .sort((a, b) => b.count - a.count),
+      byWinReason: Array.from(byWinReason.values())
+        .map((x) => ({ ...x, amount: +x.amount.toFixed(2) }))
+        .sort((a, b) => b.count - a.count),
+      topCompetitors: Array.from(byCompetitor.values())
+        .map((x) => ({ ...x, amount: +x.amount.toFixed(2) }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10),
+    };
+  }
+
   async remove(id: string, userId: string) {
     await this.findOne(id);
     await this.prisma.opportunity.delete({ where: { id } });

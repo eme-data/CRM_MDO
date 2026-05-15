@@ -41,6 +41,11 @@ export class OpportunitiesController {
     return this.service.kanban();
   }
 
+  @Get('win-loss-analysis')
+  winLossAnalysis(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.service.winLossAnalysis({ from, to });
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);
