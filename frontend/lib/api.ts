@@ -101,14 +101,14 @@ async function doFetch(path: string, init: RequestInit = {}, retry = true): Prom
 }
 
 export const api = {
-  get: (path: string) => doFetch(path),
-  post: (path: string, body?: any) =>
+  get: <T = any>(path: string): Promise<T> => doFetch(path),
+  post: <T = any>(path: string, body?: any): Promise<T> =>
     doFetch(path, { method: 'POST', body: JSON.stringify(body ?? {}) }),
-  patch: (path: string, body?: any) =>
+  patch: <T = any>(path: string, body?: any): Promise<T> =>
     doFetch(path, { method: 'PATCH', body: JSON.stringify(body ?? {}) }),
-  put: (path: string, body?: any) =>
+  put: <T = any>(path: string, body?: any): Promise<T> =>
     doFetch(path, { method: 'PUT', body: JSON.stringify(body ?? {}) }),
-  delete: (path: string) => doFetch(path, { method: 'DELETE' }),
+  delete: <T = any>(path: string): Promise<T> => doFetch(path, { method: 'DELETE' }),
 };
 
 export { ApiError };

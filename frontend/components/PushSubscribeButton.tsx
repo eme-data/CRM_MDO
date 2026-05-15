@@ -51,7 +51,11 @@ export function PushSubscribeButton() {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        // applicationServerKey accepte BufferSource. Le typing TypeScript 5.x
+        // strict refuse Uint8Array<ArrayBufferLike> via SharedArrayBuffer ;
+        // on cast en BufferSource (ArrayBufferView) qui est ce que PushManager
+        // accepte effectivement a l'execution.
+        applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
       });
       const json = sub.toJSON();
       await api.post('/push/subscribe', {

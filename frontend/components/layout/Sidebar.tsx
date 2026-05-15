@@ -33,7 +33,6 @@ import {
   Workflow,
   Phone,
   BookOpen,
-  Target,
   Mail,
   Cpu,
   HardDrive,
