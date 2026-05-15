@@ -214,7 +214,7 @@ export class InvoicesService {
   // Desactive automatiquement quand un provider externe (Qonto) est
   // actif ET que billing.disableInternalCron est a true (defaut). Dans ce
   // mode, c'est le provider externe qui est la source de verite des factures.
-  @Cron('0 6 1 * *') // 1er du mois a 6h
+  @Cron('0 6 1 * *', { name: 'invoices-monthly-auto', timeZone: 'Europe/Paris' }) // 1er du mois a 6h Paris
   async generateMonthlyInvoicesAuto() {
     const provider = (await this.settings.get('billing.provider')) ?? 'none';
     const disableInternal = await this.settings.getBool('billing.disableInternalCron');

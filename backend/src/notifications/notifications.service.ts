@@ -78,7 +78,7 @@ export class NotificationsService {
 
   // Cron quotidien : notifier les contrats qui expirent dans 30j et les
   // tickets en retard SLA pour leur assignee.
-  @Cron('0 9 * * *')
+  @Cron('0 9 * * *', { name: 'notifications-daily-digest', timeZone: 'Europe/Paris' })
   async dailyDigests() {
     const now = new Date();
     // Contrats qui expirent dans 30j

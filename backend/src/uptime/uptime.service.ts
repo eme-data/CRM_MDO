@@ -278,7 +278,7 @@ export class UptimeService {
   }
 
   // Purge quotidienne des checks vieux de plus de 30j (a 4h, avant le monitoring SSL).
-  @Cron('0 4 * * *')
+  @Cron('0 4 * * *', { name: 'uptime-purge-old-checks', timeZone: 'Europe/Paris' })
   async purgeOldChecks() {
     const cutoff = new Date(Date.now() - CHECK_RETENTION_DAYS * 86_400_000);
     const r = await this.prisma.uptimeCheck.deleteMany({ where: { checkedAt: { lt: cutoff } } });

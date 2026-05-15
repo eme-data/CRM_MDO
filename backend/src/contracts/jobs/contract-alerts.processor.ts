@@ -13,8 +13,8 @@ export class ContractAlertsProcessor {
     private readonly mail: MailService,
   ) {}
 
-  // Tous les matins a 8h (heure du serveur / TZ=Europe/Paris)
-  @Cron('0 8 * * *')
+  // Tous les matins a 8h (heure Paris)
+  @Cron('0 8 * * *', { name: 'contract-alerts-daily', timeZone: 'Europe/Paris' })
   async processDailyAlerts() {
     const from = startOfDay(new Date());
     const to = endOfDay(new Date());

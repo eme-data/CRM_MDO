@@ -24,7 +24,7 @@ export class SurveillanceService {
   ) {}
 
   // Cron quotidien a 7h : check tous les assets de type CERTIFICATE et DOMAIN
-  @Cron('0 7 * * *')
+  @Cron('0 7 * * *', { name: 'surveillance-daily-scan', timeZone: 'Europe/Paris' })
   async dailyScan() {
     this.logger.log('Surveillance quotidienne demarree');
     const certs = await this.prisma.asset.findMany({

@@ -216,7 +216,7 @@ export class MonitoringService {
   // ----------- Crons -----------
   // Une fois par jour a 5h : tous les certs SSL et tous les domaines
   // dont monitoringEnabled = true.
-  @Cron('0 5 * * *')
+  @Cron('0 5 * * *', { name: 'monitoring-daily', timeZone: 'Europe/Paris' })
   async dailyMonitor() {
     const candidates = await this.prisma.asset.findMany({
       where: {
@@ -249,7 +249,7 @@ export class MonitoringService {
 
   // Recap hebdomadaire : tous les lundis a 8h, on envoie a chaque owner
   // la liste de ses certificats / domaines qui expirent dans les 60 jours.
-  @Cron('0 8 * * 1')
+  @Cron('0 8 * * 1', { name: 'monitoring-weekly-digest', timeZone: 'Europe/Paris' })
   async weeklyDigest() {
     const horizon = new Date(Date.now() + WEEKLY_DIGEST_HORIZON_DAYS * 86_400_000);
     const assets = await this.prisma.asset.findMany({

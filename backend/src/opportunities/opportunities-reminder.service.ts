@@ -16,7 +16,7 @@ export class OpportunitiesReminderService {
   ) {}
 
   // Tous les lundis 9h : alerter les owners sur leurs opportunites stagnantes
-  @Cron('0 9 * * 1')
+  @Cron('0 9 * * 1', { name: 'opportunities-weekly-reminder', timeZone: 'Europe/Paris' })
   async stagnantOpportunities() {
     const cutoff = subDays(new Date(), STAGNANT_DAYS);
     const opps = await this.prisma.opportunity.findMany({
