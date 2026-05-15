@@ -66,6 +66,7 @@ model User {
   workflowRulesAssigned  WorkflowRule[]  @relation("WorkflowRuleAssignee")
   ownedQuotes            Quote[]         @relation("QuoteOwner")
   signatureRequests      SignatureRequest[] @relation("SignatureRequestCreator")
+  callLogs               CallLog[]
 
   @@index([teamId])
 }
@@ -175,6 +176,7 @@ model Company {
   recurringTemplates RecurringTaskTemplate[]
   quotes         Quote[]
   signatureRequests SignatureRequest[]
+  callLogs       CallLog[]
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -207,6 +209,7 @@ model Contact {
   tickets     Ticket[]
   portalUsers ClientPortalUser[] @relation("ContactPortalUser")
   quotes      Quote[]
+  callLogs    CallLog[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -1878,4 +1881,70 @@ model SignatureRequest {
   @@index([entityType, entityId])
   @@index([status])
   @@index([companyId])
+}
+
+// =================== CALL LOGS (Telephonie / VoIP) ===================
+//
+// Journalise les appels entrants et sortants relatifs a un contact / une societe.
+// Alimente :
+//  - manuellement via click-to-call (POST /calls/click)
+//  - automatiquement via webhook provider VoIP (POST /calls/webhook/:provider)
+//
+// Si le numero correspond a un Contact existant (matching normalise E.164),
+// le CallLog est rattache automatiquement a ce contact + sa societe.
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CallStatus {
+  RINGING
+  ANSWERED
+  MISSED
+  BUSY
+  FAILED
+  COMPLETED
+}
+
+model CallLog {
+  id            String        @id @default(uuid())
+  direction     CallDirection
+  status        CallStatus    @default(RINGING)
+  // Numeros normalises E.164 (+33...) si possible. On garde les versions
+  // brutes recues du provider dans rawPayload pour debug.
+  fromNumber    String
+  toNumber      String
+
+  startedAt     DateTime      @default(now())
+  answeredAt    DateTime?
+  endedAt       DateTime?
+  durationSec   Int?
+
+  // Resolution automatique
+  contactId     String?
+  contact       Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  companyId     String?
+  company       Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  // Utilisateur MDO concerne (passeur d'appel sortant ou destinataire d'entrant).
+  userId        String?
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Optionnels (selon provider)
+  recordingUrl  String?
+  notes         String?
+  // Provider technique (FREE_PRO|TEL_URI|MANUAL) pour debug.
+  provider      String        @default("MANUAL")
+  // Identifiant externe (call_id, sip_id) pour deduplication des webhooks.
+  externalId    String?       @unique
+  // Payload brut pour audit / debug.
+  rawPayload    Json?
+
+  createdAt     DateTime      @default(now())
+
+  @@index([contactId])
+  @@index([companyId])
+  @@index([userId])
+  @@index([startedAt])
+  @@index([direction, status])
 }

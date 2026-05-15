@@ -388,6 +388,48 @@ export const SETTINGS_DEFS: SettingDef[] = [
     isSecret: true,
     envVar: 'YOUSIGN_WEBHOOK_SECRET',
   },
+
+  // ---------- Telephonie / VoIP ----------
+  {
+    key: 'voip.provider',
+    category: 'voip',
+    label: 'Provider telephonie',
+    description:
+      'TEL_URI (defaut, ouvre le telephone systeme via tel:+33...) | FREE_PRO (Free PRO Coms Pro API) | NONE',
+    defaultValue: 'TEL_URI',
+    envVar: 'VOIP_PROVIDER',
+  },
+  {
+    key: 'voip.freepro.apiUrl',
+    category: 'voip',
+    label: 'Free PRO Coms Pro - URL API',
+    description: 'URL de base de l\'API Coms Pro (recue avec le contrat Free PRO).',
+    envVar: 'FREEPRO_API_URL',
+  },
+  {
+    key: 'voip.freepro.apiKey',
+    category: 'voip',
+    label: 'Free PRO Coms Pro - cle API',
+    description: 'Token Bearer fourni par Free PRO.',
+    isSecret: true,
+    envVar: 'FREEPRO_API_KEY',
+  },
+  {
+    key: 'voip.freepro.callerId',
+    category: 'voip',
+    label: 'Free PRO Coms Pro - numero MDO (caller ID)',
+    description:
+      'Numero affiche au correspondant lors d\'un click-to-call. Format E.164 (+33...).',
+    envVar: 'FREEPRO_CALLER_ID',
+  },
+  {
+    key: 'voip.freepro.webhookSecret',
+    category: 'voip',
+    label: 'Free PRO - secret webhook',
+    description: 'Secret HMAC pour verifier les webhooks d\'evenements d\'appel.',
+    isSecret: true,
+    envVar: 'FREEPRO_WEBHOOK_SECRET',
+  },
 ];
 
 export function findSettingDef(key: string): SettingDef | undefined {

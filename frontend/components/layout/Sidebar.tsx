@@ -31,6 +31,7 @@ import {
   FileBarChart,
   Repeat,
   Workflow,
+  Phone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logout } from '@/lib/auth';
@@ -64,6 +65,7 @@ const sections: NavSection[] = [
     items: [
       { href: '/tickets', label: 'Support', icon: LifeBuoy },
       { href: '/interventions', label: 'Interventions', icon: Wrench },
+      { href: '/calls', label: 'Appels', icon: Phone },
       { href: '/calendar', label: 'Calendrier', icon: Calendar },
     ],
   },

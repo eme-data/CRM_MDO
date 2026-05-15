@@ -57,6 +57,7 @@ import { RecurringTasksModule } from './recurring-tasks/recurring-tasks.module';
 import { WorkflowModule } from './workflow/workflow.module';
 import { QuotesModule } from './quotes/quotes.module';
 import { SignatureModule } from './signature/signature.module';
+import { CallsModule } from './calls/calls.module';
 import { HealthController } from './health/health.controller';
 import { MetricsController } from './common/observability/metrics.controller';
 import { MetricsService } from './common/observability/metrics.service';
@@ -142,6 +143,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     WorkflowModule,
     QuotesModule,
     SignatureModule,
+    CallsModule,
     NotesModule,
     ActivitiesModule,
     DashboardModule,
