@@ -59,6 +59,12 @@ export class SystemBackupController {
     res.setHeader('Content-Type', 'application/gzip');
     res.setHeader('Content-Disposition', 'attachment; filename="' + r.filename + '"');
     if (r.sizeBytes) res.setHeader('Content-Length', String(r.sizeBytes));
+    // Cleanup explicite : si le client se deconnecte ou si le stream
+    // throw, on libere le file descriptor au lieu de fuir. Sans ces
+    // listeners, un download interrompu (ferme l'onglet en plein telechargement
+    // d'un dump 5GB) garde le FD ouvert jusqu'au GC — saturation possible.
+    r.stream.on('error', () => res.destroy());
+    res.on('close', () => r.stream.destroy());
     r.stream.pipe(res);
   }
 

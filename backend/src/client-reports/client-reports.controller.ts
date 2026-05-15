@@ -147,7 +147,12 @@ export class ClientReportsController {
       // Pas de cache : le PDF est sensible (donnees client).
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       res.setHeader('Pragma', 'no-cache');
-      createReadStream(fullPath).pipe(res);
+      const stream = createReadStream(fullPath);
+      // Cleanup explicite : libere le FD si le client se deconnecte ou si
+      // le stream throw. Sans ca, leak progressif sur les downloads avortes.
+      stream.on('error', () => res.destroy());
+      res.on('close', () => stream.destroy());
+      stream.pipe(res);
     } catch (err: any) {
       throw new BadRequestException('Fichier introuvable sur disque : ' + err.message);
     }
