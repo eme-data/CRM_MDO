@@ -34,6 +34,11 @@ export default () => ({
     dir: process.env.UPLOADS_DIR ?? '/app/uploads',
     maxMb: process.env.MAX_UPLOAD_SIZE_MB ?? '25',
   },
+  systemBackup: {
+    // Repertoire ou sont stockes les .tar.gz generes par le module system-backup.
+    // Doit etre monte comme volume Docker pour persister entre redemarrages.
+    dir: process.env.SYSTEM_BACKUP_DIR ?? '/app/backups',
+  },
   lookup: {
     pappersKey: process.env.PAPPERS_API_KEY,
     sireneKey: process.env.SIRENE_API_KEY,

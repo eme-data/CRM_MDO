@@ -557,6 +557,32 @@ export const SETTINGS_DEFS: SettingDef[] = [
       'Quand le cron detecte qu\'une review est due, il la programme pour J + N jours (laisse le temps a l\'owner de caler le RDV).',
     defaultValue: '7',
   },
+
+  // ---------- System backup (sauvegarde + restore CRM) ----------
+  {
+    key: 'systemBackup.dailyAuto',
+    category: 'system-backup',
+    label: 'Backup automatique quotidien (interne)',
+    description:
+      'Si actif, un backup complet (BDD + uploads) est cree chaque jour a 02:30 par le backend (en plus du script /etc/cron.d/crm-mdo-backup hote qui utilise restic pour off-site). Les deux sont complementaires : l\'auto cron interne sert pour rollback rapide depuis l\'UI.',
+    defaultValue: 'true',
+  },
+  {
+    key: 'systemBackup.retentionDays',
+    category: 'system-backup',
+    label: 'Retention backups internes (jours)',
+    description:
+      'Au-dela de N jours, les backups SCHEDULED sont supprimes par le cron de cleanup. Les MANUAL et PRE_RESTORE ne sont jamais auto-purges.',
+    defaultValue: '30',
+  },
+  {
+    key: 'systemBackup.includeUploads',
+    category: 'system-backup',
+    label: 'Inclure les uploads (pieces jointes) dans les backups',
+    description:
+      'Si actif, le tarball contient le volume uploads en plus du dump BDD. Desactiver SI les uploads sont sauvegardes ailleurs (S3, restic) — gain de temps + place.',
+    defaultValue: 'true',
+  },
 ];
 
 export function findSettingDef(key: string): SettingDef | undefined {

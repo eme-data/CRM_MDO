@@ -81,6 +81,8 @@ model User {
   kbArticles              KbArticle[]                      @relation("KbArticleAuthor")
   customerSuccessReviews  CustomerSuccessReview[]          @relation("CustomerSuccessReviewOwner")
   skills                  UserSkill[]
+  systemBackupsCreated    SystemBackup[]                   @relation("SystemBackupCreator")
+  systemBackupsRestored   SystemBackup[]                   @relation("SystemBackupRestorer")
   complianceAssessments  ComplianceAssessment[]            @relation("ComplianceOwner")
   controlReviews         ComplianceControlAssessment[]     @relation("ControlReviewer")
 
@@ -2348,6 +2350,67 @@ model UserSkill {
   @@index([userId])
   @@index([skillId])
   @@index([expiresAt])
+}
+
+// =================== SYSTEM BACKUP (sauvegarde + restore CRM) ===================
+//
+// Snapshots .tar.gz de la BDD (pg_dump -Fc) + uploads/ (volume Docker).
+// Crees a la demande depuis l'UI admin OU automatiquement via cron quotidien.
+// Restaurables en 1 clic (avec confirmation forte) depuis la meme UI.
+//
+// Stockage : volume Docker dedie monte sur /app/backups dans le container backend.
+// Permet le download direct via streaming + cleanup au-dela de retention days.
+//
+// SECURITE : restore = action destructive. Avant restore, on cree
+// automatiquement un snapshot pre-restore (rollback safety) et on exige
+// une phrase de confirmation cote UI.
+
+enum SystemBackupKind {
+  MANUAL          // declenche par un admin via UI
+  SCHEDULED       // declenche par le cron quotidien
+  PRE_RESTORE     // genere automatiquement avant un restore (safety net)
+}
+
+enum SystemBackupStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model SystemBackup {
+  id              String              @id @default(uuid())
+  kind            SystemBackupKind    @default(MANUAL)
+  status          SystemBackupStatus  @default(RUNNING)
+  filename        String              // nom du fichier .tar.gz
+  pathRelative    String              // chemin relatif dans /app/backups (ex. "2026/05/abc.tar.gz")
+  // Tailles : BigInt — un dump avec uploads peut depasser 4 Go
+  sizeBytes       BigInt?
+  // Composants inclus (denormalise pour affichage UI)
+  includesDb      Boolean             @default(true)
+  includesUploads Boolean             @default(true)
+  // Version Prisma schema au moment du backup (utile pour detecter une
+  // tentative de restore vers un schema incompatible)
+  schemaVersion   String?
+
+  // Audit
+  createdById     String?
+  createdBy       User?               @relation("SystemBackupCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  errorMessage    String?
+  durationMs      Int?
+
+  // Si restaure, on horodate ici. Une fois restaure, le record reste pour audit.
+  restoredAt      DateTime?
+  restoredById    String?
+  restoredBy      User?               @relation("SystemBackupRestorer", fields: [restoredById], references: [id], onDelete: SetNull)
+  restoreError    String?
+
+  downloadCount   Int                 @default(0)
+  lastDownloadAt  DateTime?
+
+  createdAt       DateTime            @default(now())
+
+  @@index([kind, createdAt])
+  @@index([status])
 }
 
 // =================== ONBOARDING CLIENT ===================

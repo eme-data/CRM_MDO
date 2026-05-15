@@ -1,8 +1,11 @@
 # -------- base --------
 FROM node:20-alpine AS base
 WORKDIR /app
-# openssl pour Prisma (engine), wget pour HEALTHCHECK, dumb-init pour PID 1.
-RUN apk add --no-cache openssl wget dumb-init
+# openssl pour Prisma (engine), wget pour HEALTHCHECK, dumb-init pour PID 1,
+# postgresql16-client pour pg_dump/pg_restore via le module system-backup
+# (backup/restore depuis l'UI admin — version doit matcher le service postgres
+# du docker-compose), tar pour le packaging des uploads.
+RUN apk add --no-cache openssl wget dumb-init postgresql16-client tar
 
 # -------- deps --------
 FROM base AS deps
