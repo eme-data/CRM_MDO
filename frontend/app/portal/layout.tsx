@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, FileText, LifeBuoy, Server, LogOut, Building2, Menu, X, Receipt, Activity, ShieldCheck, HardDrive, FolderOpen } from 'lucide-react';
 import { portalApi, getPortalSession, clearPortalSession } from '@/lib/portal-api';
 import { cn } from '@/lib/utils';
+import { useBranding } from '@/components/BrandingProvider';
 
 interface PortalUser {
   id: string;
@@ -22,6 +23,7 @@ interface PortalUser {
 export default function PortalLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const branding = useBranding();
   const [user, setUser] = useState<PortalUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -80,7 +82,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4">
           <Link href="/portal" className="font-bold text-lg text-mdo-600 tracking-tight">
-            Espace client MDO
+            Espace client {branding.shortName}
           </Link>
           <nav className="hidden md:flex gap-1 ml-6">
             {nav.map((item) => {
@@ -149,8 +151,8 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
       </header>
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">{children}</main>
       <footer className="max-w-6xl mx-auto px-4 sm:px-6 py-6 text-center text-xs text-slate-400">
-        <a href="https://www.mdoservices.fr" className="hover:underline">MDO Services</a>
-        {' - Prestataire IT et Cybersecurite - Occitanie'}
+        <a href={branding.websiteUrl} className="hover:underline">{branding.name}</a>
+        {branding.tagline ? ' - ' + branding.tagline : ''}
       </footer>
     </div>
   );

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ShieldCheck, ExternalLink, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { portalApi } from '@/lib/portal-api';
+import { useBranding } from '@/components/BrandingProvider';
 
 interface Subprocessor {
   id: string;
@@ -41,6 +42,7 @@ const MECHANISM_LABEL: Record<string, string> = {
 };
 
 export default function PortalSubprocessorsPage() {
+  const branding = useBranding();
   const [items, setItems] = useState<Subprocessor[] | null>(null);
 
   useEffect(() => {
@@ -65,7 +67,7 @@ export default function PortalSubprocessorsPage() {
       </div>
       <p className="text-sm text-slate-500">
         En application de l'article 28 du RGPD, voici la liste des sous-traitants utilises
-        par MDO Services pour traiter les donnees personnelles dans le cadre de votre contrat.
+        par {branding.name} pour traiter les donnees personnelles dans le cadre de votre contrat.
         Cette liste alimente votre registre de sous-traitance.
       </p>
 
@@ -138,8 +140,8 @@ export default function PortalSubprocessorsPage() {
 
       <p className="text-xs text-slate-400 pt-4 border-t border-slate-100 dark:border-slate-800">
         Pour toute question sur le traitement de vos donnees, contactez{' '}
-        <a href="mailto:dpo@mdoservices.fr" className="text-mdo-600 hover:underline">
-          dpo@mdoservices.fr
+        <a href={'mailto:' + branding.dpoEmail} className="text-mdo-600 hover:underline">
+          {branding.dpoEmail}
         </a>
       </p>
     </div>

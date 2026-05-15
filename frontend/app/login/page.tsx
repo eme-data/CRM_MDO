@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ShieldCheck, KeyRound, Mail, ArrowLeft } from 'lucide-react';
 import { login } from '@/lib/auth';
+import { useBranding } from '@/components/BrandingProvider';
 
 function extractMessages(err: any): string[] {
   // NestJS peut retourner message comme string OU array (validation).
@@ -21,6 +22,7 @@ function extractMessages(err: any): string[] {
 
 export default function LoginPage() {
   const router = useRouter();
+  const branding = useBranding();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
@@ -65,7 +67,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 p-4">
       <form onSubmit={handleSubmit} className="w-full max-w-md card p-8 space-y-5 shadow-lg">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-mdo-600 tracking-tight">CRM MDO Services</h1>
+          <h1 className="text-2xl font-bold text-mdo-600 tracking-tight">CRM {branding.shortName}</h1>
           <p className="text-sm text-slate-500 mt-1">
             {needTotp ? 'Verification a deux facteurs' : 'Connexion a votre espace'}
           </p>

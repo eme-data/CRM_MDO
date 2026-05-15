@@ -2,17 +2,22 @@ import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 import { Toaster } from 'sonner';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
+import { BrandingProvider } from '@/components/BrandingProvider';
 import './globals.css';
 
+// Metadata defaut : remplaces dynamiquement cote client par le BrandingProvider
+// pour les instances multi-instance (cf .env BRAND_NAME). Pour un changement
+// du <title> sur une instance reseaude, on utilise un useEffect qui set
+// document.title depuis useBranding (cf MetadataSetter ci-dessous).
 export const metadata: Metadata = {
-  title: 'CRM MDO Services',
-  description: 'CRM interne MDO Services',
+  title: 'CRM',
+  description: 'CRM',
   manifest: '/manifest.webmanifest',
-  applicationName: 'CRM MDO',
+  applicationName: 'CRM',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'CRM MDO',
+    title: 'CRM',
   },
 };
 
@@ -26,7 +31,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="fr">
       <body>
-        <ConfirmProvider>{children}</ConfirmProvider>
+        <BrandingProvider>
+          <ConfirmProvider>{children}</ConfirmProvider>
+        </BrandingProvider>
         <Toaster position="top-right" richColors />
         {/* Enregistrement du service worker. Strategy "afterInteractive" pour
             ne pas bloquer le first paint. Le SW gere le mode offline + le

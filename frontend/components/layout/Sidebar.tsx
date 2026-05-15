@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logout } from '@/lib/auth';
+import { useBranding } from '@/components/BrandingProvider';
 import { NotificationBell } from './NotificationBell';
 import { ThemeToggle } from '../ThemeToggle';
 import { HealthBadge } from './HealthBadge';
@@ -163,6 +164,7 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
     router.replace('/login');
   }
 
+  const branding = useBranding();
   function isActive(href: string) {
     return pathname === href || pathname?.startsWith(href + '/');
   }
@@ -170,8 +172,8 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
   return (
     <aside className="w-64 bg-slate-900 text-white flex flex-col min-h-screen border-r border-slate-800">
       <div className="px-6 py-5 border-b border-slate-800">
-        <h1 className="text-xl font-bold text-white tracking-tight">CRM MDO</h1>
-        <p className="text-xs text-slate-400 mt-0.5">Services IT &amp; Cybersecurite</p>
+        <h1 className="text-xl font-bold text-white tracking-tight">CRM {branding.shortName}</h1>
+        <p className="text-xs text-slate-400 mt-0.5">{branding.tagline}</p>
         <p className="text-[11px] text-slate-500 mt-2 inline-flex items-center gap-1">
           <kbd className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 font-mono text-[10px]">Ctrl</kbd>
           <span>+</span>
