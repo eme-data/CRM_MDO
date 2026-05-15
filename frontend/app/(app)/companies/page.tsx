@@ -7,6 +7,7 @@ import { companyStatusLabel, sectorLabel } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableRowSkeleton } from '@/components/ui/Skeleton';
 import { Pagination } from '@/components/ui/Pagination';
+import { useReloadOnFocus } from '@/lib/useReloadOnFocus';
 
 interface Company {
   id: string;
@@ -44,7 +45,8 @@ export default function CompaniesPage() {
     setPage(1);
   }, [search, status]);
 
-  useEffect(() => {
+  // Fonction de chargement extraite pour pouvoir la passer a useReloadOnFocus.
+  function load() {
     setLoading(true);
     const params = new URLSearchParams();
     if (search) params.set('search', search);
@@ -58,7 +60,14 @@ export default function CompaniesPage() {
         setTotal(res.total);
       })
       .finally(() => setLoading(false));
-  }, [search, status, page]);
+  }
+
+  useEffect(() => { load(); }, [search, status, page]);
+
+  // Refetch automatique quand l'utilisateur revient sur la page (navigation
+  // back, retour d'onglet inactif, retour apres creation/edition). Cf
+  // useReloadOnFocus pour le contexte Router Cache de Next.js.
+  useReloadOnFocus(load);
 
   return (
     <div className="space-y-6">

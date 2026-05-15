@@ -117,6 +117,10 @@ export function CompanyForm({ company }: { company?: Company }) {
       } else {
         const c = await api.post('/companies', payload);
         toast.success('Societe creee');
+        // Invalide le Router Cache AVANT le push sinon /companies (la liste)
+        // restera servie depuis le cache et la nouvelle societe sera invisible
+        // jusqu'a un F5 manuel.
+        router.refresh();
         router.push('/companies/' + c.id);
         return;
       }
