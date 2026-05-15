@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
@@ -97,6 +97,30 @@ export class CompaniesService {
 
   async remove(id: string, userId: string) {
     await this.findOne(id);
+    // Garde-fou : la societe est rattachee a 26 cascades onDelete (contrats,
+    // factures, opportunites, time entries...). Un DELETE physique fait perdre
+    // tout l'historique financier et d'exploitation. On bloque tant qu'il
+    // existe de la donnee structurante. Pour archiver une societe inactive,
+    // changer son status en LOST/INACTIVE plutot que de supprimer.
+    const [contracts, invoices, opportunities, interventions, tickets] = await Promise.all([
+      this.prisma.contract.count({ where: { companyId: id } }),
+      this.prisma.invoice.count({ where: { companyId: id } }),
+      this.prisma.opportunity.count({ where: { companyId: id } }),
+      this.prisma.intervention.count({ where: { companyId: id } }),
+      this.prisma.ticket.count({ where: { companyId: id } }),
+    ]);
+    const blockers: string[] = [];
+    if (contracts > 0) blockers.push(`${contracts} contrat(s)`);
+    if (invoices > 0) blockers.push(`${invoices} facture(s)`);
+    if (opportunities > 0) blockers.push(`${opportunities} opportunite(s)`);
+    if (interventions > 0) blockers.push(`${interventions} intervention(s)`);
+    if (tickets > 0) blockers.push(`${tickets} ticket(s)`);
+    if (blockers.length > 0) {
+      throw new BadRequestException(
+        `Suppression refusee : la societe est liee a ${blockers.join(', ')}. ` +
+        `Pour archiver, changez son statut en LOST plutot que de supprimer.`,
+      );
+    }
     return this.prisma.$transaction(async (tx) => {
       await tx.activity.create({
         data: { userId, action: 'DELETE', entity: 'Company', entityId: id },

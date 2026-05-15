@@ -14,6 +14,7 @@ import { RenewContractDto } from './dto/renew-contract.dto';
 import { QueryContractsDto } from './dto/query-contracts.dto';
 import { buildPageResult, toSkipTake } from '../common/pagination/pagination.dto';
 import { OnboardingService } from '../onboarding/onboarding.service';
+import { CacheService } from '../common/cache/cache.service';
 
 const OFFER_UNIT_PRICES: Record<ContractOffer, number> = {
   MDO_ESSENTIEL: 69,
@@ -31,8 +32,18 @@ export class ContractsService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly onboarding: OnboardingService,
+    private readonly cache: CacheService,
   ) {
     this.alertDays = this.configService.get<number[]>('contract.alertDays') ?? [90, 60, 30, 7];
+  }
+
+  // Toute mutation de contrat invalide les agregats cachs : MRR/ARR exec et
+  // marge par client. Sans ca, un nouveau contrat n'apparait dans le dashboard
+  // dirigeant qu'apres expiration du TTL (1h) — incoherence visible.
+  private invalidateAggregates(companyId?: string) {
+    this.cache.del('executive:snapshot');
+    if (companyId) this.cache.invalidatePrefix('profitability:' + companyId);
+    else this.cache.invalidatePrefix('profitability:');
   }
 
   async generateReference(): Promise<string> {
@@ -162,6 +173,7 @@ export class ContractsService {
       return created;
     });
 
+    this.invalidateAggregates(contract.companyId);
     return contract;
   }
 
@@ -206,22 +218,24 @@ export class ContractsService {
         .catch((err) => this.logger.warn('Auto-onboarding skip pour ' + updated.id + ' : ' + err.message));
     }
 
+    this.invalidateAggregates(existing.companyId);
     return updated;
   }
 
   async remove(id: string, userId: string) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
     await this.prisma.$transaction(async (tx) => {
       await tx.contract.delete({ where: { id } });
       await tx.activity.create({
         data: { userId, action: 'DELETE', entity: 'Contract', entityId: id },
       });
     });
+    this.invalidateAggregates(existing.companyId);
     return { success: true };
   }
 
   async terminate(id: string, reason: string, userId: string) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
     const updated = await this.prisma.contract.update({
       where: { id },
       data: {
@@ -233,6 +247,7 @@ export class ContractsService {
     await this.prisma.activity.create({
       data: { userId, action: 'TERMINATE', entity: 'Contract', entityId: id, metadata: { reason } },
     });
+    this.invalidateAggregates(existing.companyId);
     return updated;
   }
 
@@ -284,6 +299,7 @@ export class ContractsService {
       return created;
     });
 
+    this.invalidateAggregates(previous.companyId);
     return newContract;
   }
 

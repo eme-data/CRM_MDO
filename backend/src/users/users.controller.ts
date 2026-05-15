@@ -62,8 +62,8 @@ export class UsersController {
 
   @Roles('ADMIN')
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.usersService.remove(id, user.id);
   }
 
   @Roles('ADMIN')

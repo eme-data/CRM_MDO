@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../database/prisma.service';
 import { SettingsService } from '../settings/settings.service';
@@ -113,9 +113,32 @@ export class UsersService {
     });
   }
 
-  async remove(id: string) {
-    await this.findById(id);
-    await this.prisma.user.delete({ where: { id } });
+  async remove(id: string, currentUserId?: string) {
+    // Soft delete : on desactive plutot que supprimer physiquement.
+    // Raison : User est relie a TimeEntry, ownedCompanies, ownedContracts,
+    // assignedTickets, etc. via Cascade. Un DELETE physique ferait perdre
+    // toutes les heures saisies (impact direct sur la facturation au temps
+    // passe) et orphelinerait l'historique. La desactivation conserve la
+    // tracabilite et empeche le login (cf JwtStrategy isActive).
+    if (currentUserId && currentUserId === id) {
+      throw new BadRequestException('Vous ne pouvez pas vous desactiver vous-meme.');
+    }
+    const target = await this.findById(id);
+    if (target.role === 'ADMIN') {
+      const activeAdmins = await this.prisma.user.count({
+        where: { role: 'ADMIN', isActive: true, id: { not: id } },
+      });
+      if (activeAdmins === 0) {
+        throw new BadRequestException('Impossible de desactiver le dernier ADMIN actif.');
+      }
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id }, data: { isActive: false } });
+      await tx.refreshToken.updateMany({
+        where: { userId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    });
     return { success: true };
   }
 
