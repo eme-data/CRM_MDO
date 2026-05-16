@@ -61,6 +61,6 @@ export class CompaniesController {
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post(':id/refresh-from-registry')
   refreshFromRegistry(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.lookupService.refreshCompany(id, user.id);
+    return this.lookupService.refreshCompany(id, user);
   }
 }

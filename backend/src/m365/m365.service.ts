@@ -7,6 +7,8 @@ import {
 import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 import { SettingsService } from '../settings/settings.service';
 import { M365GraphClient } from './m365-graph.client';
 
@@ -39,16 +41,19 @@ export class M365Service {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
     private readonly settings: SettingsService,
     private readonly graph: M365GraphClient,
   ) {}
 
   // ============================================================
-  // Configuration globale (client_id, secret) lue depuis Settings.
+  // Configuration : credentials de l'app M365 PAR TENANT CRM. Chaque tenant
+  // (MDO, Mairie de Seysses) a sa propre app registration Azure et donne
+  // SES propres autorisations admin-consent dans son tenant Microsoft.
   // ============================================================
-  private async getAppCredentials(): Promise<{ clientId: string; clientSecret: string }> {
-    const clientId = await this.settings.get('m365.clientId');
-    const clientSecret = await this.settings.get('m365.clientSecret');
+  private async getAppCredentials(crmTenantId: string | null = null): Promise<{ clientId: string; clientSecret: string }> {
+    const clientId = await this.settings.get('m365.clientId', crmTenantId);
+    const clientSecret = await this.settings.get('m365.clientSecret', crmTenantId);
     if (!clientId || !clientSecret) {
       throw new BadRequestException(
         "L'application Microsoft 365 n'est pas configuree. Renseignez m365.clientId et m365.clientSecret dans les Settings.",
@@ -62,10 +67,11 @@ export class M365Service {
    * dans son tenant en tant qu'admin et accepte les permissions. Azure redirige
    * ensuite vers notre `redirectUri` avec `tenant=<guid>&admin_consent=True&state=<companyId>`.
    */
-  async buildAdminConsentUrl(companyId: string): Promise<string> {
-    const { clientId } = await this.getAppCredentials();
+  async buildAdminConsentUrl(companyId: string, me: JwtUser): Promise<string> {
+    await this.scope.assertCompanyInTenant(companyId, me);
+    const { clientId } = await this.getAppCredentials(me.tenantId);
     const baseUrl =
-      (await this.settings.get('app.publicUrl'))
+      (await this.settings.get('app.publicUrl', me.tenantId))
       ?? 'https://crm.mdoservices.fr';
     const redirectUri = encodeURIComponent(baseUrl.replace(/\/+$/, '') + '/api/m365/consent/callback');
     // common = endpoint multi-tenant, le tenant_id reel est renvoye au callback.
@@ -81,7 +87,9 @@ export class M365Service {
   /**
    * Callback admin-consent. Azure passe `tenant`, `admin_consent`, `state`
    * (= companyId), eventuellement `error` si refuse. On enregistre le tenant
-   * et on lance une premiere sync.
+   * et on lance une premiere sync. PAS de scope tenant ici : c'est un
+   * callback OAuth public (Azure -> nous), on lookup le companyId pour
+   * resoudre le tenant CRM proprietaire.
    */
   async handleConsentCallback(params: {
     tenant?: string;
@@ -113,7 +121,7 @@ export class M365Service {
       : await this.prisma.m365Tenant.create({ data: { ...data, companyId } });
 
     // Sync immediate en best-effort (non bloquante pour le redirect).
-    this.syncTenant(tenant.id).catch((err) =>
+    this.syncTenantInternal(tenant.id).catch((err) =>
       this.logger.warn('Sync initiale M365 echouee pour ' + companyId + ' : ' + err.message),
     );
 
@@ -121,20 +129,27 @@ export class M365Service {
   }
 
   // ============================================================
-  // Sync
+  // Sync (entry points)
   // ============================================================
-  async syncTenantByCompany(companyId: string) {
+  async syncTenantByCompany(companyId: string, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(companyId, me);
     const tenant = await this.prisma.m365Tenant.findUnique({ where: { companyId } });
     if (!tenant) throw new NotFoundException('Aucun tenant M365 connecte pour cette societe.');
-    return this.syncTenant(tenant.id);
+    return this.syncTenantInternal(tenant.id);
   }
 
-  async syncTenant(tenantId: string) {
-    const tenant = await this.prisma.m365Tenant.findUnique({ where: { id: tenantId } });
+  // Methode interne : prend l'ID du M365Tenant et resout le tenant CRM via la company.
+  // Appelable depuis cron (sans contexte user).
+  async syncTenantInternal(m365TenantPk: string) {
+    const tenant = await this.prisma.m365Tenant.findUnique({
+      where: { id: m365TenantPk },
+      include: { company: { select: { tenantId: true } } },
+    });
     if (!tenant) throw new NotFoundException();
     if (!tenant.isActive) throw new BadRequestException('Tenant desactive.');
 
-    const { clientId, clientSecret } = await this.getAppCredentials();
+    const crmTenantId = tenant.company.tenantId;
+    const { clientId, clientSecret } = await this.getAppCredentials(crmTenantId);
     const errors: string[] = [];
 
     try {
@@ -316,23 +331,11 @@ export class M365Service {
   }
 
   /**
-   * Microsoft Secure Score : indicateur officiel Microsoft de la posture de
-   * securite du tenant (couvre MFA, conditional access, Defender, partage
-   * externe, etc.). Endpoint : /security/secureScores. Necessite la permission
-   * SecurityEvents.Read.All et un tenant avec licence appropriee (E3/E5/Business
-   * Premium typiquement). On prend le dernier (top=1, l'API retourne par ordre
-   * descendant).
-   *
-   * Si l'endpoint retourne 0 element (tenant sans Secure Score disponible) ou
-   * 401/403 (permission/licence manquante), on capture en upstream via le
-   * .catch() de l'orchestrateur — ces tenants restent avec secureScorePercent=null
-   * et le Cyber Score retombe sur la MFA pure (cf cyber-score.algorithm).
+   * Microsoft Secure Score
    */
   private async syncSecureScore(tenantPk: string, accessToken: string): Promise<number | null> {
     const items = await this.graph.getAll<any>(accessToken, '/security/secureScores?$top=1');
     if (items.length === 0) {
-      // Tenant connecte mais pas eligible Secure Score : on remet les champs
-      // a null pour ne pas garder une valeur perimee.
       await this.prisma.m365Tenant.update({
         where: { id: tenantPk },
         data: {
@@ -362,9 +365,10 @@ export class M365Service {
   }
 
   // ============================================================
-  // Lecture (pour l'UI)
+  // Lecture (pour l'UI) - scope tenant via la company
   // ============================================================
-  async getForCompany(companyId: string) {
+  async getForCompany(companyId: string, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(companyId, me);
     const tenant = await this.prisma.m365Tenant.findUnique({
       where: { companyId },
       include: {
@@ -374,7 +378,8 @@ export class M365Service {
     return tenant; // peut etre null = pas encore connecte
   }
 
-  async listUsers(companyId: string) {
+  async listUsers(companyId: string, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(companyId, me);
     const tenant = await this.prisma.m365Tenant.findUnique({ where: { companyId } });
     if (!tenant) return [];
     return this.prisma.m365User.findMany({
@@ -383,7 +388,8 @@ export class M365Service {
     });
   }
 
-  async listLicenses(companyId: string) {
+  async listLicenses(companyId: string, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(companyId, me);
     const tenant = await this.prisma.m365Tenant.findUnique({ where: { companyId } });
     if (!tenant) return [];
     return this.prisma.m365License.findMany({
@@ -392,7 +398,8 @@ export class M365Service {
     });
   }
 
-  async listAlerts(companyId: string) {
+  async listAlerts(companyId: string, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(companyId, me);
     const tenant = await this.prisma.m365Tenant.findUnique({ where: { companyId } });
     if (!tenant) return [];
     return this.prisma.m365SecurityAlert.findMany({
@@ -402,8 +409,10 @@ export class M365Service {
     });
   }
 
-  async listAllTenants() {
+  // Liste tous les M365Tenants du tenant CRM courant (super-admin voit tout).
+  async listAllTenants(me: JwtUser) {
     return this.prisma.m365Tenant.findMany({
+      where: me.isSuperAdmin ? {} : { company: { tenantId: me.tenantId } },
       orderBy: { createdAt: 'desc' },
       include: {
         company: { select: { id: true, name: true } },
@@ -412,7 +421,8 @@ export class M365Service {
     });
   }
 
-  async disconnect(companyId: string) {
+  async disconnect(companyId: string, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(companyId, me);
     const tenant = await this.prisma.m365Tenant.findUnique({ where: { companyId } });
     if (!tenant) throw new NotFoundException();
     // On supprime tout (users/licenses/alerts) via cascade.
@@ -422,7 +432,9 @@ export class M365Service {
   }
 
   // ============================================================
-  // Cron quotidien : sync tous les tenants actifs a 06:00 Europe/Paris
+  // Cron quotidien : sync tous les M365Tenants actifs (cross-tenant CRM)
+  // 06:00 Europe/Paris. Chaque sync resout les credentials selon le
+  // tenant CRM proprietaire (via company.tenantId).
   // ============================================================
   @Cron('0 6 * * *', { name: 'm365-daily-sync', timeZone: 'Europe/Paris' })
   async runDailySync() {
@@ -435,7 +447,7 @@ export class M365Service {
     let failed = 0;
     for (const t of tenants) {
       try {
-        await this.syncTenant(t.id);
+        await this.syncTenantInternal(t.id);
         ok++;
       } catch (err: any) {
         failed++;

@@ -15,6 +15,7 @@ import { M365Service } from './m365.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('M365')
 @Controller('m365')
@@ -29,8 +30,8 @@ export class M365Controller {
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('companies/:companyId/consent-url')
-  async getConsentUrl(@Param('companyId') companyId: string) {
-    const url = await this.service.buildAdminConsentUrl(companyId);
+  async getConsentUrl(@Param('companyId') companyId: string, @CurrentUser() user: JwtUser) {
+    const url = await this.service.buildAdminConsentUrl(companyId, user);
     return { url };
   }
 
@@ -38,56 +39,56 @@ export class M365Controller {
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('companies/:companyId')
-  getForCompany(@Param('companyId') companyId: string) {
-    return this.service.getForCompany(companyId);
+  getForCompany(@Param('companyId') companyId: string, @CurrentUser() user: JwtUser) {
+    return this.service.getForCompany(companyId, user);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('companies/:companyId/users')
-  listUsers(@Param('companyId') companyId: string) {
-    return this.service.listUsers(companyId);
+  listUsers(@Param('companyId') companyId: string, @CurrentUser() user: JwtUser) {
+    return this.service.listUsers(companyId, user);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('companies/:companyId/licenses')
-  listLicenses(@Param('companyId') companyId: string) {
-    return this.service.listLicenses(companyId);
+  listLicenses(@Param('companyId') companyId: string, @CurrentUser() user: JwtUser) {
+    return this.service.listLicenses(companyId, user);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('companies/:companyId/alerts')
-  listAlerts(@Param('companyId') companyId: string) {
-    return this.service.listAlerts(companyId);
+  listAlerts(@Param('companyId') companyId: string, @CurrentUser() user: JwtUser) {
+    return this.service.listAlerts(companyId, user);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('companies/:companyId/sync')
-  syncCompany(@Param('companyId') companyId: string) {
-    return this.service.syncTenantByCompany(companyId);
+  syncCompany(@Param('companyId') companyId: string, @CurrentUser() user: JwtUser) {
+    return this.service.syncTenantByCompany(companyId, user);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Roles(Role.ADMIN)
   @Delete('companies/:companyId')
-  disconnect(@Param('companyId') companyId: string) {
-    return this.service.disconnect(companyId);
+  disconnect(@Param('companyId') companyId: string, @CurrentUser() user: JwtUser) {
+    return this.service.disconnect(companyId, user);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('tenants')
-  listTenants() {
-    return this.service.listAllTenants();
+  listTenants(@CurrentUser() user: JwtUser) {
+    return this.service.listAllTenants(user);
   }
 
   // ============================================================

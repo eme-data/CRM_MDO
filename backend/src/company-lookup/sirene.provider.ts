@@ -10,12 +10,15 @@ export class SireneProvider {
 
   constructor(private readonly settings: SettingsService) {}
 
-  async isEnabled(): Promise<boolean> {
-    return Boolean(await this.settings.get('lookup.sireneApiKey'));
+  async isEnabled(tenantId: string | null = null): Promise<boolean> {
+    return Boolean(await this.settings.get('lookup.sireneApiKey', tenantId));
   }
 
-  async search(query: string, limit = 10): Promise<CompanyLookupResult[]> {
-    const key = await this.settings.get('lookup.sireneApiKey');
+  // Multi-tenant : la cle Sirene est consommee pour le compte du tenant.
+  // Si le tenant n'a pas configure sa propre cle, le secret n'a PAS de
+  // fallback global (cf SettingsService) — il devra s'enregistrer sur INSEE.
+  async search(query: string, limit = 10, tenantId: string | null = null): Promise<CompanyLookupResult[]> {
+    const key = await this.settings.get('lookup.sireneApiKey', tenantId);
     if (!key) return [];
     const isNumeric = /^\d{9,14}$/.test(query.replace(/\s/g, ''));
     const cleanedQuery = query.replace(/\s/g, '');
@@ -54,8 +57,8 @@ export class SireneProvider {
     }
   }
 
-  async getBySiren(siren: string): Promise<CompanyLookupResult | null> {
-    const list = await this.search(siren, 1);
+  async getBySiren(siren: string, tenantId: string | null = null): Promise<CompanyLookupResult | null> {
+    const list = await this.search(siren, 1, tenantId);
     return list[0] ?? null;
   }
 

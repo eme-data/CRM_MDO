@@ -22,13 +22,13 @@ interface InboundConfig {
   password: string;
   folder: string;
   processedFolder: string | null;
+  tenantId: string | null;
 }
 
 @Injectable()
 export class MailInboundService {
   private readonly logger = new Logger(MailInboundService.name);
   private polling = false;
-  private autoAck = false;
 
   constructor(
     private readonly settings: SettingsService,
@@ -39,36 +39,47 @@ export class MailInboundService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  private async loadConfig(): Promise<InboundConfig> {
+  // Charge la config IMAP pour un tenant donne. En multi-tenant, chaque
+  // tenant a sa propre BAL support@. Quand tenantId=null, on lit la config
+  // globale (compat MDO single-instance).
+  private async loadConfig(tenantId: string | null): Promise<InboundConfig> {
     return {
-      enabled: await this.settings.getBool('imap.enabled'),
-      autoAck: await this.settings.getBool('imap.autoAck'),
-      host: (await this.settings.get('imap.host')) ?? '',
-      port: await this.settings.getInt('imap.port', 993),
-      secure: (await this.settings.get('imap.secure')) !== 'false',
-      user: (await this.settings.get('imap.user')) ?? '',
-      password: (await this.settings.get('imap.password')) ?? '',
-      folder: (await this.settings.get('imap.folder')) ?? 'INBOX',
-      processedFolder: (await this.settings.get('imap.processedFolder')) || null,
+      tenantId,
+      enabled: await this.settings.getBool('imap.enabled', tenantId),
+      autoAck: await this.settings.getBool('imap.autoAck', tenantId),
+      host: (await this.settings.get('imap.host', tenantId)) ?? '',
+      port: await this.settings.getInt('imap.port', 993, tenantId),
+      secure: (await this.settings.get('imap.secure', tenantId)) !== 'false',
+      user: (await this.settings.get('imap.user', tenantId)) ?? '',
+      password: (await this.settings.get('imap.password', tenantId)) ?? '',
+      folder: (await this.settings.get('imap.folder', tenantId)) ?? 'INBOX',
+      processedFolder: (await this.settings.get('imap.processedFolder', tenantId)) || null,
     };
   }
 
-  // Toutes les 2 minutes
+  // Toutes les 2 minutes — poll PAR TENANT. Chaque tenant a son propre IMAP.
   @Cron('*/2 * * * *')
   async poll() {
     if (this.polling) return;
-    const config = await this.loadConfig();
-    if (!config.enabled) return;
-    if (!config.host || !config.user || !config.password) {
-      this.logger.warn('IMAP active mais config incomplete (host/user/password)');
-      return;
-    }
-    this.autoAck = config.autoAck;
     this.polling = true;
     try {
-      await this.processMailbox(config);
-    } catch (err: any) {
-      this.logger.error('Erreur polling IMAP : ' + err.message);
+      const tenants = await this.prisma.tenant.findMany({
+        where: { isActive: true },
+        select: { id: true },
+      });
+      for (const t of tenants) {
+        try {
+          const config = await this.loadConfig(t.id);
+          if (!config.enabled) continue;
+          if (!config.host || !config.user || !config.password) {
+            this.logger.warn('IMAP active mais config incomplete pour tenant ' + t.id);
+            continue;
+          }
+          await this.processMailbox(config);
+        } catch (err: any) {
+          this.logger.error('Erreur polling IMAP tenant ' + t.id + ' : ' + err.message);
+        }
+      }
     } finally {
       this.polling = false;
     }
@@ -89,11 +100,11 @@ export class MailInboundService {
       try {
         const uids = await client.search({ seen: false }, { uid: true });
         if (!uids || uids.length === 0) return;
-        this.logger.log(uids.length + ' email(s) a traiter');
+        this.logger.log('[tenant ' + (config.tenantId ?? 'global') + '] ' + uids.length + ' email(s) a traiter');
 
         for await (const message of client.fetch(uids, { source: true, envelope: true, uid: true })) {
           try {
-            await this.processMessage(message);
+            await this.processMessage(message, config);
             await client.messageFlagsAdd(message.uid, ['\\Seen'], { uid: true });
             if (config.processedFolder) {
               try {
@@ -116,7 +127,7 @@ export class MailInboundService {
     }
   }
 
-  private async processMessage(message: FetchMessageObject) {
+  private async processMessage(message: FetchMessageObject, config: InboundConfig) {
     const parsed: ParsedMail = await simpleParser(message.source as Buffer);
 
     const fromAddr = parsed.from?.value?.[0];
@@ -140,12 +151,16 @@ export class MailInboundService {
         ? [parsed.references]
         : [];
 
-    // 1. Ticket existant via In-Reply-To / References (le plus fiable)
+    // 1. Ticket existant via In-Reply-To / References (le plus fiable).
+    // Scope tenant : on cherche uniquement dans les tickets du tenant courant.
     let existingTicket = null as null | { id: string; reference: string; status: string; assigneeId: string | null; title: string };
     const refIds = [inReplyTo, ...references].filter(Boolean) as string[];
     if (refIds.length > 0) {
       const matched = await this.prisma.ticketMessage.findFirst({
-        where: { messageId: { in: refIds } },
+        where: {
+          messageId: { in: refIds },
+          ...(config.tenantId ? { tenantId: config.tenantId } : {}),
+        },
         select: {
           ticket: {
             select: { id: true, reference: true, status: true, assigneeId: true, title: true },
@@ -155,16 +170,16 @@ export class MailInboundService {
       if (matched?.ticket) existingTicket = matched.ticket;
     }
 
-    // 2. Fallback : reference dans le sujet
+    // 2. Fallback : reference dans le sujet, scopee par tenant.
     if (!existingTicket) {
       const refMatch = subject.match(TICKET_REF_RE);
       if (refMatch) {
         const reference = refMatch[1].toUpperCase();
-        // Multi-tenant : reference n'est plus unique seul (cf @@unique
-        // ([tenantId, reference])). On utilise findFirst en attendant que
-        // mail-inbound soit refactore pour scope tenant explicite.
         const t = await this.prisma.ticket.findFirst({
-          where: { reference },
+          where: {
+            reference,
+            ...(config.tenantId ? { tenantId: config.tenantId } : {}),
+          },
           select: { id: true, reference: true, status: true, assigneeId: true, title: true },
         });
         if (t) existingTicket = t;
@@ -174,6 +189,7 @@ export class MailInboundService {
     if (existingTicket) {
       const newMsg = await this.prisma.ticketMessage.create({
         data: {
+          tenantId: config.tenantId,
           ticketId: existingTicket.id,
           authorId: null,
           authorName: senderName || null,
@@ -212,11 +228,12 @@ export class MailInboundService {
       return;
     }
 
-    // 3. Resoudre Contact + Company
-    const { companyId, contactId } = await this.resolveSender(senderEmail);
+    // 3. Resoudre Contact + Company DANS LE MEME TENANT
+    const { companyId, contactId } = await this.resolveSender(senderEmail, config.tenantId);
     if (!companyId) {
       this.logger.warn(
-        'Pas de Company correspondant a ' + senderEmail + ' - email ignore (creer la societe avant)',
+        'Pas de Company correspondant a ' + senderEmail + ' dans le tenant ' + (config.tenantId ?? 'global') +
+        ' - email ignore (creer la societe avant)',
       );
       return;
     }
@@ -224,14 +241,15 @@ export class MailInboundService {
     // 4. Creer le ticket + premier message + (optionnel) accuse de reception
     const cleanTitle = this.cleanSubject(subject);
     const dueDate = await this.sla.computeDueDate(companyId, 'NORMAL');
-    const systemUserId = await this.systemUserId();
+    const systemUserId = await this.systemUserId(config.tenantId);
     // Retry anti-TOCTOU sur reference (un email entrant + ticket cree manuel
     // peuvent calculer la meme TKT-2026-XXXXX). Cf withUniqueRetry.
     const { ticket, firstMessage } = await withUniqueRetry(
-      () => this.generateReference(),
+      () => this.generateReference(config.tenantId),
       (reference) => this.prisma.$transaction(async (tx) => {
         const created = await tx.ticket.create({
           data: {
+            tenantId: config.tenantId,
             reference,
             title: cleanTitle,
             description: textBody,
@@ -247,6 +265,7 @@ export class MailInboundService {
         });
         const msg = await tx.ticketMessage.create({
           data: {
+            tenantId: config.tenantId,
             ticketId: created.id,
             authorId: null,
             authorName: senderName || null,
@@ -266,8 +285,8 @@ export class MailInboundService {
 
     this.logger.log('Ticket ' + ticket.reference + ' cree depuis ' + senderEmail);
 
-    // 5. Auto-acknowledgement
-    if (this.autoAck) {
+    // 5. Auto-acknowledgement (envoie via le SMTP du tenant)
+    if (config.autoAck) {
       try {
         const ackRefs = [incomingMessageId, ...references].filter(Boolean) as string[];
         const ackResult = await this.mail.sendTicketAcknowledgement({
@@ -277,11 +296,13 @@ export class MailInboundService {
           inReplyTo: incomingMessageId,
           references: ackRefs,
           relatedEntityId: ticket.id,
+          tenantId: config.tenantId,
         });
         if (ackResult.status === 'SENT' && ackResult.messageId) {
           // On stocke le messageId de l'ack dans un message interne pour tracer le thread
           await this.prisma.ticketMessage.create({
             data: {
+              tenantId: config.tenantId,
               ticketId: ticket.id,
               authorId: null,
               authorName: 'Accuse automatique',
@@ -321,22 +342,28 @@ export class MailInboundService {
     }
   }
 
+  // Match contact / company DANS LE TENANT du IMAP. Sinon un email entrant
+  // d'un domaine commun (ex: orange.fr) pourrait etre rattache au mauvais
+  // contact d'un autre tenant.
   private async resolveSender(
     email: string,
+    tenantId: string | null,
   ): Promise<{ companyId: string | null; contactId: string | null }> {
-    // Match contact par email exact
+    const tenantWhere = tenantId ? { tenantId } : {};
+    // Match contact par email exact dans le tenant
     const contact = await this.prisma.contact.findFirst({
-      where: { email: { equals: email, mode: 'insensitive' } },
+      where: { ...tenantWhere, email: { equals: email, mode: 'insensitive' } },
       select: { id: true, companyId: true },
     });
     if (contact?.companyId) {
       return { companyId: contact.companyId, contactId: contact.id };
     }
-    // Match company par domaine de l'email
+    // Match company par domaine de l'email dans le tenant
     const domain = email.split('@')[1];
     if (domain) {
       const company = await this.prisma.company.findFirst({
         where: {
+          ...tenantWhere,
           OR: [
             { email: { endsWith: '@' + domain, mode: 'insensitive' } },
             { website: { contains: domain, mode: 'insensitive' } },
@@ -351,11 +378,18 @@ export class MailInboundService {
     return { companyId: null, contactId: contact?.id ?? null };
   }
 
-  private async generateReference(): Promise<string> {
+  private async generateReference(tenantId: string | null): Promise<string> {
     const year = new Date().getFullYear();
     const prefix = 'TKT-' + year + '-';
+    // Reference unique par tenant : on lit la derniere DU TENANT pour
+    // continuer la sequence. Sinon deux tenants re-utiliseraient les memes
+    // numeros, et bien que ca passe la contrainte @@unique([tenantId,
+    // reference]), c'est confus pour la communication client.
     const last = await this.prisma.ticket.findFirst({
-      where: { reference: { startsWith: prefix } },
+      where: {
+        ...(tenantId ? { tenantId } : {}),
+        reference: { startsWith: prefix },
+      },
       orderBy: { reference: 'desc' },
       select: { reference: true },
     });
@@ -368,15 +402,19 @@ export class MailInboundService {
   }
 
   // Le ticket cree par email a besoin d'un createdBy (FK obligatoire).
-  // On utilise le 1er admin actif comme "user systeme".
-  private async systemUserId(): Promise<string> {
+  // On utilise le 1er admin actif DU TENANT comme "user systeme".
+  private async systemUserId(tenantId: string | null): Promise<string> {
     const admin = await this.prisma.user.findFirst({
-      where: { role: 'ADMIN', isActive: true },
+      where: {
+        role: 'ADMIN',
+        isActive: true,
+        ...(tenantId ? { tenantId } : {}),
+      },
       orderBy: { createdAt: 'asc' },
       select: { id: true },
     });
     if (!admin) {
-      throw new Error('Aucun ADMIN actif - impossible de creer un ticket via email');
+      throw new Error('Aucun ADMIN actif dans le tenant - impossible de creer un ticket via email');
     }
     return admin.id;
   }

@@ -4,6 +4,7 @@ import { PatchManagementService } from './patch-management.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Patch management')
 @ApiBearerAuth()
@@ -14,20 +15,21 @@ export class PatchManagementController {
 
   @Get('devices')
   list(
+    @CurrentUser() user: JwtUser,
     @Query('companyId') companyId?: string,
     @Query('complianceState') complianceState?: string,
   ) {
-    return this.service.list({ companyId, complianceState });
+    return this.service.list(user, { companyId, complianceState });
   }
 
   @Get('stats')
-  stats() {
-    return this.service.stats();
+  stats(@CurrentUser() user: JwtUser) {
+    return this.service.stats(user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Post('tenants/:tenantId/sync')
-  sync(@Param('tenantId') tenantId: string) {
-    return this.service.syncTenant(tenantId);
+  sync(@Param('tenantId') tenantId: string, @CurrentUser() user: JwtUser) {
+    return this.service.syncTenant(tenantId, user);
   }
 }

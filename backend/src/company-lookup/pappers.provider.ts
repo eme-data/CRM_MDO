@@ -24,12 +24,14 @@ export class PappersProvider {
 
   constructor(private readonly settings: SettingsService) {}
 
-  async isEnabled(): Promise<boolean> {
-    return Boolean(await this.settings.get('lookup.pappersApiKey'));
+  async isEnabled(tenantId: string | null = null): Promise<boolean> {
+    return Boolean(await this.settings.get('lookup.pappersApiKey', tenantId));
   }
 
-  async search(query: string, limit = 10): Promise<CompanyLookupResult[]> {
-    const key = await this.settings.get('lookup.pappersApiKey');
+  // Multi-tenant : cle Pappers consommee pour le compte du tenant. Aucun
+  // fallback global pour les secrets (le tenant doit avoir sa propre cle).
+  async search(query: string, limit = 10, tenantId: string | null = null): Promise<CompanyLookupResult[]> {
+    const key = await this.settings.get('lookup.pappersApiKey', tenantId);
     if (!key) return [];
     const url =
       this.base +
@@ -54,8 +56,8 @@ export class PappersProvider {
     }
   }
 
-  async getBySiren(siren: string): Promise<CompanyLookupResult | null> {
-    const key = await this.settings.get('lookup.pappersApiKey');
+  async getBySiren(siren: string, tenantId: string | null = null): Promise<CompanyLookupResult | null> {
+    const key = await this.settings.get('lookup.pappersApiKey', tenantId);
     if (!key) return null;
     const url =
       this.base + '/entreprise?api_token=' + encodeURIComponent(key) + '&siren=' + encodeURIComponent(siren);

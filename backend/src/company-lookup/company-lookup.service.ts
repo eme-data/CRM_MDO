@@ -1,6 +1,8 @@
 import { Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { CompanySector } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 import { PappersProvider, CompanyLookupResult } from './pappers.provider';
 import { SireneProvider } from './sirene.provider';
 
@@ -12,46 +14,48 @@ export class CompanyLookupService {
     private readonly pappers: PappersProvider,
     private readonly sirene: SireneProvider,
     private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
   ) {}
 
-  async hasAnyProvider(): Promise<boolean> {
-    return (await this.pappers.isEnabled()) || (await this.sirene.isEnabled());
+  async hasAnyProvider(tenantId: string | null = null): Promise<boolean> {
+    return (await this.pappers.isEnabled(tenantId)) || (await this.sirene.isEnabled(tenantId));
   }
 
-  async search(query: string): Promise<CompanyLookupResult[]> {
+  async search(query: string, tenantId: string | null = null): Promise<CompanyLookupResult[]> {
     if (!query || query.trim().length < 3) return [];
-    if (!(await this.hasAnyProvider())) {
+    if (!(await this.hasAnyProvider(tenantId))) {
       throw new ServiceUnavailableException(
         'Aucun provider configure : renseignez la cle Pappers ou Sirene dans Admin > Parametres',
       );
     }
-    if (await this.pappers.isEnabled()) {
-      const results = await this.pappers.search(query.trim(), 10);
+    if (await this.pappers.isEnabled(tenantId)) {
+      const results = await this.pappers.search(query.trim(), 10, tenantId);
       if (results.length > 0) return results;
     }
-    if (await this.sirene.isEnabled()) {
-      return this.sirene.search(query.trim(), 10);
+    if (await this.sirene.isEnabled(tenantId)) {
+      return this.sirene.search(query.trim(), 10, tenantId);
     }
     return [];
   }
 
-  async getBySiren(siren: string): Promise<CompanyLookupResult> {
+  async getBySiren(siren: string, tenantId: string | null = null): Promise<CompanyLookupResult> {
     const cleaned = siren.replace(/\s/g, '');
     if (!/^\d{9}$/.test(cleaned)) {
       throw new NotFoundException('SIREN invalide (9 chiffres attendus)');
     }
-    if (await this.pappers.isEnabled()) {
-      const r = await this.pappers.getBySiren(cleaned);
+    if (await this.pappers.isEnabled(tenantId)) {
+      const r = await this.pappers.getBySiren(cleaned, tenantId);
       if (r) return r;
     }
-    if (await this.sirene.isEnabled()) {
-      const r = await this.sirene.getBySiren(cleaned);
+    if (await this.sirene.isEnabled(tenantId)) {
+      const r = await this.sirene.getBySiren(cleaned, tenantId);
       if (r) return r;
     }
     throw new NotFoundException('Aucune entreprise trouvee pour SIREN ' + cleaned);
   }
 
-  async refreshCompany(companyId: string, userId: string): Promise<any> {
+  async refreshCompany(companyId: string, me: JwtUser): Promise<any> {
+    await this.scope.assertCompanyInTenant(companyId, me);
     const company = await this.prisma.company.findUnique({ where: { id: companyId } });
     if (!company) throw new NotFoundException('Societe introuvable');
     const siren = company.siren ?? this.sirenFromSiret(company.siret);
@@ -60,7 +64,7 @@ export class CompanyLookupService {
         'Pas de SIREN/SIRET sur cette societe - impossible de rafraichir depuis le registre',
       );
     }
-    const remote = await this.getBySiren(siren);
+    const remote = await this.getBySiren(siren, me.tenantId);
     const updated = await this.prisma.company.update({
       where: { id: companyId },
       data: {
@@ -83,7 +87,8 @@ export class CompanyLookupService {
     });
     await this.prisma.activity.create({
       data: {
-        userId,
+        userId: me.id,
+        tenantId: me.tenantId,
         action: 'SYNC_REGISTRY',
         entity: 'Company',
         entityId: companyId,
