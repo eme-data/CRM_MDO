@@ -25,6 +25,9 @@ import { SsoService, OidcSession } from './sso.service';
 // HTTP-only, signed (JWT court), expire en 10 min.
 const SSO_COOKIE = 'mdo_sso_session';
 const SSO_COOKIE_TTL_SECONDS = 600;
+// Cookie one-shot pour transmettre les tokens entre callback (cote serveur)
+// et la page /sso-callback du frontend (qui appelle /exchange).
+const SSO_EXCHANGE_COOKIE = 'mdo_sso_exchange';
 
 @ApiTags('Auth — SSO (OIDC)')
 @Public()
@@ -40,6 +43,19 @@ export class SsoController {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
   ) {}
+
+  // Endpoint public consomme par la page /login pour decider d'afficher le
+  // bouton "Sign in with SSO". Resout le tenant depuis le Host (middleware
+  // global) et renvoie { enabled, tenantSlug }. Pas de leak : on ne devoile
+  // ni l'issuer, ni le clientId — juste si le bouton doit apparaitre.
+  @AllowMfaPending()
+  @Get('status')
+  async status(@Req() req: Request) {
+    const tenant = req.tenant;
+    if (!tenant) return { enabled: false, tenantSlug: null };
+    const enabled = await this.sso.isEnabledFor(tenant.id);
+    return { enabled, tenantSlug: enabled ? tenant.slug : null };
+  }
 
   // Lance le flow SSO : redirige le navigateur vers l'IdP du tenant.
   // /auth/sso/<tenantSlug>/start?return=/dashboard
@@ -119,27 +135,47 @@ export class SsoController {
       userAgent: req.headers['user-agent'],
     });
 
-    // Renvoie tokens via cookie + redirect pour que le frontend les capte.
-    // Strategie classique : stocker l'accessToken en HTTP-only cookie pour les
-    // requetes API (le frontend lit le user via /auth/me). Refresh token en
-    // cookie HTTP-only egalement, valide sur /auth/refresh uniquement.
-    res.cookie('mdo_access', tokens.accessToken, {
+    // Bridge cookie -> localStorage : le reste de l'app utilise des Bearer
+    // tokens en localStorage (cf api.ts). On stocke les tokens dans un cookie
+    // HTTP-only court (60s) signe en JWT, on redirige vers une page frontend
+    // /sso-callback qui appelle /auth/sso/exchange pour les recuperer, les
+    // place dans localStorage puis redirige vers la destination finale.
+    // Avantages : tokens jamais dans l'URL/history, atomicite (one-shot via
+    // clearCookie cote exchange).
+    const exchangeToken = await this.jwt.signAsync(
+      { at: tokens.accessToken, rt: tokens.refreshToken, ret: payload.return || '/' },
+      { expiresIn: '60s' },
+    );
+    res.cookie(SSO_EXCHANGE_COOKIE, exchangeToken, {
       httpOnly: true,
       secure: this.isProd(),
       sameSite: 'lax',
-      maxAge: 15 * 60 * 1000, // 15 min (sync avec JWT expiration)
-      path: '/',
+      maxAge: 60_000,
+      path: '/api/auth/sso',
     });
-    res.cookie('mdo_refresh', tokens.refreshToken, {
-      httpOnly: true,
-      secure: this.isProd(),
-      sameSite: 'lax',
-      maxAge: 30 * 86400 * 1000, // 30 jours
-      path: '/api/auth/refresh',
-    });
+    res.redirect(302, '/sso-callback');
+  }
 
-    const dest = payload.return || '/';
-    res.redirect(302, dest);
+  // Exchange : la page /sso-callback du frontend appelle cet endpoint pour
+  // recuperer les tokens depuis le cookie one-shot, et les stocker dans
+  // localStorage. Le cookie est immediatement efface (anti-rejeu).
+  @AllowMfaPending()
+  @Get('exchange')
+  async exchange(@Req() req: Request, @Res() res: Response) {
+    const token = (req.cookies as Record<string, string> | undefined)?.[SSO_EXCHANGE_COOKIE];
+    if (!token) throw new UnauthorizedException('Aucune session SSO en attente');
+    let payload: { at: string; rt: string; ret: string };
+    try {
+      payload = await this.jwt.verifyAsync(token);
+    } catch {
+      throw new UnauthorizedException('Cookie exchange invalide ou expire');
+    }
+    res.clearCookie(SSO_EXCHANGE_COOKIE, { path: '/api/auth/sso' });
+    res.json({
+      accessToken: payload.at,
+      refreshToken: payload.rt,
+      returnPath: payload.ret,
+    });
   }
 
   // Helpers

@@ -1,10 +1,11 @@
 'use client';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { ShieldCheck, KeyRound, Mail, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, KeyRound, Mail, ArrowLeft, LogIn } from 'lucide-react';
 import { login } from '@/lib/auth';
 import { useBranding } from '@/components/BrandingProvider';
+import { getSsoStatus, ssoStartUrl, SsoStatus } from '@/lib/sso';
 
 function extractMessages(err: any): string[] {
   // NestJS peut retourner message comme string OU array (validation).
@@ -22,12 +23,28 @@ function extractMessages(err: any): string[] {
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const branding = useBranding();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
   const [needTotp, setNeedTotp] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [sso, setSso] = useState<SsoStatus>({ enabled: false, tenantSlug: null });
+
+  // Charge le statut SSO du tenant courant (resolu par backend via Host).
+  // Si SSO est actif, on affiche le bouton "Sign in with SSO".
+  useEffect(() => {
+    getSsoStatus().then(setSso).catch(() => {});
+  }, []);
+
+  // Si redirige ici apres echec SSO via /login?sso_error=...
+  useEffect(() => {
+    const ssoError = searchParams?.get('sso_error');
+    if (ssoError) {
+      toast.error('Echec de la connexion SSO : ' + ssoError);
+    }
+  }, [searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -72,6 +89,27 @@ export default function LoginPage() {
             {needTotp ? 'Verification a deux facteurs' : 'Connexion a votre espace'}
           </p>
         </div>
+
+        {/* Bouton SSO : visible si le tenant a active sso.enabled. On le
+            propose AVANT le formulaire email/password pour pousser les users
+            vers leur IdP (Entra ID / Keycloak) qui gere deja la 2FA cote
+            entreprise. */}
+        {!needTotp && sso.enabled && sso.tenantSlug && (
+          <div className="space-y-3">
+            <a
+              href={ssoStartUrl(sso.tenantSlug, '/dashboard')}
+              className="btn w-full inline-flex items-center justify-center gap-2 bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+            >
+              <LogIn size={16} />
+              Se connecter avec votre compte entreprise (SSO)
+            </a>
+            <div className="flex items-center gap-3 text-xs text-slate-400">
+              <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+              <span>ou</span>
+              <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+            </div>
+          </div>
+        )}
 
         {!needTotp && (
           <>
