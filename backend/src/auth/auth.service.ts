@@ -158,6 +158,21 @@ export class AuthService {
     return { success: true };
   }
 
+  // Variante publique utilisee par le flow SSO (bypass password verif).
+  // L'auth a deja ete faite par l'IdP externe ; on emet juste nos tokens.
+  // mfaPending suit la meme regle qu'en login local (cf computeMfaPending).
+  async issueTokensForUser(
+    user: { id: string; email: string; role: string; tenantId: string | null; isSuperAdmin: boolean },
+    context: { ip?: string; userAgent?: string } = {},
+  ) {
+    const mfaPending = await this.computeMfaPending(user.id, user.role);
+    return this.issueTokens(
+      user.id, user.email, user.role,
+      user.tenantId, user.isSuperAdmin,
+      mfaPending, context,
+    );
+  }
+
   private async issueTokens(
     userId: string,
     email: string,

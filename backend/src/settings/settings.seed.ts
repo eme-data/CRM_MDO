@@ -583,6 +583,64 @@ export const SETTINGS_DEFS: SettingDef[] = [
       'Si actif, le tarball contient le volume uploads en plus du dump BDD. Desactiver SI les uploads sont sauvegardes ailleurs (S3, restic) — gain de temps + place.',
     defaultValue: 'true',
   },
+
+  // ---------- SSO (OIDC) ----------
+  // Active le bouton "Sign in with SSO" sur la page de login du tenant.
+  // Chaque tenant configure SON IdP (Entra ID, Keycloak, etc.) via ces
+  // settings. Les credentials etant sensibles, isSecret=true bloque le
+  // fallback global (cf SettingsService) — un tenant client ne peut pas
+  // taper sur l'app MDO Entra par defaut.
+  {
+    key: 'sso.enabled',
+    category: 'sso',
+    label: 'Activer le SSO (OIDC) pour ce tenant',
+    description:
+      'Si actif, les users peuvent se connecter via le bouton "Sign in with SSO" qui les redirige vers l\'IdP configure (Entra ID, Keycloak, Google Workspace, etc.). Le login local password reste possible pour les comptes sans ssoSubject lie.',
+    defaultValue: 'false',
+  },
+  {
+    key: 'sso.oidc.issuerUrl',
+    category: 'sso',
+    label: 'OIDC Issuer URL',
+    description:
+      'URL complete de l\'issuer (sera concatene avec /.well-known/openid-configuration pour la decouverte). Exemples : https://login.microsoftonline.com/<tenant-id>/v2.0 (Entra ID), https://keycloak.example.fr/realms/<realm> (Keycloak), https://accounts.google.com (Google).',
+  },
+  {
+    key: 'sso.oidc.clientId',
+    category: 'sso',
+    label: 'OIDC Client ID',
+    description: 'Identifiant de l\'application enregistree dans l\'IdP.',
+  },
+  {
+    key: 'sso.oidc.clientSecret',
+    category: 'sso',
+    label: 'OIDC Client Secret',
+    description: 'Secret client genere lors de l\'enregistrement de l\'app dans l\'IdP.',
+    isSecret: true,
+  },
+  {
+    key: 'sso.oidc.scopes',
+    category: 'sso',
+    label: 'Scopes OIDC demandes',
+    description:
+      'Liste de scopes separes par espace. Minimum : "openid email profile". Ajouter "offline_access" si vous voulez un refresh_token IdP.',
+    defaultValue: 'openid email profile',
+  },
+  {
+    key: 'sso.allowJitProvisioning',
+    category: 'sso',
+    label: 'Creation automatique des users (JIT)',
+    description:
+      'Si actif, un user qui se connecte via SSO et qui n\'existe pas encore en BDD est cree automatiquement (Just-In-Time) avec le role par defaut. Si inactif, seuls les users deja crees manuellement peuvent se connecter via SSO.',
+    defaultValue: 'true',
+  },
+  {
+    key: 'sso.defaultRole',
+    category: 'sso',
+    label: 'Role par defaut pour les users JIT',
+    description: 'Role assigne aux users crees via JIT provisioning : ADMIN, MANAGER, SALES, READONLY. Recommandation : SALES (acces standard).',
+    defaultValue: 'SALES',
+  },
 ];
 
 export function findSettingDef(key: string): SettingDef | undefined {

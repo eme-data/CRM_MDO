@@ -4,6 +4,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { initSentry } from './common/observability/sentry';
 
 // Sentry doit etre initialise AVANT toute charge applicative pour capturer les
@@ -84,6 +85,12 @@ async function bootstrap() {
       strictTransportSecurity: { maxAge: 63072000, includeSubDomains: true, preload: true },
     }),
   );
+  // Cookie parser : requis pour le flow SSO OIDC (cookie de session
+  // intermediaire entre /sso/start et /sso/callback porte le state + nonce
+  // + code_verifier + path de retour). Aussi pour les cookies de tokens
+  // emis post-SSO (mdo_access / mdo_refresh).
+  app.use(cookieParser());
+
   app.setGlobalPrefix('api', { exclude: ['health', 'metrics'] });
   // Versioning d'URI : tous les controleurs sont accessibles sous /api/v1/...
   // Les anciennes URLs /api/... restent fonctionnelles via VERSION_NEUTRAL.

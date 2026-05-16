@@ -356,6 +356,15 @@ export class TenantsService implements OnModuleInit {
     return t;
   }
 
+  // Helper utilise par le flow SSO public : on identifie le tenant par slug
+  // (depuis l'URL /auth/sso/<slug>/start) plutot que par id. Throw 404 sinon.
+  async findBySlugStrict(slug: string) {
+    const t = await this.prisma.tenant.findUnique({ where: { slug } });
+    if (!t) throw new NotFoundException('Tenant introuvable : ' + slug);
+    if (!t.isActive) throw new NotFoundException('Tenant inactif : ' + slug);
+    return t;
+  }
+
   async create(input: {
     slug: string;
     customDomain: string;

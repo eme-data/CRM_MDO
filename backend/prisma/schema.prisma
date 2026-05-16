@@ -131,6 +131,19 @@ model User {
   // supportent pas Bearer). NULL tant que l'utilisateur n'a pas active la
   // fonctionnalite ; revoquable via /users/me/ical/regenerate.
   icalToken       String?   @unique
+  // ----- SSO (OIDC) -----
+  // Lien vers une identite SSO externe. Si renseigne, le user s'authentifie
+  // via le provider OIDC de son tenant (Entra ID, Keycloak, etc.) et n'a
+  // PAS de password local (passwordHash garde une valeur placeholder bcrypt
+  // d'une chaine aleatoire pour rendre tout login local impossible).
+  //   - ssoIssuer  : claim "iss" du token IdP (URL de l'issuer OIDC)
+  //   - ssoSubject : claim "sub" du token IdP (id stable de l'utilisateur
+  //                  dans son tenant Entra/Keycloak — jamais l'email qui peut
+  //                  changer)
+  // Unique compose (tenantId, ssoIssuer, ssoSubject) : meme identite SSO peut
+  // exister dans plusieurs tenants si IdP partage (ex: Entra commune).
+  ssoIssuer       String?
+  ssoSubject      String?
   // Taux horaire interne (cout du technicien pour MDO). Sert au calcul de
   // marge / rentabilite (cf module profitability). Si null, on utilise la
   // valeur par defaut Settings('profitability.defaultHourlyRate').
@@ -199,6 +212,10 @@ model User {
   // differents (ex: mathieu@mdoservices.fr peut exister dans tenant 'mdo'
   // ET dans tenant 'seysses' pour audit, sans conflit).
   @@unique([tenantId, email])
+  // Identite SSO unique par tenant : empeche deux users du meme tenant de
+  // matcher la meme identite OIDC (sub) du meme IdP (iss). Permet la meme
+  // identite dans plusieurs tenants si IdP partage.
+  @@unique([tenantId, ssoIssuer, ssoSubject])
   @@index([teamId])
   @@index([tenantId])
 }
