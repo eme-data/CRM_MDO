@@ -23,12 +23,12 @@ export class ResponseTemplatesController {
 
   @Get()
   list(@CurrentUser() user: JwtUser, @Query('category') category?: string) {
-    return this.service.listForUser(user.id, category);
+    return this.service.listForUser(user, category);
   }
 
   @Get(':id')
   findOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.findOne(id, user.id);
+    return this.service.findOne(id, user);
   }
 
   @Post()
@@ -36,7 +36,7 @@ export class ResponseTemplatesController {
     @Body() dto: { name: string; body: string; subject?: string; category?: string; shared?: boolean },
     @CurrentUser() user: JwtUser,
   ) {
-    return this.service.create(user.id, dto);
+    return this.service.create(user, dto);
   }
 
   @Patch(':id')
@@ -45,11 +45,11 @@ export class ResponseTemplatesController {
     @Body() dto: any,
     @CurrentUser() user: JwtUser,
   ) {
-    return this.service.update(id, user.id, user.role, dto);
+    return this.service.update(id, user, dto);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.remove(id, user.id, user.role);
+    return this.service.remove(id, user);
   }
 }

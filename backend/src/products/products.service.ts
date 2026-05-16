@@ -1,15 +1,30 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, ProductType } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
+// NOTE multi-tenant : le catalogue produit est SCOPE par tenant.
+// Le champ Product.code reste @unique global cote schema (vague 8 ne l'a pas
+// migre). Conséquence : un meme code ne peut etre utilise que par un seul
+// tenant. A migrer vers @@unique([tenantId, code]) au prochain refactor de
+// schema. Pour l'instant : les noms de code peuvent etre prefixes par tenant
+// (ex: "MDO-O365-E3" vs "SEYSSES-O365-E3") en attendant.
+
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
+  ) {}
 
-  async findAll(params: { search?: string; vendor?: string; type?: ProductType; includeInactive?: boolean }) {
-    const where: Prisma.ProductWhereInput = {};
+  async findAll(
+    me: JwtUser,
+    params: { search?: string; vendor?: string; type?: ProductType; includeInactive?: boolean },
+  ) {
+    const where: Prisma.ProductWhereInput = this.scope.scopedWhere(me);
     if (!params.includeInactive) where.isActive = true;
     if (params.vendor) where.vendor = params.vendor;
     if (params.type) where.type = params.type;
@@ -27,9 +42,9 @@ export class ProductsService {
     });
   }
 
-  async findOne(id: string) {
-    const p = await this.prisma.product.findUnique({
-      where: { id },
+  async findOne(id: string, me: JwtUser) {
+    const p = await this.prisma.product.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: {
         _count: { select: { quoteLines: true } },
       },
@@ -38,9 +53,9 @@ export class ProductsService {
     return p;
   }
 
-  async create(dto: CreateProductDto) {
+  async create(dto: CreateProductDto, me: JwtUser) {
     try {
-      return await this.prisma.product.create({ data: dto as any });
+      return await this.prisma.product.create({ data: { ...dto, tenantId: me.tenantId } as any });
     } catch (err: any) {
       if (err?.code === 'P2002') {
         throw new BadRequestException('Code produit deja utilise : ' + dto.code);
@@ -49,8 +64,8 @@ export class ProductsService {
     }
   }
 
-  async update(id: string, dto: UpdateProductDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateProductDto, me: JwtUser) {
+    await this.findOne(id, me);
     try {
       return await this.prisma.product.update({ where: { id }, data: dto as any });
     } catch (err: any) {
@@ -61,8 +76,8 @@ export class ProductsService {
     }
   }
 
-  async remove(id: string) {
-    const p = await this.findOne(id);
+  async remove(id: string, me: JwtUser) {
+    const p = await this.findOne(id, me);
     if (p._count.quoteLines > 0) {
       // On ne supprime pas un produit utilise dans des devis (perte de
       // trace historique). Soft-delete via isActive=false a la place.
@@ -75,12 +90,13 @@ export class ProductsService {
   }
 
   // ============================================================
-  // Stats globales catalogue
+  // Stats catalogue (par tenant)
   // ============================================================
-  async stats() {
-    // Top vendors par marge generee sur les devis ACCEPTED
+  async stats(me: JwtUser) {
+    // Top vendors par marge generee sur les devis ACCEPTED de ce tenant.
     const lines = await this.prisma.quoteLine.findMany({
       where: {
+        ...this.scope.scopedWhere(me),
         productId: { not: null },
         purchasePriceHtSnapshot: { not: null },
         quote: { status: 'ACCEPTED' },
@@ -148,7 +164,9 @@ export class ProductsService {
           margin: +p.margin.toFixed(2),
           units: +p.units.toFixed(0),
         })),
-      totalCatalogProducts: await this.prisma.product.count({ where: { isActive: true } }),
+      totalCatalogProducts: await this.prisma.product.count({
+        where: this.scope.scopedWhere(me, { isActive: true }),
+      }),
     };
   }
 }

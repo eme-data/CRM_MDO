@@ -14,23 +14,25 @@ export class QuickNotesController {
   constructor(private readonly service: QuickNotesService) {}
 
   @Get()
-  list(@Query('companyId') companyId: string) {
-    return this.service.listForCompany(companyId);
+  list(@Query('companyId') companyId: string, @CurrentUser() user: JwtUser) {
+    return this.service.listForCompany(companyId, user);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post()
   create(@Body() dto: UpsertQuickNoteDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(dto, user.id);
+    return this.service.create(dto, user);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: Partial<UpsertQuickNoteDto>) {
-    return this.service.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: Partial<UpsertQuickNoteDto>, @CurrentUser() user: JwtUser) {
+    return this.service.update(id, dto, user);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Delete(':id')
-  remove(@Param('id') id: string) { return this.service.remove(id); }
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.remove(id, user);
+  }
 }

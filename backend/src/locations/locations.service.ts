@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 export interface UpsertLocationDto {
   companyId: string;
@@ -17,9 +19,13 @@ export interface UpsertLocationDto {
 
 @Injectable()
 export class LocationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
+  ) {}
 
-  listForCompany(companyId: string) {
+  async listForCompany(companyId: string, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(companyId, me);
     return this.prisma.location.findMany({
       where: { companyId },
       orderBy: [{ isPrimary: 'desc' }, { name: 'asc' }],
@@ -29,16 +35,17 @@ export class LocationsService {
     });
   }
 
-  async findOne(id: string) {
-    const l = await this.prisma.location.findUnique({
-      where: { id },
+  async findOne(id: string, me: JwtUser) {
+    const l = await this.prisma.location.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: { networks: true, flexibleAssets: { include: { type: true } } },
     });
     if (!l) throw new NotFoundException('Site introuvable');
     return l;
   }
 
-  async create(dto: UpsertLocationDto) {
+  async create(dto: UpsertLocationDto, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(dto.companyId, me);
     if (dto.isPrimary) {
       // Un seul site principal par societe
       await this.prisma.location.updateMany({
@@ -46,11 +53,11 @@ export class LocationsService {
         data: { isPrimary: false },
       });
     }
-    return this.prisma.location.create({ data: dto });
+    return this.prisma.location.create({ data: { ...dto, tenantId: me.tenantId } });
   }
 
-  async update(id: string, dto: Partial<UpsertLocationDto>) {
-    const existing = await this.findOne(id);
+  async update(id: string, dto: Partial<UpsertLocationDto>, me: JwtUser) {
+    const existing = await this.findOne(id, me);
     if (dto.isPrimary) {
       await this.prisma.location.updateMany({
         where: { companyId: existing.companyId, isPrimary: true, id: { not: id } },
@@ -60,8 +67,8 @@ export class LocationsService {
     return this.prisma.location.update({ where: { id }, data: dto });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, me: JwtUser) {
+    await this.findOne(id, me);
     await this.prisma.location.delete({ where: { id } });
     return { success: true };
   }
