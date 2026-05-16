@@ -25,12 +25,18 @@ describe('AuthService', () => {
     passwordHash: validHash,
     firstName: 'Mathieu',
     lastName: 'D',
+    tenantId: 'tenant-mdo',
+    isSuperAdmin: false,
   };
+  // Contexte tenant injecte par le middleware en prod (req.tenant). Necessaire
+  // pour login() depuis la vague 0 multi-tenant.
+  const ctx = { tenant: { id: 'tenant-mdo' } as any };
 
   beforeEach(async () => {
     prisma = {
       user: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         update: jest.fn(),
       },
       refreshToken: {
@@ -71,29 +77,48 @@ describe('AuthService', () => {
   });
 
   describe('login', () => {
-    it('rejette un email inconnu', async () => {
-      prisma.user.findUnique.mockResolvedValue(null);
+    it('rejette un login sans contexte tenant (domaine non reconnu)', async () => {
+      // Multi-tenant : sans tenant resolu par le middleware, le login doit
+      // etre refuse — empeche un user d'authentifier sans contexte valide.
       await expect(
-        service.login({ email: 'nope@x.fr', password: 'whatever' }),
+        service.login({ email: baseUser.email, password: 'x' }, {}),
       ).rejects.toThrow(UnauthorizedException);
     });
 
-    it('rejette un utilisateur desactive', async () => {
-      prisma.user.findUnique.mockResolvedValue({ ...baseUser, isActive: false });
+    it('rejette un email inconnu', async () => {
+      prisma.user.findFirst.mockResolvedValue(null);
       await expect(
-        service.login({ email: baseUser.email, password: 'CorrectHorse42!Battery' }),
+        service.login({ email: 'nope@x.fr', password: 'whatever' }, ctx),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('cherche le user dans le tenant resolu (isolation cross-tenant)', async () => {
+      prisma.user.findFirst.mockResolvedValue(null);
+      await expect(
+        service.login({ email: baseUser.email, password: 'x' }, ctx),
+      ).rejects.toThrow(UnauthorizedException);
+      // Verifie que le where contient bien le tenantId du contexte.
+      expect(prisma.user.findFirst).toHaveBeenCalledWith({
+        where: { email: baseUser.email, tenantId: 'tenant-mdo' },
+      });
+    });
+
+    it('rejette un utilisateur desactive', async () => {
+      prisma.user.findFirst.mockResolvedValue({ ...baseUser, isActive: false });
+      await expect(
+        service.login({ email: baseUser.email, password: 'CorrectHorse42!Battery' }, ctx),
       ).rejects.toThrow(UnauthorizedException);
     });
 
     it('rejette un mot de passe incorrect', async () => {
-      prisma.user.findUnique.mockResolvedValue(baseUser);
+      prisma.user.findFirst.mockResolvedValue(baseUser);
       await expect(
-        service.login({ email: baseUser.email, password: 'mauvais' }),
+        service.login({ email: baseUser.email, password: 'mauvais' }, ctx),
       ).rejects.toThrow(UnauthorizedException);
     });
 
     it("emet des tokens et trace l'activite quand le mot de passe est valide", async () => {
-      prisma.user.findUnique.mockResolvedValue(baseUser);
+      prisma.user.findFirst.mockResolvedValue(baseUser);
       prisma.user.update.mockResolvedValue(baseUser);
       prisma.refreshToken.create.mockResolvedValue({});
       prisma.activity.create.mockResolvedValue({});
@@ -101,7 +126,7 @@ describe('AuthService', () => {
       const result = await service.login({
         email: baseUser.email,
         password: 'CorrectHorse42!Battery',
-      });
+      }, ctx);
 
       expect(result.accessToken).toBe('signed-access-token');
       expect(result.refreshToken).toHaveLength(96); // randomBytes(48).toString('hex')
@@ -112,16 +137,16 @@ describe('AuthService', () => {
     });
 
     it("renvoie TOTP_REQUIRED quand la 2FA est active et qu'aucun code n'est fourni", async () => {
-      prisma.user.findUnique.mockResolvedValue(baseUser);
+      prisma.user.findFirst.mockResolvedValue(baseUser);
       mfa.isEnabledFor.mockResolvedValue(true);
 
       await expect(
-        service.login({ email: baseUser.email, password: 'CorrectHorse42!Battery' }),
+        service.login({ email: baseUser.email, password: 'CorrectHorse42!Battery' }, ctx),
       ).rejects.toMatchObject({ message: 'TOTP_REQUIRED' });
     });
 
     it('rejette un code TOTP invalide quand la 2FA est active', async () => {
-      prisma.user.findUnique.mockResolvedValue(baseUser);
+      prisma.user.findFirst.mockResolvedValue(baseUser);
       mfa.isEnabledFor.mockResolvedValue(true);
       mfa.verify.mockResolvedValue(false);
 
@@ -130,12 +155,12 @@ describe('AuthService', () => {
           email: baseUser.email,
           password: 'CorrectHorse42!Battery',
           totpCode: '000000',
-        }),
+        }, ctx),
       ).rejects.toThrow(UnauthorizedException);
     });
 
     it('accepte un code TOTP valide quand la 2FA est active', async () => {
-      prisma.user.findUnique.mockResolvedValue(baseUser);
+      prisma.user.findFirst.mockResolvedValue(baseUser);
       mfa.isEnabledFor.mockResolvedValue(true);
       mfa.verify.mockResolvedValue(true);
       prisma.user.update.mockResolvedValue(baseUser);
@@ -146,14 +171,14 @@ describe('AuthService', () => {
         email: baseUser.email,
         password: 'CorrectHorse42!Battery',
         totpCode: '123456',
-      });
+      }, ctx);
 
       expect(result.accessToken).toBe('signed-access-token');
       expect(mfa.verify).toHaveBeenCalledWith(baseUser.id, '123456');
     });
 
     it("positionne mfaPending=true quand le role est dans la liste 'auth.mfaRequiredRoles' et que la 2FA n'est pas active", async () => {
-      prisma.user.findUnique.mockResolvedValue(baseUser);
+      prisma.user.findFirst.mockResolvedValue(baseUser);
       mfa.isEnabledFor.mockResolvedValue(false);
       settings.get.mockResolvedValue('ADMIN,MANAGER');
       prisma.user.update.mockResolvedValue(baseUser);
@@ -163,13 +188,13 @@ describe('AuthService', () => {
       const result = await service.login({
         email: baseUser.email,
         password: 'CorrectHorse42!Battery',
-      });
+      }, ctx);
 
       expect(result.mfaPending).toBe(true);
     });
 
     it("n'exige pas mfaPending quand le role n'est pas dans la liste", async () => {
-      prisma.user.findUnique.mockResolvedValue({ ...baseUser, role: 'SALES' });
+      prisma.user.findFirst.mockResolvedValue({ ...baseUser, role: 'SALES' });
       mfa.isEnabledFor.mockResolvedValue(false);
       settings.get.mockResolvedValue('ADMIN,MANAGER');
       prisma.user.update.mockResolvedValue(baseUser);
@@ -179,7 +204,7 @@ describe('AuthService', () => {
       const result = await service.login({
         email: baseUser.email,
         password: 'CorrectHorse42!Battery',
-      });
+      }, ctx);
 
       expect(result.mfaPending).toBe(false);
     });
