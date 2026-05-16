@@ -96,6 +96,12 @@ model Tenant {
   aiUsage             AiUsage[]
   apiKeys             ApiKey[]
   onboardingTemplates OnboardingTemplate[]
+  uptimeMonitors      UptimeMonitor[]
+  backupJobs          BackupJob[]
+  dripCampaigns       DripCampaign[]
+  onboardingRuns      OnboardingRun[]
+  phishingCampaigns   PhishingCampaign[]
+  complianceAssessments ComplianceAssessment[]
 
   @@index([customDomain])
   @@index([slug])
@@ -1177,6 +1183,9 @@ model Asset {
 // ouvert + notification (in-app + email) au proprietaire.
 model UptimeMonitor {
   id              String           @id @default(uuid())
+  // Multi-tenant : nullable transitoire.
+  tenantId        String?
+  tenant          Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name            String           // libelle ("Site vitrine ACME")
   url             String           // ex: https://www.acme.fr/
   method          String           @default("GET")
@@ -1206,6 +1215,7 @@ model UptimeMonitor {
   checks          UptimeCheck[]
   incidents       UptimeIncident[]
 
+  @@index([tenantId])
   @@index([companyId])
   @@index([enabled])
 }
@@ -2312,6 +2322,9 @@ enum DripEnrollmentStatus {
 
 model DripCampaign {
   id            String                @id @default(uuid())
+  // Multi-tenant : nullable transitoire.
+  tenantId      String?
+  tenant        Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name          String
   description   String?
   trigger       DripCampaignTrigger   @default(MANUAL)
@@ -2323,6 +2336,7 @@ model DripCampaign {
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
 
+  @@index([tenantId])
   @@index([isActive, trigger])
 }
 
@@ -2470,6 +2484,9 @@ enum BackupRunStatus {
 
 model BackupJob {
   id                String           @id @default(uuid())
+  // Multi-tenant : nullable transitoire.
+  tenantId          String?
+  tenant            Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   companyId         String
   company           Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name              String           // libelle interne
@@ -2495,6 +2512,7 @@ model BackupJob {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
+  @@index([tenantId])
   @@index([companyId])
   @@index([isActive, lastSuccessAt])
 }
@@ -2862,6 +2880,9 @@ model OnboardingTemplateStep {
 
 model OnboardingRun {
   id           String                @id @default(uuid())
+  // Multi-tenant : nullable transitoire.
+  tenantId     String?
+  tenant       Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   templateId   String
   template     OnboardingTemplate    @relation(fields: [templateId], references: [id], onDelete: Restrict)
   // Contrat declencheur. Si null, c'est un onboarding manuel (sans contrat
@@ -2888,6 +2909,7 @@ model OnboardingRun {
   createdAt    DateTime              @default(now())
   updatedAt    DateTime              @updatedAt
 
+  @@index([tenantId])
   @@index([companyId])
   @@index([status])
 }
@@ -3064,6 +3086,9 @@ enum PhishingCampaignStatus {
 
 model PhishingCampaign {
   id              String                  @id @default(uuid())
+  // Multi-tenant : nullable transitoire.
+  tenantId        String?
+  tenant          Tenant?                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name            String                  // libelle interne ("Phishing Q2 2026 Banque")
   vendor          PhishingVendor          @default(GOPHISH)
   externalId      String?                 // id externe chez le vendor
@@ -3090,6 +3115,7 @@ model PhishingCampaign {
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
 
+  @@index([tenantId])
   @@index([companyId])
   @@index([status])
 }
@@ -3448,6 +3474,9 @@ model ComplianceControl {
 
 model ComplianceAssessment {
   id            String              @id @default(uuid())
+  // Multi-tenant : nullable transitoire (audit cyber par client = par tenant).
+  tenantId      String?
+  tenant        Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   companyId     String
   company       Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   frameworkId   String
@@ -3478,6 +3507,7 @@ model ComplianceAssessment {
   // Une societe ne peut avoir qu'UN audit actif par framework. Si besoin de
   // re-auditer, on remplace celui-la (l'historique est trace via Activity).
   @@unique([companyId, frameworkId])
+  @@index([tenantId])
   @@index([companyId])
   @@index([frameworkId])
 }

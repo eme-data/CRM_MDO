@@ -245,6 +245,32 @@ export class TenantsService implements OnModuleInit {
       where: { tenantId: null }, data: { tenantId: tenant.id },
     });
     if (onboardingTemplatesUpdated.count > 0) this.logger.log(`Retro-compat : ${onboardingTemplatesUpdated.count} onboarding template(s) assignes`);
+    // Vague 7 : modules satellites (UptimeMonitor, BackupJob, DripCampaign,
+    // OnboardingRun, PhishingCampaign, ComplianceAssessment).
+    const uptimeUpdated = await this.prisma.uptimeMonitor.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (uptimeUpdated.count > 0) this.logger.log(`Retro-compat : ${uptimeUpdated.count} uptime monitor(s) assignes`);
+    const backupJobsUpdated = await this.prisma.backupJob.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (backupJobsUpdated.count > 0) this.logger.log(`Retro-compat : ${backupJobsUpdated.count} backup job(s) assignes`);
+    const dripsUpdated = await this.prisma.dripCampaign.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (dripsUpdated.count > 0) this.logger.log(`Retro-compat : ${dripsUpdated.count} drip campaign(s) assignees`);
+    const onboardingRunsUpdated = await this.prisma.onboardingRun.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (onboardingRunsUpdated.count > 0) this.logger.log(`Retro-compat : ${onboardingRunsUpdated.count} onboarding run(s) assignes`);
+    const phishingUpdated = await this.prisma.phishingCampaign.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (phishingUpdated.count > 0) this.logger.log(`Retro-compat : ${phishingUpdated.count} phishing campaign(s) assignees`);
+    const complianceUpdated = await this.prisma.complianceAssessment.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (complianceUpdated.count > 0) this.logger.log(`Retro-compat : ${complianceUpdated.count} compliance assessment(s) assignes`);
   }
 
   // ============================================================
