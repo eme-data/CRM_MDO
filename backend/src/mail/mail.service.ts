@@ -285,6 +285,7 @@ export class MailService {
     monitor: { id: string; name: string; url: string };
     companyName: string;
     message: string;
+    tenantId?: string | null;
   }) {
     const isDown = params.status === 'DOWN';
     const subject = isDown
@@ -311,6 +312,7 @@ export class MailService {
       to: params.to,
       subject,
       html,
+      tenantId: params.tenantId,
       text:
         headline +
         ' : ' +

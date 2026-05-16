@@ -1,5 +1,7 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 const ALLOWED_ENTITIES = new Set([
   'Company',
@@ -25,7 +27,10 @@ export interface CreateLinkDto {
 
 @Injectable()
 export class ItemLinksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
+  ) {}
 
   private validate(entity: string) {
     if (!ALLOWED_ENTITIES.has(entity)) {
@@ -33,9 +38,79 @@ export class ItemLinksService {
     }
   }
 
+  // Verifie que (entity, id) appartient au tenant de l'utilisateur. Throw 404
+  // sinon (pas de revelation cross-tenant). Renvoie le tenantId de l'entite
+  // pour usage en aval. Super-admin bypasse.
+  private async assertEntityInTenant(entity: string, id: string, me: JwtUser): Promise<string | null> {
+    if (me.isSuperAdmin) {
+      const t = await this.fetchTenantId(entity, id);
+      if (t === undefined) throw new NotFoundException();
+      return t;
+    }
+    const tenantId = await this.fetchTenantId(entity, id);
+    if (tenantId === undefined) throw new NotFoundException();
+    if (tenantId !== me.tenantId) throw new NotFoundException();
+    return tenantId;
+  }
+
+  // Charge le tenantId d'une entite. Renvoie undefined si introuvable.
+  private async fetchTenantId(entity: string, id: string): Promise<string | null | undefined> {
+    switch (entity) {
+      case 'Company': {
+        const r = await this.prisma.company.findUnique({ where: { id }, select: { tenantId: true } });
+        return r?.tenantId ?? undefined;
+      }
+      case 'Contact': {
+        const r = await this.prisma.contact.findUnique({ where: { id }, select: { tenantId: true } });
+        return r?.tenantId ?? undefined;
+      }
+      case 'Contract': {
+        const r = await this.prisma.contract.findUnique({ where: { id }, select: { tenantId: true } });
+        return r?.tenantId ?? undefined;
+      }
+      case 'Asset': {
+        const r = await this.prisma.asset.findUnique({ where: { id }, select: { tenantId: true } });
+        return r?.tenantId ?? undefined;
+      }
+      case 'FlexibleAsset': {
+        const r = await this.prisma.flexibleAsset.findUnique({ where: { id }, select: { tenantId: true } });
+        return r?.tenantId ?? undefined;
+      }
+      case 'DocPage': {
+        const r = await this.prisma.docPage.findUnique({ where: { id }, select: { tenantId: true } });
+        return r?.tenantId ?? undefined;
+      }
+      case 'SecretEntry': {
+        const r = await this.prisma.secretEntry.findUnique({ where: { id }, select: { tenantId: true } });
+        return r?.tenantId ?? undefined;
+      }
+      case 'Network': {
+        const r = await this.prisma.network.findUnique({ where: { id }, select: { tenantId: true } });
+        return r?.tenantId ?? undefined;
+      }
+      case 'Location': {
+        const r = await this.prisma.location.findUnique({ where: { id }, select: { tenantId: true } });
+        return r?.tenantId ?? undefined;
+      }
+      case 'Ticket': {
+        const r = await this.prisma.ticket.findUnique({ where: { id }, select: { tenantId: true } });
+        return r?.tenantId ?? undefined;
+      }
+      case 'Intervention': {
+        const r = await this.prisma.intervention.findUnique({ where: { id }, select: { tenantId: true } });
+        return r?.tenantId ?? undefined;
+      }
+    }
+    return undefined;
+  }
+
   // Liste les liens partants ET entrants pour un item donne (vue 360).
-  async listForItem(entity: string, id: string) {
+  // Multi-tenant : on valide que l'item focus appartient au tenant courant
+  // avant de retourner ses liens. Sans ca, un user pourrait deviner un id
+  // d'asset d'un autre tenant et lister tous ses liens.
+  async listForItem(entity: string, id: string, me: JwtUser) {
     this.validate(entity);
+    await this.assertEntityInTenant(entity, id, me);
     const out = await this.prisma.itemLink.findMany({
       where: {
         OR: [
@@ -46,15 +121,15 @@ export class ItemLinksService {
       orderBy: { createdAt: 'desc' },
     });
     // Enrichit chaque lien avec le "petit objet" de l'autre cote (label affiche).
-    const enriched = await Promise.all(out.map((l) => this.enrich(l, entity, id)));
+    const enriched = await Promise.all(out.map((l) => this.enrich(l, entity, id, me)));
     return enriched;
   }
 
-  private async enrich(link: any, focusEntity: string, focusId: string) {
+  private async enrich(link: any, focusEntity: string, focusId: string, me: JwtUser) {
     const isOutgoing = link.sourceEntity === focusEntity && link.sourceId === focusId;
     const otherEntity = isOutgoing ? link.targetEntity : link.sourceEntity;
     const otherId = isOutgoing ? link.targetId : link.sourceId;
-    const display = await this.fetchDisplay(otherEntity, otherId);
+    const display = await this.fetchDisplay(otherEntity, otherId, me);
     return {
       id: link.id,
       direction: isOutgoing ? 'outgoing' : 'incoming',
@@ -67,8 +142,14 @@ export class ItemLinksService {
     };
   }
 
-  private async fetchDisplay(entity: string, id: string): Promise<{ label: string; subtitle?: string }> {
+  // Fetch le label d'une entite ; si elle existe mais appartient a un autre
+  // tenant, on renvoie "(autre tenant)" plutot que de leaker le label. Si
+  // supprimee, "(supprime)".
+  private async fetchDisplay(entity: string, id: string, me: JwtUser): Promise<{ label: string; subtitle?: string }> {
     try {
+      const tenantId = await this.fetchTenantId(entity, id);
+      if (tenantId === undefined) return { label: '(supprime)' };
+      if (!me.isSuperAdmin && tenantId !== me.tenantId) return { label: '(autre tenant)' };
       switch (entity) {
         case 'Company': {
           const c = await this.prisma.company.findUnique({ where: { id }, select: { name: true, city: true } });
@@ -122,12 +203,16 @@ export class ItemLinksService {
     return { label: entity + ' #' + id.substring(0, 8) };
   }
 
-  async create(dto: CreateLinkDto, userId: string) {
+  // Cree un lien : verifie que SOURCE et TARGET appartiennent au meme tenant
+  // que l'utilisateur (sinon on pourrait creer un lien cross-tenant).
+  async create(dto: CreateLinkDto, me: JwtUser) {
     this.validate(dto.sourceEntity);
     this.validate(dto.targetEntity);
     if (dto.sourceEntity === dto.targetEntity && dto.sourceId === dto.targetId) {
       throw new BadRequestException('Un item ne peut pas etre lie a lui-meme');
     }
+    await this.assertEntityInTenant(dto.sourceEntity, dto.sourceId, me);
+    await this.assertEntityInTenant(dto.targetEntity, dto.targetId, me);
     return this.prisma.itemLink.upsert({
       where: {
         sourceEntity_sourceId_targetEntity_targetId: {
@@ -137,12 +222,22 @@ export class ItemLinksService {
           targetId: dto.targetId,
         },
       },
-      create: { ...dto, createdById: userId },
+      create: { ...dto, createdById: me.id },
       update: { label: dto.label },
     });
   }
 
-  async remove(id: string) {
+  // Suppression : on verifie que l'utilisateur a acces a au moins l'un des
+  // deux endpoints du lien (sinon il pourrait casser un lien d'un autre tenant).
+  async remove(id: string, me: JwtUser) {
+    const link = await this.prisma.itemLink.findUnique({ where: { id } });
+    if (!link) throw new NotFoundException();
+    if (!me.isSuperAdmin) {
+      const sourceTenant = await this.fetchTenantId(link.sourceEntity, link.sourceId);
+      const targetTenant = await this.fetchTenantId(link.targetEntity, link.targetId);
+      const ok = sourceTenant === me.tenantId || targetTenant === me.tenantId;
+      if (!ok) throw new NotFoundException();
+    }
     await this.prisma.itemLink.delete({ where: { id } });
     return { success: true };
   }

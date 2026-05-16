@@ -14,19 +14,19 @@ export class ItemLinksController {
   constructor(private readonly service: ItemLinksService) {}
 
   @Get()
-  list(@Query('entity') entity: string, @Query('id') id: string) {
-    return this.service.listForItem(entity, id);
+  list(@Query('entity') entity: string, @Query('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.listForItem(entity, id, user);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post()
   create(@Body() dto: CreateLinkDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(dto, user.id);
+    return this.service.create(dto, user);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.remove(id, user);
   }
 }
