@@ -84,4 +84,13 @@ export class TenantsController {
     }
     return this.service.purge(id, body.confirmSlug, user.id);
   }
+
+  // Regenere la config Caddy a partir de la liste actuelle des tenants
+  // actifs et la pousse via l'admin API Caddy. Trigge automatiquement a
+  // chaque create/update/remove de tenant ; cet endpoint sert pour reset
+  // manuel apres modif d'env ou debug.
+  @Post('regenerate-caddy')
+  async regenerateCaddy() {
+    return this.service.regenerateCaddy();
+  }
 }

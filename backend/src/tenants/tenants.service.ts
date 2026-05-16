@@ -11,6 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { Tenant } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { SettingsService } from '../settings/settings.service';
+import { CaddyProvisioningService } from './caddy-provisioning.service';
 
 // Service tenant : gere le CRUD + la resolution par domaine.
 //
@@ -38,6 +39,7 @@ export class TenantsService implements OnModuleInit {
     private readonly config: ConfigService,
     @Inject(forwardRef(() => SettingsService))
     private readonly settings: SettingsService,
+    private readonly caddy: CaddyProvisioningService,
   ) {}
 
   // Au boot : cree le tenant 'mdo' s'il n'existe pas, et assigne a tous les
@@ -388,6 +390,9 @@ export class TenantsService implements OnModuleInit {
     await this.settings.seedForTenant(tenant.id).catch((err) =>
       this.logger.warn(`seedForTenant failed pour ${tenant.slug}: ${err.message}`),
     );
+    // Auto-provisioning Caddy : ajoute le nouveau customDomain au reverse-proxy
+    // + ACME automatique. Best-effort (n'echoue pas la creation tenant).
+    await this.caddy.triggerSilent('tenant.create ' + tenant.slug);
     return tenant;
   }
 
@@ -413,6 +418,10 @@ export class TenantsService implements OnModuleInit {
     // Invalide le cache pour les 2 domaines (avant + apres) au cas ou customDomain change.
     this.invalidateCache(before.customDomain);
     if (input.customDomain) this.invalidateCache(input.customDomain);
+    // Re-provisioning Caddy si le domaine ou l'etat actif ont change
+    if (input.customDomain || input.isActive !== undefined) {
+      await this.caddy.triggerSilent('tenant.update ' + t.slug);
+    }
     return t;
   }
 
@@ -432,6 +441,8 @@ export class TenantsService implements OnModuleInit {
     }
     await this.prisma.tenant.delete({ where: { id } });
     this.invalidateCache(before.customDomain);
+    // Retire le site Caddy correspondant
+    await this.caddy.triggerSilent('tenant.remove ' + before.slug);
     return { ok: true };
   }
 
@@ -697,10 +708,18 @@ export class TenantsService implements OnModuleInit {
     // Enfin : le tenant
     await this.prisma.tenant.delete({ where: { id } });
     this.invalidateCache(before.customDomain);
+    await this.caddy.triggerSilent('tenant.purge ' + before.slug);
 
     this.logger.warn(
       `[RGPD PURGE] Tenant "${before.slug}" purge avec succes — entites supprimees : ${JSON.stringify(deleted)}`,
     );
     return { deleted };
+  }
+
+  // Re-genere manuellement la config Caddy. Utile apres modif manuelle de
+  // l'env Caddy, demarrage initial, ou debug. Equivalent en endpoint :
+  // POST /tenants/regenerate-caddy (super-admin).
+  async regenerateCaddy() {
+    return this.caddy.regenerate();
   }
 }

@@ -3,14 +3,15 @@ import { TenantsService } from './tenants.service';
 import { TenantsController } from './tenants.controller';
 import { SuperAdminGuard } from './guards/super-admin.guard';
 import { TenantResolverMiddleware } from './middleware/tenant-resolver.middleware';
+import { CaddyProvisioningService } from './caddy-provisioning.service';
 
 // @Global() : TenantsService et SuperAdminGuard sont injectables partout
 // sans avoir a re-importer TenantsModule.
 @Global()
 @Module({
-  providers: [TenantsService, SuperAdminGuard, TenantResolverMiddleware],
+  providers: [TenantsService, SuperAdminGuard, TenantResolverMiddleware, CaddyProvisioningService],
   controllers: [TenantsController],
-  exports: [TenantsService, SuperAdminGuard],
+  exports: [TenantsService, SuperAdminGuard, CaddyProvisioningService],
 })
 export class TenantsModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

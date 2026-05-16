@@ -18,8 +18,17 @@ services:
       - "80:80"
       - "443:443"
       - "443:443/udp"  # HTTP/3
+    # Admin API Caddy expose sur le reseau interne uniquement : permet au
+    # backend de reload la config dynamiquement (CaddyProvisioningService)
+    # quand un tenant est cree/modifie/supprime. JAMAIS exposer port 2019
+    # publiquement (controle total de Caddy).
+    expose:
+      - "2019"
     volumes:
-      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddyfile bind-mount initial (utilise au boot). Apres regenerate-caddy,
+      # le backend ecrit dans le meme path via le volume monte cote backend
+      # (cf service backend : - caddy-config-shared:/etc/caddy).
+      - caddy-config-shared:/etc/caddy
       - caddy-data:/data
       - caddy-config:/config
       # Access logs JSON exposes a l'hote pour CrowdSec.
@@ -28,13 +37,22 @@ services:
       - backend
       - frontend
 
+  backend:
+    ports: []
+    environment:
+      # Active la regeneration auto de la config Caddy quand un tenant est
+      # cree/modifie/supprime. URL admin sur le reseau Docker interne.
+      CADDY_PROVISIONING: enabled
+      CADDY_ADMIN_URL: http://caddy:2019
+      CADDY_CONFIG_PATH: /etc/caddy/Caddyfile
+    volumes:
+      # Volume partage avec caddy pour ecrire la Caddyfile regeneree
+      - caddy-config-shared:/etc/caddy
+
   postgres:
     ports: []
 
   redis:
-    ports: []
-
-  backend:
     ports: []
 
   frontend:
@@ -43,3 +61,4 @@ services:
 volumes:
   caddy-data:
   caddy-config:
+  caddy-config-shared:

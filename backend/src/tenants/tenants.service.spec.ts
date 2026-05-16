@@ -4,6 +4,7 @@ import { BadRequestException } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { PrismaService } from '../database/prisma.service';
 import { SettingsService } from '../settings/settings.service';
+import { CaddyProvisioningService } from './caddy-provisioning.service';
 
 // Vague 10 : tests d'isolation tenant sur le TenantsService.
 // Couvre la resolution par domaine (cache, normalisation), le seed retro-compat,
@@ -53,6 +54,13 @@ describe('TenantsService — resolution domaine + cache + protections', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: ConfigService, useValue: { get: jest.fn() } },
         { provide: SettingsService, useValue: settings },
+        {
+          provide: CaddyProvisioningService,
+          useValue: {
+            triggerSilent: jest.fn().mockResolvedValue(undefined),
+            regenerate: jest.fn().mockResolvedValue({ tenantsApplied: 0, reloaded: false }),
+          },
+        },
       ],
     }).compile();
     service = module.get<TenantsService>(TenantsService);
