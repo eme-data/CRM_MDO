@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { TenantThrottlerGuard } from './common/throttler/tenant-throttler.guard';
 import configuration from './config/configuration';
 import { PrismaModule } from './database/prisma.module';
 import { SettingsModule } from './settings/settings.module';
@@ -215,9 +216,12 @@ import { RolesGuard } from './common/guards/roles.guard';
     MetricsService,
     // ThrottlerGuard avant JwtAuthGuard : on rate-limit AVANT de tenter l'auth,
     // sinon un attaquant epuise le pool bcrypt en bombardant /auth/login.
+    // Variante "tenant" : la cle de tracking est (tenantId, IP) au lieu de
+    // IP seule, pour isoler les budgets de rate-limit entre tenants
+    // (cf TenantThrottlerGuard).
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: TenantThrottlerGuard,
     },
     {
       provide: APP_GUARD,
