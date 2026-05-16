@@ -181,6 +181,40 @@ export class TenantsService implements OnModuleInit {
       where: { tenantId: null }, data: { tenantId: tenant.id },
     });
     if (recurringUpdated.count > 0) this.logger.log(`Retro-compat : ${recurringUpdated.count} recurring template(s) assignees`);
+    // Vague 5 : Assets + Locations + Networks + FlexibleAssets + QuickNotes +
+    // DocPages + RunbookRuns + SecretEntries (inventaire IT).
+    const assetsUpdated = await this.prisma.asset.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (assetsUpdated.count > 0) this.logger.log(`Retro-compat : ${assetsUpdated.count} asset(s) assignes`);
+    const locationsUpdated = await this.prisma.location.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (locationsUpdated.count > 0) this.logger.log(`Retro-compat : ${locationsUpdated.count} location(s) assignees`);
+    const networksUpdated = await this.prisma.network.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (networksUpdated.count > 0) this.logger.log(`Retro-compat : ${networksUpdated.count} network(s) assignes`);
+    const flexUpdated = await this.prisma.flexibleAsset.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (flexUpdated.count > 0) this.logger.log(`Retro-compat : ${flexUpdated.count} flexible asset(s) assignes`);
+    const quickNotesUpdated = await this.prisma.quickNote.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (quickNotesUpdated.count > 0) this.logger.log(`Retro-compat : ${quickNotesUpdated.count} quick note(s) assignees`);
+    const docPagesUpdated = await this.prisma.docPage.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (docPagesUpdated.count > 0) this.logger.log(`Retro-compat : ${docPagesUpdated.count} doc page(s) assignees`);
+    const runbookRunsUpdated = await this.prisma.runbookRun.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (runbookRunsUpdated.count > 0) this.logger.log(`Retro-compat : ${runbookRunsUpdated.count} runbook run(s) assignes`);
+    const secretsUpdated = await this.prisma.secretEntry.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (secretsUpdated.count > 0) this.logger.log(`Retro-compat : ${secretsUpdated.count} secret(s) assignes`);
   }
 
   // ============================================================
