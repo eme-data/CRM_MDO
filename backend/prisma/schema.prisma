@@ -89,6 +89,13 @@ model Tenant {
   docPages            DocPage[]
   runbookRuns         RunbookRun[]
   secretEntries       SecretEntry[]
+  emailTemplates      EmailTemplate[]
+  responseTemplates   ResponseTemplate[]
+  subprocessors       Subprocessor[]
+  kbArticles          KbArticle[]
+  aiUsage             AiUsage[]
+  apiKeys             ApiKey[]
+  onboardingTemplates OnboardingTemplate[]
 
   @@index([customDomain])
   @@index([slug])
@@ -787,13 +794,19 @@ model Activity {
 
 model EmailTemplate {
   id         String   @id @default(uuid())
-  key        String   @unique
+  // Multi-tenant : key passe d'unique global a unique par tenant.
+  tenantId   String?
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  key        String
   name       String
   subject    String
   bodyHtml   String
   bodyText   String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
 }
 
 enum EmailStatus {
@@ -1074,15 +1087,19 @@ model Notification {
 
 model ResponseTemplate {
   id        String   @id @default(uuid())
+  // Multi-tenant : nullable transitoire.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name      String
   category  String?
   subject   String?
   body      String
-  ownerId   String?  // null = partage avec tous
+  ownerId   String?
   owner     User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([tenantId])
   @@index([ownerId])
 }
 
@@ -2740,6 +2757,11 @@ enum DataTransferMechanism {
 
 model Subprocessor {
   id              String                 @id @default(uuid())
+  // Multi-tenant : nullable transitoire. Chaque tenant gere son propre
+  // registre RGPD article 28 (la liste sous-traitants MDO != la liste
+  // sous-traitants Mairie de SEYSSES).
+  tenantId        String?
+  tenant          Tenant?                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name            String                 // "Microsoft Corporation"
   legalEntity     String?                // raison sociale exacte si differente
   role            SubprocessorRole       @default(OTHER)
@@ -2771,6 +2793,7 @@ model Subprocessor {
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 
+  @@index([tenantId])
   @@index([isActive])
   @@index([role])
 }
@@ -2802,10 +2825,11 @@ enum OnboardingStepStatus {
 
 model OnboardingTemplate {
   id          String              @id @default(uuid())
+  // Multi-tenant : nullable transitoire.
+  tenantId    String?
+  tenant      Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name        String
   description String?
-  // Si null, le template est global (s'applique a toutes les offres). Sinon
-  // il ne sera auto-declenche que pour les contrats de cette offre.
   offer       ContractOffer?
   isActive    Boolean             @default(true)
 
@@ -2815,6 +2839,7 @@ model OnboardingTemplate {
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
+  @@index([tenantId])
   @@index([offer, isActive])
 }
 
@@ -2911,10 +2936,12 @@ enum KbScope {
 
 model KbArticle {
   id              String   @id @default(uuid())
+  // Multi-tenant : nullable transitoire. Chaque tenant a sa propre KB.
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   title           String
-  // Slug URL-friendly auto-genere a la creation. Unique pour l'integration
-  // future avec un router /kb/[slug] cote portail.
-  slug            String   @unique
+  // Slug URL-friendly. Passe d'unique global a unique par tenant.
+  slug            String
   // Markdown — rendu cote frontend (pas de HTML pour eviter XSS sur portail).
   content         String
   // Resume court (1-2 phrases) pour les listes / cartes de recherche.
@@ -2950,7 +2977,9 @@ model KbArticle {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  @@index([scope, isPublished])
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([tenantId, scope, isPublished])
   @@index([companyId])
   @@index([category])
   @@index([authorId])
@@ -3315,6 +3344,10 @@ model CompanyDocument {
 
 model AiUsage {
   id            String        @id @default(uuid())
+  // Multi-tenant : nullable transitoire. Chaque tenant paye sa propre
+  // consommation IA (cles API separees, cf vague 6 Settings).
+  tenantId      String?
+  tenant        Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   capability    AiCapability
   model         String        // 'claude-sonnet-4-6', etc.
   // Tokens : reportes par l'API. cacheReadTokens et cacheCreationTokens si
@@ -3337,9 +3370,10 @@ model AiUsage {
 
   createdAt     DateTime      @default(now())
 
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
   @@index([capability])
   @@index([entityType, entityId])
-  @@index([createdAt])
   @@index([userId])
 }
 
@@ -3511,6 +3545,11 @@ enum ApiKeyScope {
 
 model ApiKey {
   id          String      @id @default(uuid())
+  // Multi-tenant : nullable transitoire. Chaque tenant gere ses propres
+  // cles API. Une cle d'un tenant ne peut PAS appeler les endpoints d'un
+  // autre tenant (a renforcer dans l'auth strategy api-key).
+  tenantId    String?
+  tenant      Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name        String      // libelle pour identification ("Zapier prod", "Backup script")
   scope       ApiKeyScope @default(CLIENT_READ)
   // Hash SHA-256 de la cle complete. La cle elle-meme n'est jamais stockee.
@@ -3532,6 +3571,7 @@ model ApiKey {
 
   createdAt   DateTime    @default(now())
 
+  @@index([tenantId])
   @@index([companyId])
   @@index([prefix])
   @@index([keyHash])

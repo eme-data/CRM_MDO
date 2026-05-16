@@ -215,6 +215,36 @@ export class TenantsService implements OnModuleInit {
       where: { tenantId: null }, data: { tenantId: tenant.id },
     });
     if (secretsUpdated.count > 0) this.logger.log(`Retro-compat : ${secretsUpdated.count} secret(s) assignes`);
+    // Vague 6 complete : Subprocessors + KbArticle + ApiKey + AiUsage +
+    // EmailTemplate + ResponseTemplate + OnboardingTemplate (config + ressources).
+    const subprocessorsUpdated = await this.prisma.subprocessor.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (subprocessorsUpdated.count > 0) this.logger.log(`Retro-compat : ${subprocessorsUpdated.count} subprocessor(s) assignes`);
+    const kbUpdated = await this.prisma.kbArticle.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (kbUpdated.count > 0) this.logger.log(`Retro-compat : ${kbUpdated.count} kb article(s) assignes`);
+    const aiUsageUpdated = await this.prisma.aiUsage.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (aiUsageUpdated.count > 0) this.logger.log(`Retro-compat : ${aiUsageUpdated.count} ai usage row(s) assignees`);
+    const apiKeysUpdated = await this.prisma.apiKey.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (apiKeysUpdated.count > 0) this.logger.log(`Retro-compat : ${apiKeysUpdated.count} api key(s) assignees`);
+    const emailTemplatesUpdated = await this.prisma.emailTemplate.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (emailTemplatesUpdated.count > 0) this.logger.log(`Retro-compat : ${emailTemplatesUpdated.count} email template(s) assignes`);
+    const responseTemplatesUpdated = await this.prisma.responseTemplate.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (responseTemplatesUpdated.count > 0) this.logger.log(`Retro-compat : ${responseTemplatesUpdated.count} response template(s) assignees`);
+    const onboardingTemplatesUpdated = await this.prisma.onboardingTemplate.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (onboardingTemplatesUpdated.count > 0) this.logger.log(`Retro-compat : ${onboardingTemplatesUpdated.count} onboarding template(s) assignes`);
   }
 
   // ============================================================
