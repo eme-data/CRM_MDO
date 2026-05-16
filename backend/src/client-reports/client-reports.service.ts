@@ -97,6 +97,8 @@ export class ClientReportsService {
 
     const report = await this.prisma.clientReport.create({
       data: {
+        // Le rapport herite du tenantId de la company
+        tenantId: company.tenantId,
         companyId,
         periodStart: start,
         periodEnd: end,
@@ -257,38 +259,46 @@ export class ClientReportsService {
   /**
    * Cron mensuel : tous les 1ers du mois a 08:00 (heure du serveur, generalement
    * Europe/Paris). Genere les rapports du mois ECOULE pour chaque client actif
-   * (status = CUSTOMER), puis envoie le mail au contact principal.
-   * Le job est idempotent : si un rapport existe deja pour la periode, il est
-   * reutilise plutot que regenere.
+   * (status = CUSTOMER) DE CHAQUE TENANT, puis envoie le mail au contact
+   * principal. Le job est idempotent : si un rapport existe deja pour la
+   * periode, il est reutilise plutot que regenere.
+   * Itere par tenant pour respecter le toggle `reports.monthlyAutoSend` du
+   * tenant (chacun peut opt-out).
    */
   @Cron('0 8 1 * *', { name: 'monthly-client-reports', timeZone: 'Europe/Paris' })
   async runMonthlyCron() {
-    // Setting `reports.monthlyAutoSend` (defaultValue: 'true'). Si l'admin met
-    // explicitement 'false' depuis l'UI Settings, on saute le cron.
-    const enabled = await this.settings.getBool('reports.monthlyAutoSend');
-    if (!enabled) {
-      this.logger.log('Cron rapports mensuels : desactive via reports.monthlyAutoSend');
-      return;
-    }
-    const lastMonth = subMonths(new Date(), 1);
-    const customers = await this.prisma.company.findMany({
-      where: { status: 'CUSTOMER' },
-      select: { id: true, name: true },
+    const tenants = await this.prisma.tenant.findMany({
+      where: { isActive: true },
+      select: { id: true },
     });
-    this.logger.log(`Cron rapports mensuels : ${customers.length} client(s) a traiter`);
-    let ok = 0;
-    let failed = 0;
-    for (const c of customers) {
+    const lastMonth = subMonths(new Date(), 1);
+    let totalOk = 0, totalFailed = 0;
+    for (const t of tenants) {
       try {
-        const report = await this.generateForCompany(c.id, lastMonth);
-        await this.sendByEmail(report.id);
-        ok++;
+        const enabled = await this.settings.getBool('reports.monthlyAutoSend', t.id);
+        if (!enabled) {
+          this.logger.log('[tenant ' + t.id + '] Cron rapports mensuels : desactive');
+          continue;
+        }
+        const customers = await this.prisma.company.findMany({
+          where: { tenantId: t.id, status: 'CUSTOMER' },
+          select: { id: true, name: true },
+        });
+        for (const c of customers) {
+          try {
+            const report = await this.generateForCompany(c.id, lastMonth);
+            await this.sendByEmail(report.id);
+            totalOk++;
+          } catch (err: any) {
+            totalFailed++;
+            this.logger.error(`[tenant ${t.id}] Echec rapport ${c.name} : ${err.message}`);
+          }
+        }
       } catch (err: any) {
-        failed++;
-        this.logger.error(`Echec rapport ${c.name} : ${err.message}`);
+        this.logger.warn('Cron rapports tenant ' + t.id + ' echec : ' + err.message);
       }
     }
-    this.logger.log(`Cron rapports mensuels termine : ${ok} OK, ${failed} echec(s)`);
+    this.logger.log(`Cron rapports mensuels termine : ${totalOk} OK, ${totalFailed} echec(s)`);
   }
 
   // ============================================================

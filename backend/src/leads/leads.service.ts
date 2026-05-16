@@ -28,7 +28,7 @@ export class LeadsService {
    */
   async createFromPublic(
     dto: CreateLeadDto,
-    ctx: { ip?: string; userAgent?: string } = {},
+    ctx: { ip?: string; userAgent?: string; tenantId?: string | null } = {},
   ): Promise<{ ok: true; deduplicated?: boolean }> {
     // Honeypot : champ website rempli = bot → on retourne ok silencieux pour
     // ne pas leak la detection. Validation DTO devrait deja rejeter, mais
@@ -41,12 +41,14 @@ export class LeadsService {
     const cleanEmail = dto.email.trim().toLowerCase();
     const cleanName = (dto.company || dto.name).trim();
     const source = (dto.source || 'website').slice(0, 60);
+    const tenantId = ctx.tenantId ?? null;
 
-    // Deduplication legere : on cherche une Company avec ce nom ou un Contact
-    // avec cet email. Si trouve, on ajoute juste une Activity au lieu de
-    // recreer un doublon.
+    // Deduplication legere DANS LE TENANT : sans le scope, deux tenants
+    // partageant un meme client (ex. cabinet d'avocats commun) verraient
+    // leurs leads dedupliques sur l'autre tenant.
     const existingCompany = await this.prisma.company.findFirst({
       where: {
+        ...(tenantId ? { tenantId } : {}),
         OR: [
           { name: { equals: cleanName, mode: 'insensitive' } },
           { contacts: { some: { email: { equals: cleanEmail, mode: 'insensitive' } } } },
@@ -60,9 +62,8 @@ export class LeadsService {
       // Lead deja connu : on ajoute une Activity de re-contact pour visibilite
       await this.prisma.activity.create({
         data: {
-          // System user : pas de userId reel → on utilise un placeholder.
-          // Si pas d'admin existant on log juste sans Activity (cas seed initial).
-          userId: await this.getSystemUserId(),
+          userId: await this.getSystemUserId(tenantId),
+          tenantId,
           action: 'LEAD_RECONTACT',
           entity: 'Company',
           entityId: existingCompany.id,
@@ -78,6 +79,7 @@ export class LeadsService {
         `Lead re-contact : ${existingCompany.name}`,
         `${cleanEmail} via ${source}`,
         existingCompany.id,
+        tenantId,
       );
       return { ok: true, deduplicated: true };
     }
@@ -86,6 +88,7 @@ export class LeadsService {
     const created = await this.prisma.$transaction(async (tx) => {
       const company = await tx.company.create({
         data: {
+          tenantId,
           name: cleanName,
           status: 'LEAD',
           email: cleanEmail,
@@ -102,6 +105,7 @@ export class LeadsService {
 
       await tx.contact.create({
         data: {
+          tenantId,
           firstName,
           lastName,
           email: cleanEmail,
@@ -113,7 +117,8 @@ export class LeadsService {
 
       await tx.activity.create({
         data: {
-          userId: await this.getSystemUserId(),
+          userId: await this.getSystemUserId(tenantId),
+          tenantId,
           action: 'LEAD_CREATED',
           entity: 'Company',
           entityId: company.id,
@@ -133,10 +138,11 @@ export class LeadsService {
       `Nouveau lead : ${created.name}`,
       `${cleanEmail} via ${source}`,
       created.id,
+      tenantId,
     );
 
     // Email de confirmation au prospect (best-effort, non bloquant)
-    this.sendConfirmation(cleanEmail, dto.name).catch((err) =>
+    this.sendConfirmation(cleanEmail, dto.name, tenantId).catch((err) =>
       this.logger.warn('Email confirmation lead echec : ' + err.message),
     );
 
@@ -144,29 +150,32 @@ export class LeadsService {
   }
 
   /**
-   * Recupere l'ID du premier ADMIN actif pour rattacher les Activity creees
-   * par le flow public (pas d'utilisateur authentifie). En l'absence d'ADMIN,
-   * on tente un MANAGER, puis n'importe quel User. Si rien -> erreur explicite
-   * (CRM non encore seede : situation impossible en prod, OK en tests).
+   * Recupere l'ID du premier ADMIN actif DU TENANT pour rattacher les Activity
+   * creees par le flow public. Sans scope tenant, le lead du tenant A serait
+   * rattache a un admin du tenant B.
    */
-  private cachedSystemUserId: string | null = null;
-  private async getSystemUserId(): Promise<string> {
-    if (this.cachedSystemUserId) return this.cachedSystemUserId;
+  private async getSystemUserId(tenantId: string | null): Promise<string> {
     const user = await this.prisma.user.findFirst({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        ...(tenantId ? { tenantId } : {}),
+      },
       orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
       select: { id: true },
     });
     if (!user) {
-      throw new Error('Aucun utilisateur dans le CRM pour rattacher l Activity lead');
+      throw new Error('Aucun utilisateur dans le tenant pour rattacher l Activity lead');
     }
-    this.cachedSystemUserId = user.id;
     return user.id;
   }
 
-  private async notifyAdmins(title: string, body: string, companyId: string) {
+  private async notifyAdmins(title: string, body: string, companyId: string, tenantId: string | null) {
     const admins = await this.prisma.user.findMany({
-      where: { isActive: true, role: { in: ['ADMIN', 'MANAGER'] } },
+      where: {
+        isActive: true,
+        role: { in: ['ADMIN', 'MANAGER'] },
+        ...(tenantId ? { tenantId } : {}),
+      },
       select: { id: true },
     });
     await Promise.all(
@@ -184,8 +193,8 @@ export class LeadsService {
     );
   }
 
-  private async sendConfirmation(toEmail: string, name: string) {
-    const enabled = await this.settings.getBool('leads.confirmationEmail.enabled');
+  private async sendConfirmation(toEmail: string, name: string, tenantId: string | null) {
+    const enabled = await this.settings.getBool('leads.confirmationEmail.enabled', tenantId);
     if (!enabled) return;
     const html = `
       <p>Bonjour ${this.escapeHtml(name)},</p>
@@ -197,6 +206,7 @@ export class LeadsService {
       subject: 'Votre demande a bien ete recue — MDO Services',
       html,
       relatedEntity: 'Lead',
+      tenantId,
     });
   }
 

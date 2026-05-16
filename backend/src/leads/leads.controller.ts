@@ -22,9 +22,14 @@ export class LeadsController {
   @HttpCode(202)
   @Post()
   async create(@Body() dto: CreateLeadDto, @Req() req: Request) {
+    // Multi-tenant : le tenant est resolu par le TenantResolverMiddleware
+    // depuis le Host (ex: contact.mairie-seysses.fr -> tenant Seysses).
+    // Si la requete n'a pas de tenant resolu, le lead atterrit dans le
+    // tenant par defaut (le legacy MDO via retro-compat seed).
     return this.service.createFromPublic(dto, {
       ip: req.ip,
       userAgent: req.headers['user-agent'],
+      tenantId: req.tenant?.id ?? null,
     });
   }
 }
