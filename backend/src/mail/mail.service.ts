@@ -60,32 +60,36 @@ export class MailService {
     private readonly prisma: PrismaService,
   ) {}
 
-  // Cree un transporter a la volee a chaque envoi (les settings peuvent changer en runtime)
-  private async buildTransporter(): Promise<nodemailer.Transporter | null> {
-    const host = await this.settings.get('smtp.host');
+  // Cree un transporter a la volee a chaque envoi (les settings peuvent
+  // changer en runtime). En multi-tenant, le SMTP est resolu PAR TENANT —
+  // chaque tenant a son propre serveur smtp.* et son propre expediteur.
+  // Si tenantId est null (cron systeme sans contexte), on utilise les
+  // settings globaux (compat MDO single-instance).
+  private async buildTransporter(tenantId: string | null = null): Promise<nodemailer.Transporter | null> {
+    const host = await this.settings.get('smtp.host', tenantId);
     if (!host) return null;
     return nodemailer.createTransport({
       host,
-      port: await this.settings.getInt('smtp.port', 587),
-      secure: await this.settings.getBool('smtp.secure'),
+      port: await this.settings.getInt('smtp.port', 587, tenantId),
+      secure: await this.settings.getBool('smtp.secure', tenantId),
       auth: {
-        user: (await this.settings.get('smtp.user')) ?? '',
-        pass: (await this.settings.get('smtp.password')) ?? '',
+        user: (await this.settings.get('smtp.user', tenantId)) ?? '',
+        pass: (await this.settings.get('smtp.password', tenantId)) ?? '',
       },
     });
   }
 
-  private async getFrom(): Promise<string> {
-    return (await this.settings.get('smtp.from')) ?? 'no-reply@mdoservices.fr';
+  private async getFrom(tenantId: string | null = null): Promise<string> {
+    return (await this.settings.get('smtp.from', tenantId)) ?? 'no-reply@mdoservices.fr';
   }
 
-  private async getSupportFrom(): Promise<string> {
+  private async getSupportFrom(tenantId: string | null = null): Promise<string> {
     // Replies tickets : on prefere l'adresse IMAP (boite support@) si configuree
-    return (await this.settings.get('imap.user')) ?? (await this.getFrom());
+    return (await this.settings.get('imap.user', tenantId)) ?? (await this.getFrom(tenantId));
   }
 
-  async generateMessageId(): Promise<string> {
-    const supportFrom = await this.getSupportFrom();
+  async generateMessageId(tenantId: string | null = null): Promise<string> {
+    const supportFrom = await this.getSupportFrom(tenantId);
     const domain = (supportFrom.match(/@([^>]+)>?$/)?.[1] ?? 'mdoservices.fr').trim();
     return '<' + randomBytes(16).toString('hex') + '@' + domain + '>';
   }
@@ -101,7 +105,7 @@ export class MailService {
       },
     });
 
-    const transporter = await this.buildTransporter();
+    const transporter = await this.buildTransporter(params.tenantId ?? null);
     if (!transporter) {
       this.logger.warn('Email non envoye (SMTP non configure) - to=' + params.to);
       await this.prisma.emailLog.update({
@@ -111,8 +115,8 @@ export class MailService {
       return { messageId: '', status: 'FAILED', error: 'SMTP non configure' };
     }
 
-    const messageId = params.messageId ?? (await this.generateMessageId());
-    const defaultFrom = await this.getFrom();
+    const messageId = params.messageId ?? (await this.generateMessageId(params.tenantId ?? null));
+    const defaultFrom = await this.getFrom(params.tenantId ?? null);
 
     try {
       await transporter.sendMail({
@@ -161,6 +165,7 @@ export class MailService {
     references?: string[];
     attachments?: MailAttachment[];
     relatedEntityId?: string;
+    tenantId?: string | null;
   }): Promise<SendResult> {
     const subject = '[' + params.ticketReference + '] ' + this.cleanSubject(params.ticketTitle);
     const signature = params.signature && params.signature.trim()
@@ -180,7 +185,7 @@ export class MailService {
       '\n\nReference : ' +
       params.ticketReference;
 
-    const supportFrom = await this.getSupportFrom();
+    const supportFrom = await this.getSupportFrom(params.tenantId ?? null);
     return this.send({
       to: params.to,
       cc: params.cc,
@@ -195,6 +200,7 @@ export class MailService {
       attachments: params.attachments,
       relatedEntity: 'Ticket',
       relatedEntityId: params.relatedEntityId,
+      tenantId: params.tenantId,
     });
   }
 
@@ -205,6 +211,7 @@ export class MailService {
     inReplyTo?: string | null;
     references?: string[];
     relatedEntityId?: string;
+    tenantId?: string | null;
   }): Promise<SendResult> {
     const subject = '[' + params.ticketReference + '] ' + this.cleanSubject(params.ticketTitle);
     const html = `
@@ -218,7 +225,7 @@ export class MailService {
   <p style="color:#6b7280; font-size:12px;">Email automatique - ne pas modifier la reference dans le sujet.</p>
 </body></html>`;
 
-    const supportFrom = await this.getSupportFrom();
+    const supportFrom = await this.getSupportFrom(params.tenantId ?? null);
     return this.send({
       to: params.to,
       from: supportFrom,
@@ -233,6 +240,7 @@ export class MailService {
       references: params.references,
       relatedEntity: 'Ticket',
       relatedEntityId: params.relatedEntityId,
+      tenantId: params.tenantId,
     });
   }
 

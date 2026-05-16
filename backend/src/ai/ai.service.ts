@@ -18,6 +18,11 @@ interface InvokeParams {
   entityType?: string;
   entityId?: string;
   userId?: string;
+  // Multi-tenant : OBLIGATOIRE si l'invocation se fait dans un contexte
+  // tenant. La cle Anthropic + le model + le companyContext sont resolus PAR
+  // tenant — sinon on ferait l'appel avec la cle MDO et factures sur compte
+  // MDO meme pour les tenants clients.
+  tenantId?: string | null;
 }
 
 @Injectable()
@@ -29,24 +34,32 @@ export class AiService {
     private readonly settings: SettingsService,
   ) {}
 
-  async isEnabled(): Promise<boolean> {
-    return this.settings.getBool('ai.enabled');
+  async isEnabled(tenantId: string | null = null): Promise<boolean> {
+    return this.settings.getBool('ai.enabled', tenantId);
   }
 
   // ============================================================
-  // Resolution clef + modele + contexte company
+  // Resolution clef + modele + contexte company - PAR TENANT.
+  // Critique : sans tenantId, on lit la config GLOBAL (= MDO) — un tenant
+  // client utiliserait la cle Anthropic MDO et les couts seraient factures
+  // a MDO. La cle API est isSecret donc PAS de fallback global pour les
+  // tenants (cf SettingsService.get).
   // ============================================================
-  private async loadConfig() {
-    const enabled = await this.settings.getBool('ai.enabled');
+  private async loadConfig(tenantId: string | null) {
+    const enabled = await this.settings.getBool('ai.enabled', tenantId);
     if (!enabled) {
       throw new ServiceUnavailableException('IA desactivee (Settings > IA > Activer)');
     }
-    const apiKey = await this.settings.get('ai.apiKey');
+    const apiKey = await this.settings.get('ai.apiKey', tenantId);
     if (!apiKey) {
-      throw new BadRequestException('Cle API Anthropic non configuree');
+      throw new BadRequestException(
+        tenantId
+          ? 'Cle API Anthropic non configuree pour ce tenant (Settings > IA)'
+          : 'Cle API Anthropic non configuree',
+      );
     }
-    const model = (await this.settings.get('ai.model')) ?? 'claude-sonnet-4-6';
-    const companyContext = (await this.settings.get('ai.companyContext')) ?? '';
+    const model = (await this.settings.get('ai.model', tenantId)) ?? 'claude-sonnet-4-6';
+    const companyContext = (await this.settings.get('ai.companyContext', tenantId)) ?? '';
     return { apiKey, model, companyContext };
   }
 
@@ -55,7 +68,7 @@ export class AiService {
   // Le system prompt final = "<companyContext>\n\n<systemPrompt>".
   // ============================================================
   async invoke(params: InvokeParams): Promise<string> {
-    const { apiKey, model, companyContext } = await this.loadConfig();
+    const { apiKey, model, companyContext } = await this.loadConfig(params.tenantId ?? null);
     const fullSystem = (companyContext ? companyContext + '\n\n' : '') + params.systemPrompt;
     const start = Date.now();
     let result;
@@ -76,6 +89,7 @@ export class AiService {
       await this.prisma.aiUsage
         .create({
           data: {
+            tenantId: params.tenantId,
             capability: params.capability,
             model,
             errorMessage: err.message?.slice(0, 500),
@@ -95,6 +109,7 @@ export class AiService {
     await this.prisma.aiUsage
       .create({
         data: {
+          tenantId: params.tenantId,
           capability: params.capability,
           model,
           inputTokens: result.usage.inputTokens,
@@ -114,19 +129,20 @@ export class AiService {
   }
 
   // ============================================================
-  // Stats consommation (admin)
+  // Stats consommation (admin) - par tenant
   // ============================================================
-  async usageStats() {
+  async usageStats(tenantId: string | null = null) {
     const since = new Date(Date.now() - 30 * 86400_000);
+    const tenantScope = tenantId ? { tenantId } : {};
     const [total, byCap] = await Promise.all([
       this.prisma.aiUsage.aggregate({
-        where: { createdAt: { gte: since } },
+        where: { ...tenantScope, createdAt: { gte: since } },
         _sum: { inputTokens: true, outputTokens: true, costUsd: true },
         _count: true,
       }),
       this.prisma.aiUsage.groupBy({
         by: ['capability'],
-        where: { createdAt: { gte: since } },
+        where: { ...tenantScope, createdAt: { gte: since } },
         _sum: { costUsd: true },
         _count: true,
       }),
