@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 import { CacheService } from '../common/cache/cache.service';
 import { CyberScoreService } from '../cyber-score/cyber-score.service';
 
@@ -53,11 +55,13 @@ const WEIGHTS = {
 export class HealthScoreService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
     private readonly cache: CacheService,
     private readonly cyber: CyberScoreService,
   ) {}
 
-  async computeForCompany(companyId: string): Promise<HealthScoreResult> {
+  async computeForCompany(companyId: string, me: JwtUser): Promise<HealthScoreResult> {
+    await this.scope.assertCompanyInTenant(companyId, me);
     const cached = this.cache.get<HealthScoreResult>(CACHE_KEY(companyId));
     if (cached) return cached;
 
@@ -97,7 +101,7 @@ export class HealthScoreService {
           orderBy: { submittedAt: 'desc' },
           select: { score: true, submittedAt: true },
         }).catch(() => null),
-        this.cyber.computeForCompany(companyId).catch(() => null),
+        this.cyber.computeForCompany(companyId, me).catch(() => null),
       ]);
 
     const alerts: string[] = [];
@@ -231,16 +235,16 @@ export class HealthScoreService {
     return result;
   }
 
-  // Vue d'ensemble : top N clients a risque (HIGH ou MEDIUM)
-  async overview(limit = 50) {
+  // Vue d'ensemble : top N clients a risque (HIGH ou MEDIUM) - scope par tenant
+  async overview(me: JwtUser, limit = 50) {
     const companies = await this.prisma.company.findMany({
-      where: { status: 'CUSTOMER' },
+      where: this.scope.scopedWhere(me, { status: 'CUSTOMER' }),
       select: { id: true, name: true },
       take: 200, // limite haute pour eviter d'exploser le compute si beaucoup de clients
     });
     const scores = await Promise.all(
       companies.map(async (c) => {
-        const s = await this.computeForCompany(c.id);
+        const s = await this.computeForCompany(c.id, me);
         return { companyId: c.id, name: c.name, overall: s.overall, risk: s.risk, alerts: s.alerts.length };
       }),
     );

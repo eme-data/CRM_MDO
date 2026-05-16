@@ -305,7 +305,7 @@ export class ClientReportsService {
   // Agregation des donnees pour une periode
   // ============================================================
   private async aggregate(
-    company: { id: string; name: string; address: string | null; postalCode: string | null; city: string | null },
+    company: { id: string; name: string; address: string | null; postalCode: string | null; city: string | null; tenantId: string | null },
     periodStart: Date,
     periodEnd: Date,
   ): Promise<MonthlyReportData> {
@@ -437,9 +437,20 @@ export class ClientReportsService {
     // --- Posture (cyber + health + compliance) ---
     // Best-effort : si l'un des trois echoue (donnees insuffisantes), on
     // continue avec les autres pour ne pas bloquer la generation du rapport.
+    // En appel cron, on construit un user systeme dans le tenant de la company
+    // pour passer les controles tenant des services cyber/health.
+    const systemMe = {
+      id: '',
+      tenantId: company.tenantId,
+      isSuperAdmin: true,
+      role: 'ADMIN',
+      email: '',
+      firstName: '',
+      lastName: '',
+    } as any;
     const [cyberRes, healthRes, complianceList] = await Promise.all([
-      this.cyber.computeForCompany(company.id).catch(() => null),
-      this.health.computeForCompany(company.id).catch(() => null),
+      this.cyber.computeForCompany(company.id, systemMe).catch(() => null),
+      this.health.computeForCompany(company.id, systemMe).catch(() => null),
       this.prisma.complianceAssessment.findMany({
         where: { companyId: company.id },
         select: {

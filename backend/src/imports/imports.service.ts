@@ -19,9 +19,13 @@ export class ImportsService {
   // ============ COMPANIES ============
   // Colonnes attendues (insensitive a la casse) : name, siret, siren, email, phone, address,
   // postalCode, city, sector, status, website
-  async importCompanies(csv: string, ownerId: string): Promise<ImportResult> {
+  // Multi-tenant : la deduplication (par SIRET/SIREN/nom) est SCOPEE au tenant
+  // de l'utilisateur. Sans ca, un import dans le tenant A pourrait mettre a
+  // jour des societes du tenant B partageant un meme SIRET (ex: client commun).
+  async importCompanies(csv: string, ownerId: string, tenantId: string | null): Promise<ImportResult> {
     const parsed = Papa.parse<any>(csv, { header: true, skipEmptyLines: true });
     const result: ImportResult = { total: 0, created: 0, updated: 0, skipped: 0, errors: [] };
+    const tenantWhere = tenantId ? { tenantId } : {};
 
     for (let i = 0; i < parsed.data.length; i++) {
       const row = parsed.data[i];
@@ -34,15 +38,11 @@ export class ImportsService {
       const siret = this.s(row, 'siret');
       const siren = this.s(row, 'siren');
 
-      // Dedup par SIRET prio, sinon SIREN, sinon nom.
-      // Multi-tenant : siret/siren ne sont plus uniques globalement (un meme
-      // SIRET peut exister dans 2 tenants differents). On utilise findFirst
-      // sans scope tenant ici — TODO vague 1+ : passer le tenantId du user
-      // qui declenche l'import pour scoper la deduplication.
+      // Dedup par SIRET prio, sinon SIREN, sinon nom — DANS LE TENANT.
       let existing: any = null;
-      if (siret) existing = await this.prisma.company.findFirst({ where: { siret } });
-      if (!existing && siren) existing = await this.prisma.company.findFirst({ where: { siren } });
-      if (!existing) existing = await this.prisma.company.findFirst({ where: { name } });
+      if (siret) existing = await this.prisma.company.findFirst({ where: { ...tenantWhere, siret } });
+      if (!existing && siren) existing = await this.prisma.company.findFirst({ where: { ...tenantWhere, siren } });
+      if (!existing) existing = await this.prisma.company.findFirst({ where: { ...tenantWhere, name } });
 
       const data = {
         name,
@@ -65,7 +65,7 @@ export class ImportsService {
           await this.prisma.company.update({ where: { id: existing.id }, data: data as any });
           result.updated++;
         } else {
-          await this.prisma.company.create({ data: { ...data, ownerId } as any });
+          await this.prisma.company.create({ data: { ...data, ownerId, tenantId } as any });
           result.created++;
         }
       } catch (err: any) {
@@ -78,9 +78,11 @@ export class ImportsService {
 
   // ============ CONTACTS ============
   // Colonnes : firstName, lastName, email, phone, mobile, position, companyName (matching par nom)
-  async importContacts(csv: string, ownerId: string): Promise<ImportResult> {
+  // Multi-tenant : matching company + dedup contact par email scopes au tenant.
+  async importContacts(csv: string, ownerId: string, tenantId: string | null): Promise<ImportResult> {
     const parsed = Papa.parse<any>(csv, { header: true, skipEmptyLines: true });
     const result: ImportResult = { total: 0, created: 0, updated: 0, skipped: 0, errors: [] };
+    const tenantWhere = tenantId ? { tenantId } : {};
 
     for (let i = 0; i < parsed.data.length; i++) {
       const row = parsed.data[i];
@@ -94,18 +96,18 @@ export class ImportsService {
       const email = this.s(row, 'email');
       const companyName = this.s(row, 'companyName');
 
-      // Match company par nom si fourni
+      // Match company par nom DANS LE TENANT
       let companyId: string | undefined;
       if (companyName) {
-        const c = await this.prisma.company.findFirst({ where: { name: companyName } });
+        const c = await this.prisma.company.findFirst({ where: { ...tenantWhere, name: companyName } });
         if (c) companyId = c.id;
         else result.errors.push({ row: i + 2, reason: 'Company non trouvee : ' + companyName });
       }
 
-      // Dedup contact par email s'il y en a un
+      // Dedup contact par email DANS LE TENANT
       let existing: any = null;
       if (email) {
-        existing = await this.prisma.contact.findFirst({ where: { email } });
+        existing = await this.prisma.contact.findFirst({ where: { ...tenantWhere, email } });
       }
 
       const data = {
@@ -123,7 +125,7 @@ export class ImportsService {
           await this.prisma.contact.update({ where: { id: existing.id }, data });
           result.updated++;
         } else {
-          await this.prisma.contact.create({ data: { ...data, ownerId } });
+          await this.prisma.contact.create({ data: { ...data, ownerId, tenantId } });
           result.created++;
         }
       } catch (err: any) {

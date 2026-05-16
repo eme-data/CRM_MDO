@@ -4,6 +4,7 @@ import { ProfitabilityService } from './profitability.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Profitability')
 @ApiBearerAuth()
@@ -14,15 +15,15 @@ export class ProfitabilityController {
 
   @Roles('ADMIN', 'MANAGER')
   @Get('companies/:id')
-  forCompany(@Param('id') id: string, @Query('months') months?: string) {
+  forCompany(@Param('id') id: string, @CurrentUser() user: JwtUser, @Query('months') months?: string) {
     const m = months ? Math.max(1, Math.min(36, parseInt(months, 10))) : 12;
-    return this.service.computeForCompany(id, m);
+    return this.service.computeForCompany(id, user, m);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Get('overview')
-  overview(@Query('months') months?: string) {
+  overview(@CurrentUser() user: JwtUser, @Query('months') months?: string) {
     const m = months ? Math.max(1, Math.min(36, parseInt(months, 10))) : 12;
-    return this.service.overview(m);
+    return this.service.overview(user, m);
   }
 }

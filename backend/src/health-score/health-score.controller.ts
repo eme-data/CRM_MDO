@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { HealthScoreService } from './health-score.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Health Score')
 @ApiBearerAuth()
@@ -12,12 +13,12 @@ export class HealthScoreController {
   constructor(private readonly service: HealthScoreService) {}
 
   @Get('companies/:id')
-  forCompany(@Param('id') id: string) {
-    return this.service.computeForCompany(id);
+  forCompany(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.computeForCompany(id, user);
   }
 
   @Get('overview')
-  overview(@Query('limit') limit?: string) {
-    return this.service.overview(limit ? parseInt(limit, 10) : 50);
+  overview(@CurrentUser() user: JwtUser, @Query('limit') limit?: string) {
+    return this.service.overview(user, limit ? parseInt(limit, 10) : 50);
   }
 }

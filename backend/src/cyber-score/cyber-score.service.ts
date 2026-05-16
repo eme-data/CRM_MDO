@@ -1,5 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 import { CacheService } from '../common/cache/cache.service';
 import { computeCyberScore, ScoreInputs, ScoreResult } from './cyber-score.algorithm';
 
@@ -15,20 +17,23 @@ export class CyberScoreService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
     private readonly cache: CacheService,
   ) {}
 
   /**
    * Calcule le score pour une societe donnee. Cache 5 min (cf SCORE_TTL_SECONDS).
    * Renvoie le ScoreResult + un horodatage `computedAt` pour traçabilite UI.
+   * Multi-tenant : si me est fourni, on valide que la company appartient au
+   * tenant courant. Pour les appels internes (HealthScore p.ex.), me est
+   * propage par le caller.
    */
-  async computeForCompany(companyId: string): Promise<ScoreResult & { computedAt: string }> {
+  async computeForCompany(companyId: string, me: JwtUser): Promise<ScoreResult & { computedAt: string }> {
+    await this.scope.assertCompanyInTenant(companyId, me);
     const cacheKey = CACHE_KEY(companyId);
     const cached = this.cache.get<ScoreResult & { computedAt: string }>(cacheKey);
     if (cached) return cached;
 
-    // Verifie l'existence de la societe avant de gather (sinon on perdrait du
-    // temps en N queries pour rien).
     const company = await this.prisma.company.findUnique({
       where: { id: companyId },
       select: { id: true },
@@ -44,23 +49,22 @@ export class CyberScoreService {
   }
 
   /**
-   * Force le recalcul (invalide le cache). Utile apres une action correctrice
-   * (renouvellement asset, activation MFA, etc.) pour voir le score remonter.
+   * Force le recalcul (invalide le cache).
    */
-  async refresh(companyId: string) {
+  async refresh(companyId: string, me: JwtUser) {
     this.cache.del(CACHE_KEY(companyId));
-    return this.computeForCompany(companyId);
+    return this.computeForCompany(companyId, me);
   }
 
   /**
-   * Calcule pour toutes les Companies actives (status=CUSTOMER). Utilise pour
-   * la page de vue d'ensemble. NON cache (rare appel admin).
+   * Calcule pour toutes les Companies actives (status=CUSTOMER) DU TENANT.
+   * NON cache (rare appel admin).
    */
-  async computeAllCustomers(): Promise<
+  async computeAllCustomers(me: JwtUser): Promise<
     Array<{ companyId: string; companyName: string; score: number | null; level: ScoreResult['level'] }>
   > {
     const customers = await this.prisma.company.findMany({
-      where: { status: 'CUSTOMER' },
+      where: this.scope.scopedWhere(me, { status: 'CUSTOMER' }),
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     });
@@ -78,7 +82,7 @@ export class CyberScoreService {
       const batchResults = await Promise.all(
         batch.map(async (c) => {
           try {
-            const r = await this.computeForCompany(c.id);
+            const r = await this.computeForCompany(c.id, me);
             return { companyId: c.id, companyName: c.name, score: r.score, level: r.level };
           } catch (err: any) {
             this.logger.warn('Score echec pour ' + c.id + ' : ' + err.message);

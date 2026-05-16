@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 import { CacheService } from '../common/cache/cache.service';
 import { SettingsService } from '../settings/settings.service';
 
@@ -30,11 +32,13 @@ export interface ProfitabilityResult {
 export class ProfitabilityService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
     private readonly cache: CacheService,
     private readonly settings: SettingsService,
   ) {}
 
-  async computeForCompany(companyId: string, periodMonths = 12): Promise<ProfitabilityResult> {
+  async computeForCompany(companyId: string, me: JwtUser, periodMonths = 12): Promise<ProfitabilityResult> {
+    await this.scope.assertCompanyInTenant(companyId, me);
     const cached = this.cache.get<ProfitabilityResult>(CACHE_KEY(companyId, periodMonths));
     if (cached) return cached;
 
@@ -46,8 +50,10 @@ export class ProfitabilityService {
 
     const since = new Date(Date.now() - periodMonths * 30 * 86400_000);
 
-    const defaultHourlyRate = parseFloat((await this.settings.get('profitability.defaultHourlyRate')) ?? '45');
-    const defaultBillingRate = parseFloat((await this.settings.get('profitability.defaultBillingRate')) ?? '90');
+    // Multi-tenant : taux horaires resolus PAR TENANT (chaque tenant a sa
+    // propre structure de couts). Defaut: lecture des settings du tenant.
+    const defaultHourlyRate = parseFloat((await this.settings.get('profitability.defaultHourlyRate', me.tenantId)) ?? '45');
+    const defaultBillingRate = parseFloat((await this.settings.get('profitability.defaultBillingRate', me.tenantId)) ?? '90');
 
     const [activeContracts, timeEntries] = await Promise.all([
       this.prisma.contract.findMany({
@@ -123,15 +129,15 @@ export class ProfitabilityService {
     return result;
   }
 
-  async overview(periodMonths = 12) {
+  async overview(me: JwtUser, periodMonths = 12) {
     const customers = await this.prisma.company.findMany({
-      where: { status: 'CUSTOMER' },
+      where: this.scope.scopedWhere(me, { status: 'CUSTOMER' }),
       select: { id: true, name: true },
       take: 200,
     });
     const items = await Promise.all(
       customers.map(async (c) => {
-        const r = await this.computeForCompany(c.id, periodMonths);
+        const r = await this.computeForCompany(c.id, me, periodMonths);
         return { ...r, name: c.name };
       }),
     );

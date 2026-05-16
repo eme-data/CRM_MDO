@@ -18,11 +18,11 @@ export class ImportsController {
 
   @Post('companies')
   importCompanies(@Body() body: { csv: string }, @CurrentUser() user: JwtUser) {
-    return this.service.importCompanies(body.csv, user.id);
+    return this.service.importCompanies(body.csv, user.id, user.tenantId);
   }
 
   @Post('contacts')
   importContacts(@Body() body: { csv: string }, @CurrentUser() user: JwtUser) {
-    return this.service.importContacts(body.csv, user.id);
+    return this.service.importContacts(body.csv, user.id, user.tenantId);
   }
 }
