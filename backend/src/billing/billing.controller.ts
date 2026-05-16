@@ -13,6 +13,7 @@ import { QontoProvider } from './qonto.provider';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 import { PushInvoiceDto } from './dto/push-invoice.dto';
 import { QontoSyncDto } from './dto/qonto-sync.dto';
 
@@ -29,8 +30,8 @@ export class BillingController {
 
   @Roles('ADMIN', 'MANAGER')
   @Get('status')
-  status() {
-    return this.billing.status();
+  status(@CurrentUser() user: JwtUser) {
+    return this.billing.status(user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER')
@@ -41,31 +42,31 @@ export class BillingController {
 
   @Roles('ADMIN')
   @Post('test/qonto')
-  testQonto() {
-    return this.qonto.ping();
+  testQonto(@CurrentUser() user: JwtUser) {
+    return this.qonto.ping(user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Post('companies/:id/push')
-  pushCompany(@Param('id') id: string) {
-    return this.billing.pushCompany(id);
+  pushCompany(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.billing.pushCompany(id, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Post('contracts/:id/push')
-  pushContract(@Param('id') id: string) {
-    return this.billing.pushContract(id);
+  pushContract(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.billing.pushContract(id, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Post('invoices/push')
-  pushInvoice(@Body() body: PushInvoiceDto) {
-    return this.billing.pushInvoiceNow(body);
+  pushInvoice(@Body() body: PushInvoiceDto, @CurrentUser() user: JwtUser) {
+    return this.billing.pushInvoiceNow(body, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Post('qonto/sync')
-  qontoSync(@Body() body: QontoSyncDto) {
-    return this.qonto.syncTransactions({ sinceDays: body.sinceDays });
+  qontoSync(@Body() body: QontoSyncDto, @CurrentUser() user: JwtUser) {
+    return this.qonto.syncTransactions(user.tenantId, { sinceDays: body.sinceDays });
   }
 }

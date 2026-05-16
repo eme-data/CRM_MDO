@@ -222,65 +222,80 @@ export class InvoicesService {
   // Desactive automatiquement quand un provider externe (Qonto) est
   // actif ET que billing.disableInternalCron est a true (defaut). Dans ce
   // mode, c'est le provider externe qui est la source de verite des factures.
+  // Itere PAR TENANT : chaque tenant a sa propre config billing.provider /
+  // disableInternalCron. Sans cette iteration, un seul reglage global
+  // (= MDO) determinerait le comportement de tous les tenants.
   @Cron('0 6 1 * *', { name: 'invoices-monthly-auto', timeZone: 'Europe/Paris' }) // 1er du mois a 6h Paris
   async generateMonthlyInvoicesAuto() {
-    const provider = (await this.settings.get('billing.provider')) ?? 'none';
-    const disableInternal = await this.settings.getBool('billing.disableInternalCron');
-    if (provider !== 'none' && disableInternal) {
-      this.logger.log(
-        'Cron interne ignore : provider externe "' + provider + '" actif (billing.disableInternalCron=true)',
-      );
-      return { created: 0, skipped: true, reason: 'external_provider_' + provider };
-    }
-
+    const tenants = await this.prisma.tenant.findMany({
+      where: { isActive: true },
+      select: { id: true },
+    });
     const now = new Date();
     const issueDate = startOfMonth(now);
-    this.logger.log('Generation mensuelle des factures pour ' + format(issueDate, 'yyyy-MM'));
-
-    const contracts = await this.prisma.contract.findMany({
-      where: {
-        status: 'ACTIVE',
-        billingPeriod: 'MONTHLY',
-        startDate: { lte: now },
-        endDate: { gte: now },
-      },
-      include: { company: true },
-    });
-
-    let created = 0;
-    for (const c of contracts) {
-      // Ne pas dupliquer : check facture existante pour ce contrat ce mois-ci
-      const existing = await this.prisma.invoice.findFirst({
-        where: {
-          contractId: c.id,
-          issueDate: { gte: issueDate, lte: endOfMonth(issueDate) },
-        },
-      });
-      if (existing) continue;
-
-      const description =
-        'Abonnement ' + c.offer + ' - ' + format(issueDate, 'MMM yyyy') +
-        ' (' + c.quantity + ' utilisateur' + (c.quantity > 1 ? 's' : '') + ')';
-
+    let totalCreated = 0;
+    for (const t of tenants) {
       try {
-        await this.create({
-          companyId: c.companyId,
-          contractId: c.id,
-          issueDate,
-          dueDate: addDays(issueDate, 30),
-          vatRate: Number(c.vatRate),
-          lines: [{
-            description,
-            quantity: c.quantity,
-            unitPriceHt: Number(c.unitPriceHt),
-          }],
+        const provider = (await this.settings.get('billing.provider', t.id)) ?? 'none';
+        const disableInternal = await this.settings.getBool('billing.disableInternalCron', t.id);
+        if (provider !== 'none' && disableInternal) {
+          this.logger.log(
+            '[tenant ' + t.id + '] Cron interne ignore : provider externe "' + provider + '"',
+          );
+          continue;
+        }
+
+        const contracts = await this.prisma.contract.findMany({
+          where: {
+            tenantId: t.id,
+            status: 'ACTIVE',
+            billingPeriod: 'MONTHLY',
+            startDate: { lte: now },
+            endDate: { gte: now },
+          },
+          include: { company: true },
         });
-        created++;
+
+        let created = 0;
+        for (const c of contracts) {
+          // Ne pas dupliquer : check facture existante pour ce contrat ce mois-ci
+          const existing = await this.prisma.invoice.findFirst({
+            where: {
+              contractId: c.id,
+              issueDate: { gte: issueDate, lte: endOfMonth(issueDate) },
+            },
+          });
+          if (existing) continue;
+
+          const description =
+            'Abonnement ' + c.offer + ' - ' + format(issueDate, 'MMM yyyy') +
+            ' (' + c.quantity + ' utilisateur' + (c.quantity > 1 ? 's' : '') + ')';
+
+          try {
+            await this.create({
+              companyId: c.companyId,
+              contractId: c.id,
+              issueDate,
+              dueDate: addDays(issueDate, 30),
+              vatRate: Number(c.vatRate),
+              lines: [{
+                description,
+                quantity: c.quantity,
+                unitPriceHt: Number(c.unitPriceHt),
+              }],
+            });
+            created++;
+          } catch (err: any) {
+            this.logger.error('Echec facture pour contrat ' + c.reference + ' : ' + err.message);
+          }
+        }
+        if (created > 0) this.logger.log('[tenant ' + t.id + '] ' + created + ' factures creees');
+        totalCreated += created;
       } catch (err: any) {
-        this.logger.error('Echec facture pour contrat ' + c.reference + ' : ' + err.message);
+        this.logger.warn('generateMonthlyInvoicesAuto tenant ' + t.id + ' echec : ' + err.message);
       }
     }
-    this.logger.log(created + ' factures creees');
-    return { created };
+    this.logger.log('Cron mensuel : ' + totalCreated + ' factures creees au total');
+    return { created: totalCreated };
   }
 }

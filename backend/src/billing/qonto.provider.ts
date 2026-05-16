@@ -14,6 +14,10 @@ import {
 // bancaires (rapprochement paiements). L'edition/emission de factures Qonto
 // (Qonto Factures) est volontairement laissee en squelette — a implementer
 // quand Mathieu bascule la facturation cote Qonto.
+//
+// MULTI-TENANT : chaque tenant a son PROPRE compte Qonto (slug + cle). Toutes
+// les methodes prennent tenantId et resolvent les credentials via Settings.
+// Sans ca, MDO et Mairie de Seysses tireraient sur le meme compte Qonto.
 
 @Injectable()
 export class QontoProvider implements BillingProvider {
@@ -25,29 +29,29 @@ export class QontoProvider implements BillingProvider {
     private readonly prisma: PrismaService,
   ) {}
 
-  async isConfigured(): Promise<boolean> {
-    const slug = await this.settings.get('billing.qonto.organizationSlug');
-    const key = await this.settings.get('billing.qonto.secretKey');
+  async isConfigured(tenantId: string | null = null): Promise<boolean> {
+    const slug = await this.settings.get('billing.qonto.organizationSlug', tenantId);
+    const key = await this.settings.get('billing.qonto.secretKey', tenantId);
     return Boolean(slug && key);
   }
 
-  private async authHeader(): Promise<string> {
-    const slug = await this.settings.get('billing.qonto.organizationSlug');
-    const key = await this.settings.get('billing.qonto.secretKey');
+  private async authHeader(tenantId: string | null): Promise<string> {
+    const slug = await this.settings.get('billing.qonto.organizationSlug', tenantId);
+    const key = await this.settings.get('billing.qonto.secretKey', tenantId);
     if (!slug || !key) throw new Error('Qonto non configure');
     return slug + ':' + key;
   }
 
-  private async base(): Promise<string> {
-    return (await this.settings.get('billing.qonto.apiBase')) || 'https://thirdparty.qonto.com/v2';
+  private async base(tenantId: string | null): Promise<string> {
+    return (await this.settings.get('billing.qonto.apiBase', tenantId)) || 'https://thirdparty.qonto.com/v2';
   }
 
-  private async request<T = any>(method: 'GET' | 'POST', path: string, body?: any): Promise<T> {
-    const url = (await this.base()) + path;
+  private async request<T = any>(method: 'GET' | 'POST', path: string, tenantId: string | null, body?: any): Promise<T> {
+    const url = (await this.base(tenantId)) + path;
     const res = await fetch(url, {
       method,
       headers: {
-        Authorization: await this.authHeader(),
+        Authorization: await this.authHeader(tenantId),
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
@@ -63,10 +67,10 @@ export class QontoProvider implements BillingProvider {
     return (await res.json()) as T;
   }
 
-  async ping(): Promise<{ ok: boolean; message: string }> {
+  async ping(tenantId: string | null = null): Promise<{ ok: boolean; message: string }> {
     try {
-      const slug = await this.settings.get('billing.qonto.organizationSlug');
-      await this.request('GET', '/organizations/' + encodeURIComponent(slug ?? ''));
+      const slug = await this.settings.get('billing.qonto.organizationSlug', tenantId);
+      await this.request('GET', '/organizations/' + encodeURIComponent(slug ?? ''), tenantId);
       return { ok: true, message: 'Connexion Qonto OK' };
     } catch (err: any) {
       return { ok: false, message: err.message };
@@ -74,28 +78,29 @@ export class QontoProvider implements BillingProvider {
   }
 
   // ---------- Facturation Qonto Factures (squelette) ----------
-  async pushClient(_input: PushClientInput): Promise<RemoteClient> {
+  async pushClient(_input: PushClientInput, _tenantId: string | null = null): Promise<RemoteClient> {
     throw new Error(
       'Qonto Factures : pushClient pas encore implemente. A coder quand on basculera la facturation cote Qonto.',
     );
   }
 
-  async pushInvoice(_input: PushInvoiceInput): Promise<RemoteInvoice> {
+  async pushInvoice(_input: PushInvoiceInput, _tenantId: string | null = null): Promise<RemoteInvoice> {
     throw new Error(
       'Qonto Factures : pushInvoice pas encore implemente. A coder quand on basculera la facturation cote Qonto.',
     );
   }
 
-  async pullInvoice(_externalId: string): Promise<RemoteInvoice | null> {
+  async pullInvoice(_externalId: string, _tenantId: string | null = null): Promise<RemoteInvoice | null> {
     return null;
   }
 
   // ---------- Lecture des transactions bancaires (cas d'usage principal) ----------
   // Synchronise les transactions Qonto (credit + debit) dans BankTransaction
   // pour rapprochement avec les factures clients.
-  async syncTransactions(opts: { sinceDays?: number } = {}): Promise<{ imported: number }> {
-    if (!(await this.isConfigured())) return { imported: 0 };
-    const slug = (await this.settings.get('billing.qonto.organizationSlug')) ?? '';
+  // tenantId OBLIGATOIRE : sans, on tire sur le compte Qonto MDO.
+  async syncTransactions(tenantId: string | null, opts: { sinceDays?: number } = {}): Promise<{ imported: number }> {
+    if (!(await this.isConfigured(tenantId))) return { imported: 0 };
+    const slug = (await this.settings.get('billing.qonto.organizationSlug', tenantId)) ?? '';
     const since = new Date();
     since.setDate(since.getDate() - (opts.sinceDays ?? 30));
 
@@ -116,7 +121,7 @@ export class QontoProvider implements BillingProvider {
         '&settled_at_from=' +
         encodeURIComponent(since.toISOString());
 
-      const data = await this.request<any>('GET', path).catch((err) => {
+      const data = await this.request<any>('GET', path, tenantId).catch((err) => {
         this.logger.warn('Qonto syncTransactions page ' + page + ' echec : ' + err.message);
         return null;
       });
@@ -130,6 +135,7 @@ export class QontoProvider implements BillingProvider {
 
         await this.prisma.bankTransaction.create({
           data: {
+            tenantId,
             source: BankSource.QONTO,
             externalId,
             bookedAt: new Date(t.settled_at ?? t.emitted_at ?? Date.now()),

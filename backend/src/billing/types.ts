@@ -80,18 +80,22 @@ export interface PushInvoiceInput {
 // Interface qu'un provider doit implementer pour etre branche dans le CRM.
 // Les methodes peuvent renvoyer null si l'operation n'est pas supportee
 // par ce provider (ex : Qonto Factures n'a pas la notion d'abonnement).
+//
+// MULTI-TENANT : toutes les methodes acceptent tenantId optionnel. Si null
+// (cron systeme legacy / single-tenant MDO), on tombe sur la config globale.
+// Sinon, credentials et endpoints sont resolus pour ce tenant precis.
 export interface BillingProvider {
   readonly kind: BillingProviderKind;
 
-  isConfigured(): Promise<boolean>;
+  isConfigured(tenantId?: string | null): Promise<boolean>;
 
   // Test de connectivite (verifie credentials)
-  ping(): Promise<{ ok: boolean; message: string }>;
+  ping(tenantId?: string | null): Promise<{ ok: boolean; message: string }>;
 
-  pushClient(input: PushClientInput): Promise<RemoteClient>;
-  pushInvoice(input: PushInvoiceInput): Promise<RemoteInvoice>;
-  pushSubscription?(input: PushSubscriptionInput): Promise<RemoteSubscription>;
+  pushClient(input: PushClientInput, tenantId?: string | null): Promise<RemoteClient>;
+  pushInvoice(input: PushInvoiceInput, tenantId?: string | null): Promise<RemoteInvoice>;
+  pushSubscription?(input: PushSubscriptionInput, tenantId?: string | null): Promise<RemoteSubscription>;
 
   // Pull de l'etat d'une facture deja creee cote provider
-  pullInvoice(externalId: string): Promise<RemoteInvoice | null>;
+  pullInvoice(externalId: string, tenantId?: string | null): Promise<RemoteInvoice | null>;
 }
