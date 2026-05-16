@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 export interface Hit {
   type: 'company' | 'contact' | 'opportunity' | 'contract' | 'ticket';
@@ -11,15 +13,23 @@ export interface Hit {
 
 @Injectable()
 export class SearchService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
+  ) {}
 
-  async global(q: string, limit = 20): Promise<Hit[]> {
+  async global(q: string, me: JwtUser, limit = 20): Promise<Hit[]> {
     if (!q || q.trim().length < 2) return [];
     const term = q.trim();
+    // Multi-tenant : la recherche globale est strictement scopee au tenant
+    // courant (sinon un user du tenant A trouverait les noms de societes du
+    // tenant B). Super-admin voit tout.
+    const ts = this.scope.scopedWhere(me);
 
     const [companies, contacts, opps, contracts, tickets] = await Promise.all([
       this.prisma.company.findMany({
         where: {
+          ...ts,
           OR: [
             { name: { contains: term, mode: 'insensitive' } },
             { email: { contains: term, mode: 'insensitive' } },
@@ -33,6 +43,7 @@ export class SearchService {
       }),
       this.prisma.contact.findMany({
         where: {
+          ...ts,
           OR: [
             { firstName: { contains: term, mode: 'insensitive' } },
             { lastName: { contains: term, mode: 'insensitive' } },
@@ -47,6 +58,7 @@ export class SearchService {
       }),
       this.prisma.opportunity.findMany({
         where: {
+          ...ts,
           OR: [
             { title: { contains: term, mode: 'insensitive' } },
             { description: { contains: term, mode: 'insensitive' } },
@@ -57,6 +69,7 @@ export class SearchService {
       }),
       this.prisma.contract.findMany({
         where: {
+          ...ts,
           OR: [
             { reference: { contains: term, mode: 'insensitive' } },
             { title: { contains: term, mode: 'insensitive' } },
@@ -67,6 +80,7 @@ export class SearchService {
       }),
       this.prisma.ticket.findMany({
         where: {
+          ...ts,
           OR: [
             { reference: { contains: term, mode: 'insensitive' } },
             { title: { contains: term, mode: 'insensitive' } },

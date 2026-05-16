@@ -2,18 +2,24 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 import { computeScore, lookupDkim, lookupDmarc, lookupSpf } from './dns-utils';
 
 @Injectable()
 export class EmailSecurityService {
   private readonly logger = new Logger(EmailSecurityService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
+  ) {}
 
   // ============================================================
   // Verification d'un domaine : appelle DNS + upsert resultat
+  // Hertie le tenantId du caller (ou de la company en mode systeme/cron).
   // ============================================================
-  async checkDomain(domain: string, companyId?: string) {
+  async checkDomain(domain: string, companyId?: string, callerTenantId: string | null = null) {
     const cleanDomain = domain.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
     let spf, dmarc, dkim, score: number, error: string | null = null;
     try {
@@ -32,11 +38,11 @@ export class EmailSecurityService {
       error = err.message?.slice(0, 500) ?? 'unknown';
     }
 
-    // Multi-tenant : domaine deduplique PAR tenant. On herite le tenantId
-    // de la company si on en a une (cas standard), sinon null (tenant 'mdo'
-    // au prochain boot via retro-compat).
-    let tenantId: string | null = null;
-    if (companyId) {
+    // Resolution tenantId : caller > company > null. Le compound unique est
+    // (tenantId, domain) ; un meme domaine peut etre verifie par plusieurs
+    // tenants si un fournisseur DNS est commun.
+    let tenantId: string | null = callerTenantId;
+    if (!tenantId && companyId) {
       const c = await this.prisma.company.findUnique({
         where: { id: companyId },
         select: { tenantId: true },
@@ -74,34 +80,34 @@ export class EmailSecurityService {
   }
 
   // ============================================================
-  // Liste / lecture
+  // Liste / lecture - scope par tenant
   // ============================================================
-  async listAll(params: { companyId?: string } = {}) {
+  async listAll(me: JwtUser, params: { companyId?: string } = {}) {
     return this.prisma.emailSecurityCheck.findMany({
-      where: params.companyId ? { companyId: params.companyId } : {},
+      where: this.scope.scopedWhere(me, params.companyId ? { companyId: params.companyId } : {}),
       include: { company: { select: { id: true, name: true } } },
       orderBy: { scorePct: 'asc' },
     });
   }
 
-  async findOne(id: string) {
-    return this.prisma.emailSecurityCheck.findUnique({
-      where: { id },
-      include: { company: { select: { id: true, name: true } } },
-    });
-  }
-
-  async findByDomain(domain: string) {
-    // Domaine plus unique seul (compound avec tenantId). On retourne le
-    // premier enregistrement trouve — typiquement scope MDO en single-tenant.
+  async findOne(id: string, me: JwtUser) {
     return this.prisma.emailSecurityCheck.findFirst({
-      where: { domain: domain.toLowerCase().trim() },
+      where: this.scope.scopedWhere(me, { id }),
       include: { company: { select: { id: true, name: true } } },
     });
   }
 
-  async stats() {
+  async findByDomain(domain: string, me: JwtUser) {
+    // Avec compound unique (tenantId, domain), on filtre par tenant courant.
+    return this.prisma.emailSecurityCheck.findFirst({
+      where: this.scope.scopedWhere(me, { domain: domain.toLowerCase().trim() }),
+      include: { company: { select: { id: true, name: true } } },
+    });
+  }
+
+  async stats(me: JwtUser) {
     const all = await this.prisma.emailSecurityCheck.findMany({
+      where: this.scope.scopedWhere(me),
       select: { scorePct: true, dmarcPolicy: true, spfPolicy: true, dkimPresent: true },
     });
     const total = all.length;
@@ -119,12 +125,14 @@ export class EmailSecurityService {
   // ============================================================
   // Cron quotidien : re-check tous les domaines (Asset type=DOMAIN actifs)
   // 03:30 Europe/Paris (apres backup, avant heure de bureau)
+  // Cron systeme global : itere tous les domaines tous tenants ; chaque
+  // checkDomain herite du tenantId via la company de l'asset.
   // ============================================================
   @Cron('30 3 * * *', { name: 'email-security-daily', timeZone: 'Europe/Paris' })
   async runDaily() {
     const domains = await this.prisma.asset.findMany({
       where: { type: 'DOMAIN', status: 'ACTIVE' },
-      select: { id: true, name: true, identifier: true, companyId: true },
+      select: { id: true, name: true, identifier: true, companyId: true, tenantId: true },
     });
     let ok = 0, failed = 0;
     for (const d of domains) {
@@ -132,7 +140,7 @@ export class EmailSecurityService {
       const domain = (d.identifier ?? d.name).trim();
       if (!domain) continue;
       try {
-        await this.checkDomain(domain, d.companyId);
+        await this.checkDomain(domain, d.companyId, d.tenantId);
         ok++;
       } catch (err: any) {
         failed++;
@@ -143,7 +151,8 @@ export class EmailSecurityService {
   }
 
   // Trigger manuel : re-check immediat de tous les domaines d'une company
-  async checkAllForCompany(companyId: string) {
+  async checkAllForCompany(companyId: string, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(companyId, me);
     const domains = await this.prisma.asset.findMany({
       where: { type: 'DOMAIN', status: 'ACTIVE', companyId },
       select: { name: true, identifier: true },
@@ -152,7 +161,7 @@ export class EmailSecurityService {
     for (const d of domains) {
       const domain = (d.identifier ?? d.name).trim();
       if (!domain) continue;
-      try { results.push(await this.checkDomain(domain, companyId)); }
+      try { results.push(await this.checkDomain(domain, companyId, me.tenantId)); }
       catch (err: any) { /* swallow per-domain */ }
     }
     return results;

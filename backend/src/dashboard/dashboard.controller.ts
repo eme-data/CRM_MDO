@@ -22,6 +22,10 @@ export class DashboardController {
   async get(@CurrentUser() user: JwtUser) {
     const now = new Date();
     const tenantId = user.tenantId;
+    // Multi-tenant : tous les compteurs sont scopes par le tenant courant.
+    // Super-admin voit l'agregation de SON tenant uniquement (pas un dashboard
+    // cross-tenant : pour ca, voir /super-admin/tenants).
+    const tenantScope = tenantId ? { tenantId } : {};
     const [
       companiesTotal,
       customersTotal,
@@ -37,15 +41,14 @@ export class DashboardController {
       this.prisma.company.count({ where: { tenantId } }),
       this.prisma.company.count({ where: { tenantId, status: 'CUSTOMER' } }),
       this.prisma.company.count({ where: { tenantId, status: { in: ['LEAD', 'PROSPECT'] } } }),
-      // Opportunity, Task, Contract, Activity : pas encore tenant-scoped
-      // (vagues 3, 4 a venir). Pour l'instant non scoped — sera complete.
-      this.prisma.opportunity.count({ where: { stage: { notIn: ['GAGNE', 'PERDU'] } } }),
+      this.prisma.opportunity.count({ where: { ...tenantScope, stage: { notIn: ['GAGNE', 'PERDU'] } } }),
       this.prisma.opportunity.aggregate({
-        where: { stage: { notIn: ['GAGNE', 'PERDU'] } },
+        where: { ...tenantScope, stage: { notIn: ['GAGNE', 'PERDU'] } },
         _sum: { amountHt: true },
       }),
       this.prisma.task.count({
         where: {
+          ...tenantScope,
           status: { notIn: ['DONE', 'CANCELLED'] },
           dueDate: { lte: addDays(now, 1) },
         },
@@ -54,6 +57,7 @@ export class DashboardController {
       this.contractsService.expiringSoon(90, tenantId),
       this.ticketsService.stats(tenantId),
       this.prisma.activity.findMany({
+        where: tenantScope,
         take: 15,
         orderBy: { createdAt: 'desc' },
         include: { user: { select: { firstName: true, lastName: true } } },
