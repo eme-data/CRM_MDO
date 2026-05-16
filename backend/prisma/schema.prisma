@@ -76,6 +76,11 @@ model Tenant {
   quotes              Quote[]
   quoteLines          QuoteLine[]
   settings            Setting[]
+  activities          Activity[]
+  notes               Note[]
+  tasks               Task[]
+  recurringTemplates  RecurringTaskTemplate[]
+  workflowRules       WorkflowRule[]
 
   @@index([customDomain])
   @@index([slug])
@@ -603,6 +608,9 @@ enum TaskStatus {
 
 model Task {
   id            String       @id @default(uuid())
+  // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
+  tenantId      String?
+  tenant        Tenant?      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   title         String
   description   String?
   priority      TaskPriority @default(NORMAL)
@@ -634,12 +642,9 @@ model Task {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
+  @@index([tenantId])
+  @@index([tenantId, status, dueDate])
   @@index([assigneeId])
-  @@index([status])
-  @@index([dueDate])
-  // Composite kanban : SELECT WHERE status=X ORDER BY dueDate (page tasks).
-  @@index([status, dueDate])
-  // FKs souvent filtrees mais sans index dedie (cascade depuis Company/Contact/...).
   @@index([companyId])
   @@index([contractId])
   @@index([recurringTemplateId])
@@ -665,6 +670,9 @@ enum RecurringFrequency {
 
 model RecurringTaskTemplate {
   id              String              @id @default(uuid())
+  // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
+  tenantId        String?
+  tenant          Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name            String              // libelle modele ("Check backup mensuel")
   // Champs reproduits sur chaque Task generee :
   title           String              // titre de la Task (peut contenir le mois pour mensuel)
@@ -702,12 +710,16 @@ model RecurringTaskTemplate {
 
   tasks           Task[]
 
+  @@index([tenantId])
   @@index([nextRunAt, isActive])
   @@index([companyId])
 }
 
 model Note {
   id            String       @id @default(uuid())
+  // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
+  tenantId      String?
+  tenant        Tenant?      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   content       String
   authorId      String
   author        User         @relation(fields: [authorId], references: [id], onDelete: Restrict)
@@ -724,12 +736,17 @@ model Note {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
+  @@index([tenantId])
   @@index([authorId])
   @@index([companyId])
 }
 
 model Activity {
   id         String   @id @default(uuid())
+  // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
+  // Pour les actions super-admin cross-tenant, on peut laisser null.
+  tenantId   String?
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   action     String
@@ -751,9 +768,10 @@ model Activity {
   // sur un meme tick). Auto-attribue lors du sealing.
   sequence   Int?     @unique
 
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
   @@index([userId])
   @@index([entity, entityId])
-  @@index([createdAt])
   @@index([currentHash])
 }
 
@@ -1890,6 +1908,9 @@ enum WorkflowAction {
 
 model WorkflowRule {
   id              String           @id @default(uuid())
+  // Multi-tenant : nullable transitoire.
+  tenantId        String?
+  tenant          Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name            String           // libelle admin ("Alerte contrats expirant 60 jours")
   description     String?
   trigger         WorkflowTrigger
@@ -1924,6 +1945,7 @@ model WorkflowRule {
 
   executions      WorkflowExecution[]
 
+  @@index([tenantId])
   @@index([isActive, trigger])
 }
 

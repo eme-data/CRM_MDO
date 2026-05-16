@@ -24,26 +24,27 @@ export class NotesController {
 
   @Get()
   findAll(
+    @CurrentUser() user: JwtUser,
     @Query('companyId') companyId?: string,
     @Query('contactId') contactId?: string,
     @Query('opportunityId') opportunityId?: string,
     @Query('contractId') contractId?: string,
   ) {
-    return this.service.findAll({ companyId, contactId, opportunityId, contractId });
+    return this.service.findAll({ companyId, contactId, opportunityId, contractId }, user.tenantId);
   }
 
   @Post()
   create(@Body() dto: CreateNoteDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(dto, user.id);
+    return this.service.create(dto, user.id, user.tenantId);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: { content: string }, @CurrentUser() user: JwtUser) {
-    return this.service.update(id, body.content, user.id);
+    return this.service.update(id, body.content, user.id, user.tenantId);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.remove(id, user.id, user.role);
+    return this.service.remove(id, user.id, user.role, user.tenantId);
   }
 }

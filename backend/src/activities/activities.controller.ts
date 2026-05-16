@@ -4,6 +4,7 @@ import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 // Journal d'activite : sensible (qui a fait quoi, quand, sur quelle entite).
 // Reserve aux ADMIN — sert d'audit trail et ne doit pas etre consulte par
@@ -18,6 +19,7 @@ export class ActivitiesController {
 
   @Get()
   async findAll(
+    @CurrentUser() me: JwtUser,
     @Query('entity') entity?: string,
     @Query('entityId') entityId?: string,
     @Query('userId') userId?: string,
@@ -27,7 +29,10 @@ export class ActivitiesController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
-    const where: Prisma.ActivityWhereInput = {};
+    // Multi-tenant : un admin tenant voit uniquement les activities de son
+    // tenant. Note : les activities pre-vague 4 ont tenantId=null et seront
+    // rattachees au tenant 'mdo' au prochain boot.
+    const where: Prisma.ActivityWhereInput = { tenantId: me.tenantId };
     if (entity) where.entity = entity;
     if (entityId) where.entityId = entityId;
     if (userId) where.userId = userId;

@@ -160,6 +160,27 @@ export class TenantsService implements OnModuleInit {
       where: { tenantId: null }, data: { tenantId: tenant.id },
     });
     if (quoteLinesUpdated.count > 0) this.logger.log(`Retro-compat : ${quoteLinesUpdated.count} quote line(s) assignees`);
+    // Vague 4 : Tasks + Notes + Activities + WorkflowRules + RecurringTemplates.
+    const tasksUpdated = await this.prisma.task.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (tasksUpdated.count > 0) this.logger.log(`Retro-compat : ${tasksUpdated.count} task(s) assignees`);
+    const notesUpdated = await this.prisma.note.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (notesUpdated.count > 0) this.logger.log(`Retro-compat : ${notesUpdated.count} note(s) assignees`);
+    const activitiesUpdated = await this.prisma.activity.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (activitiesUpdated.count > 0) this.logger.log(`Retro-compat : ${activitiesUpdated.count} activity(ies) assignees`);
+    const workflowRulesUpdated = await this.prisma.workflowRule.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (workflowRulesUpdated.count > 0) this.logger.log(`Retro-compat : ${workflowRulesUpdated.count} workflow rule(s) assignees`);
+    const recurringUpdated = await this.prisma.recurringTaskTemplate.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (recurringUpdated.count > 0) this.logger.log(`Retro-compat : ${recurringUpdated.count} recurring template(s) assignees`);
   }
 
   // ============================================================
