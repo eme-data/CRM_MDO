@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { SecretsService } from '../client-docs/secrets.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 export interface UpsertFlexibleAssetDto {
   typeId: string;
@@ -17,9 +19,11 @@ export class FlexibleAssetsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly secrets: SecretsService,
+    private readonly scope: TenantScope,
   ) {}
 
-  listForCompany(companyId: string) {
+  async listForCompany(companyId: string, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(companyId, me);
     return this.prisma.flexibleAsset.findMany({
       where: { companyId },
       orderBy: [{ type: { name: 'asc' } }, { name: 'asc' }],
@@ -30,9 +34,9 @@ export class FlexibleAssetsService {
     });
   }
 
-  async findOne(id: string, opts: { reveal?: boolean; userId?: string } = {}) {
-    const a = await this.prisma.flexibleAsset.findUnique({
-      where: { id },
+  async findOne(id: string, me: JwtUser, opts: { reveal?: boolean } = {}) {
+    const a = await this.prisma.flexibleAsset.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: {
         type: { include: { fields: { orderBy: { position: 'asc' } } } },
         location: true,
@@ -53,16 +57,15 @@ export class FlexibleAssetsService {
         }
       }
       out.secretValuesRevealed = dec;
-      if (opts.userId) {
-        await this.prisma.activity.create({
-          data: {
-            userId: opts.userId,
-            action: 'REVEAL_FLEXIBLE_ASSET_SECRETS',
-            entity: 'FlexibleAsset',
-            entityId: id,
-          },
-        });
-      }
+      await this.prisma.activity.create({
+        data: {
+          userId: me.id,
+          tenantId: a.tenantId,
+          action: 'REVEAL_FLEXIBLE_ASSET_SECRETS',
+          entity: 'FlexibleAsset',
+          entityId: id,
+        },
+      });
     } else {
       // Ne JAMAIS retourner les valeurs chiffrees brutes
       out.secretValues = undefined;
@@ -100,10 +103,12 @@ export class FlexibleAssetsService {
     return { clear, ciphered };
   }
 
-  async create(dto: UpsertFlexibleAssetDto) {
+  async create(dto: UpsertFlexibleAssetDto, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(dto.companyId, me);
     const { clear, ciphered } = await this.splitValues(dto.typeId, dto.values ?? {});
     return this.prisma.flexibleAsset.create({
       data: {
+        tenantId: me.tenantId,
         typeId: dto.typeId,
         companyId: dto.companyId,
         locationId: dto.locationId ?? null,
@@ -117,8 +122,10 @@ export class FlexibleAssetsService {
     });
   }
 
-  async update(id: string, dto: Partial<UpsertFlexibleAssetDto>) {
-    const existing = await this.prisma.flexibleAsset.findUnique({ where: { id } });
+  async update(id: string, dto: Partial<UpsertFlexibleAssetDto>, me: JwtUser) {
+    const existing = await this.prisma.flexibleAsset.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
+    });
     if (!existing) throw new NotFoundException('Asset flexible introuvable');
 
     const data: any = {};
@@ -143,7 +150,12 @@ export class FlexibleAssetsService {
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, me: JwtUser) {
+    const existing = await this.prisma.flexibleAsset.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('Asset flexible introuvable');
     await this.prisma.flexibleAsset.delete({ where: { id } });
     return { success: true };
   }

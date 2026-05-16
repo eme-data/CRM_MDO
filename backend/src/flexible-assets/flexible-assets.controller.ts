@@ -44,31 +44,35 @@ export class FlexibleAssetsController {
   // ---- Assets (instances) ----
 
   @Get('flexible-assets')
-  list(@Query('companyId') companyId: string) {
-    return this.assets.listForCompany(companyId);
+  list(@Query('companyId') companyId: string, @CurrentUser() user: JwtUser) {
+    return this.assets.listForCompany(companyId, user);
   }
 
   @Get('flexible-assets/:id')
-  one(@Param('id') id: string) {
-    return this.assets.findOne(id);
+  one(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.assets.findOne(id, user);
   }
 
   @Get('flexible-assets/:id/reveal')
   reveal(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.assets.findOne(id, { reveal: true, userId: user.id });
+    return this.assets.findOne(id, user, { reveal: true });
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post('flexible-assets')
-  create(@Body() dto: UpsertFlexibleAssetDto) { return this.assets.create(dto); }
+  create(@Body() dto: UpsertFlexibleAssetDto, @CurrentUser() user: JwtUser) {
+    return this.assets.create(dto, user);
+  }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Patch('flexible-assets/:id')
-  update(@Param('id') id: string, @Body() dto: Partial<UpsertFlexibleAssetDto>) {
-    return this.assets.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: Partial<UpsertFlexibleAssetDto>, @CurrentUser() user: JwtUser) {
+    return this.assets.update(id, dto, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Delete('flexible-assets/:id')
-  remove(@Param('id') id: string) { return this.assets.remove(id); }
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.assets.remove(id, user);
+  }
 }

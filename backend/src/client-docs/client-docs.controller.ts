@@ -23,16 +23,18 @@ export class ClientDocsController {
 
   // ----- Doc pages -----
   @Get('doc-pages')
-  list(@Query('companyId') companyId: string) {
-    return this.docs.listForCompany(companyId);
+  list(@Query('companyId') companyId: string, @CurrentUser() user: JwtUser) {
+    return this.docs.listForCompany(companyId, user);
   }
 
   @Get('doc-pages/:id')
-  one(@Param('id') id: string) { return this.docs.findOne(id); }
+  one(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.docs.findOne(id, user);
+  }
 
   @Post('doc-pages')
   create(@Body() dto: CreateDocPageDto, @CurrentUser() user: JwtUser) {
-    return this.docs.create(dto, user.id);
+    return this.docs.create(dto, user);
   }
 
   @Patch('doc-pages/:id')
@@ -42,53 +44,59 @@ export class ClientDocsController {
     @CurrentUser() user: JwtUser,
   ) {
     const { reason, ...rest } = dto as any;
-    return this.docs.update(id, rest, user.id, reason);
+    return this.docs.update(id, rest, user, reason);
   }
 
   @Delete('doc-pages/:id')
-  remove(@Param('id') id: string) { return this.docs.remove(id); }
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.docs.remove(id, user);
+  }
 
   // ----- Versioning -----
   @Get('doc-pages/:id/versions')
-  versions(@Param('id') id: string) { return this.docs.listVersions(id); }
+  versions(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.docs.listVersions(id, user);
+  }
 
   @Get('doc-pages/versions/:versionId')
-  version(@Param('versionId') versionId: string) { return this.docs.getVersion(versionId); }
+  version(@Param('versionId') versionId: string, @CurrentUser() user: JwtUser) {
+    return this.docs.getVersion(versionId, user);
+  }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post('doc-pages/versions/:versionId/restore')
   restore(@Param('versionId') versionId: string, @CurrentUser() user: JwtUser) {
-    return this.docs.restoreVersion(versionId, user.id);
+    return this.docs.restoreVersion(versionId, user);
   }
 
   // ----- Secrets -----
   @Get('secrets')
-  listSecrets(@Query('companyId') companyId: string) {
-    return this.secrets.listForCompany(companyId);
+  listSecrets(@Query('companyId') companyId: string, @CurrentUser() user: JwtUser) {
+    return this.secrets.listForCompany(companyId, user);
   }
 
   @Get('secrets/:id/reveal')
   reveal(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.secrets.reveal(id, user.id);
+    return this.secrets.reveal(id, user);
   }
 
   // Genere uniquement le code TOTP courant (sans reveler le mot de passe)
   @Get('secrets/:id/totp')
   totp(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.secrets.getTotp(id, user.id);
+    return this.secrets.getTotp(id, user);
   }
 
   // Historique d'acces a ce secret (qui a vu / quand) - audit NIS2/RGPD
   @Roles('ADMIN', 'MANAGER')
   @Get('secrets/:id/access-log')
-  accessLog(@Param('id') id: string) {
-    return this.secrets.accessLog(id);
+  accessLog(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.secrets.accessLog(id, user);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post('secrets')
   createSecret(@Body() dto: CreateSecretDto, @CurrentUser() user: JwtUser) {
-    return this.secrets.create(dto, user.id);
+    return this.secrets.create(dto, user);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
@@ -98,12 +106,12 @@ export class ClientDocsController {
     @Body() dto: Partial<CreateSecretDto>,
     @CurrentUser() user: JwtUser,
   ) {
-    return this.secrets.update(id, dto, user.id);
+    return this.secrets.update(id, dto, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Delete('secrets/:id')
   removeSecret(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.secrets.remove(id, user.id);
+    return this.secrets.remove(id, user);
   }
 }

@@ -29,6 +29,7 @@ import { AttachmentsModule } from './attachments/attachments.module';
 import { DocumentsModule } from './documents/documents.module';
 import { BrandingModule } from './branding/branding.module';
 import { TenantsModule } from './tenants/tenants.module';
+import { TenantScopeModule } from './common/tenant/tenant.module';
 import { PdfModule } from './pdf/pdf.module';
 import { AssetsModule } from './assets/assets.module';
 import { ClientDocsModule } from './client-docs/client-docs.module';
@@ -134,6 +135,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     DocumentsModule,
     BrandingModule,
     TenantsModule,
+    TenantScopeModule,
     ClientDocsModule,
     MfaModule,
     AuthModule,

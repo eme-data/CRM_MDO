@@ -1,9 +1,10 @@
-import { Injectable, Logger, NotFoundException, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
 import { authenticator } from 'otplib';
 import { PrismaService } from '../database/prisma.service';
 import { CreateSecretDto } from './dto/create-secret.dto';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 const ALGO = 'aes-256-gcm';
 const IV_LEN = 12;
@@ -74,9 +75,32 @@ export class SecretsService implements OnModuleInit {
     }
   }
 
+  // Garde-fou multi-tenant : verifie que le companyId reference appartient
+  // bien au tenant courant. Sinon, un user A pourrait creer un secret rattache
+  // a une company du tenant B. Super-admin bypasse (peut tout voir/creer).
+  private async assertCompanyInTenant(companyId: string, me: JwtUser) {
+    if (me.isSuperAdmin) return;
+    const c = await this.prisma.company.findFirst({
+      where: { id: companyId, tenantId: me.tenantId ?? undefined },
+      select: { id: true },
+    });
+    if (!c) throw new ForbiddenException('Societe inaccessible dans ce tenant');
+  }
+
+  // Lookup d'un secret avec garde tenant : retourne 404 (pas 403) si le
+  // secret existe dans un autre tenant — on ne revele pas son existence.
+  private async findSecretInTenant(id: string, me: JwtUser) {
+    const where: any = { id };
+    if (!me.isSuperAdmin) where.tenantId = me.tenantId;
+    const s = await this.prisma.secretEntry.findFirst({ where });
+    if (!s) throw new NotFoundException();
+    return s;
+  }
+
   // ============ CRUD ============
 
-  async listForCompany(companyId: string) {
+  async listForCompany(companyId: string, me: JwtUser) {
+    await this.assertCompanyInTenant(companyId, me);
     const items = await this.prisma.secretEntry.findMany({
       where: { companyId },
       orderBy: { updatedAt: 'desc' },
@@ -92,15 +116,14 @@ export class SecretsService implements OnModuleInit {
     }));
   }
 
-  async reveal(id: string, userId: string) {
-    const s = await this.prisma.secretEntry.findUnique({ where: { id } });
-    if (!s) throw new NotFoundException();
+  async reveal(id: string, me: JwtUser) {
+    const s = await this.findSecretInTenant(id, me);
     await this.prisma.secretEntry.update({
       where: { id },
       data: { lastAccessedAt: new Date() },
     });
     await this.prisma.activity.create({
-      data: { userId, action: 'REVEAL_SECRET', entity: 'SecretEntry', entityId: id },
+      data: { userId: me.id, action: 'REVEAL_SECRET', entity: 'SecretEntry', entityId: id, tenantId: s.tenantId },
     });
     const totp = this.generateTotpCode(s.cipheredTotp);
     return {
@@ -115,18 +138,20 @@ export class SecretsService implements OnModuleInit {
 
   // Genere uniquement le code TOTP (sans reveler le mot de passe).
   // Utile pour auto-refresh cote UI sans exposer la valeur.
-  async getTotp(id: string, userId: string) {
-    const s = await this.prisma.secretEntry.findUnique({ where: { id } });
-    if (!s) throw new NotFoundException();
+  async getTotp(id: string, me: JwtUser) {
+    const s = await this.findSecretInTenant(id, me);
     if (!s.cipheredTotp) return { code: null, secondsRemaining: 0 };
     await this.prisma.activity.create({
-      data: { userId, action: 'GENERATE_TOTP', entity: 'SecretEntry', entityId: id },
+      data: { userId: me.id, action: 'GENERATE_TOTP', entity: 'SecretEntry', entityId: id, tenantId: s.tenantId },
     });
     return this.generateTotpCode(s.cipheredTotp);
   }
 
   // Liste l'historique d'acces a un secret (Activity)
-  async accessLog(id: string) {
+  async accessLog(id: string, me: JwtUser) {
+    // Verifie l'acces avant de lister l'historique : eviter de leaker
+    // l'audit-trail d'un secret d'un autre tenant.
+    await this.findSecretInTenant(id, me);
     const events = await this.prisma.activity.findMany({
       where: {
         entity: 'SecretEntry',
@@ -140,11 +165,13 @@ export class SecretsService implements OnModuleInit {
     return events;
   }
 
-  async create(dto: CreateSecretDto, userId: string) {
+  async create(dto: CreateSecretDto, me: JwtUser) {
+    await this.assertCompanyInTenant(dto.companyId, me);
     const ciphered = this.encrypt(dto.value);
     const cipheredTotp = dto.totpSecret ? this.encrypt(this.parseTotpSecret(dto.totpSecret)) : null;
     const created = await this.prisma.secretEntry.create({
       data: {
+        tenantId: me.tenantId,
         companyId: dto.companyId,
         label: dto.label,
         username: dto.username,
@@ -153,15 +180,14 @@ export class SecretsService implements OnModuleInit {
         notes: dto.notes,
         cipheredValue: ciphered,
         cipheredTotp,
-        createdById: userId,
+        createdById: me.id,
       },
     });
     return { ...created, cipheredValue: undefined, cipheredTotp: undefined };
   }
 
-  async update(id: string, dto: Partial<CreateSecretDto>, userId: string) {
-    const existing = await this.prisma.secretEntry.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException();
+  async update(id: string, dto: Partial<CreateSecretDto>, me: JwtUser) {
+    await this.findSecretInTenant(id, me);
     const data: any = {
       label: dto.label,
       username: dto.username,
@@ -179,10 +205,11 @@ export class SecretsService implements OnModuleInit {
     return { ...updated, cipheredValue: undefined, cipheredTotp: undefined };
   }
 
-  async remove(id: string, userId: string) {
+  async remove(id: string, me: JwtUser) {
+    const s = await this.findSecretInTenant(id, me);
     await this.prisma.secretEntry.delete({ where: { id } });
     await this.prisma.activity.create({
-      data: { userId, action: 'DELETE_SECRET', entity: 'SecretEntry', entityId: id },
+      data: { userId: me.id, action: 'DELETE_SECRET', entity: 'SecretEntry', entityId: id, tenantId: s.tenantId },
     });
     return { success: true };
   }

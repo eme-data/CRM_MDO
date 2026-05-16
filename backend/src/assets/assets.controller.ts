@@ -8,6 +8,7 @@ import { CreateAssetDto } from './dto/create-asset.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 // Lecture ouverte a tous les utilisateurs authentifies (visibilite de l'inventaire
 // chez les clients). Ecritures reservees ADMIN/MANAGER : un asset cree/modifie
@@ -21,30 +22,39 @@ export class AssetsController {
 
   @Get()
   findAll(
+    @CurrentUser() user: JwtUser,
     @Query('companyId') companyId?: string,
     @Query('type') type?: AssetType,
     @Query('status') status?: AssetStatus,
     @Query('expiringInDays') expiringInDays?: string,
     @Query('identifier') identifier?: string,
   ) {
-    return this.service.findAll({
+    return this.service.findAll(user, {
       companyId, type, status, identifier,
       expiringInDays: expiringInDays ? parseInt(expiringInDays, 10) : undefined,
     });
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) { return this.service.findOne(id); }
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findOne(id, user);
+  }
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post()
-  create(@Body() dto: CreateAssetDto) { return this.service.create(dto); }
+  create(@Body() dto: CreateAssetDto, @CurrentUser() user: JwtUser) {
+    return this.service.create(dto, user);
+  }
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateAssetDto) { return this.service.update(id, dto); }
+  update(@Param('id') id: string, @Body() dto: UpdateAssetDto, @CurrentUser() user: JwtUser) {
+    return this.service.update(id, dto, user);
+  }
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Delete(':id')
-  remove(@Param('id') id: string) { return this.service.remove(id); }
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.remove(id, user);
+  }
 }
