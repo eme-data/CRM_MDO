@@ -102,6 +102,15 @@ model Tenant {
   onboardingRuns      OnboardingRun[]
   phishingCampaigns   PhishingCampaign[]
   complianceAssessments ComplianceAssessment[]
+  notifications       Notification[]
+  bankTransactions    BankTransaction[]
+  clientReports       ClientReport[]
+  customerSuccessReviews CustomerSuccessReview[]
+  webhookEndpoints    WebhookEndpoint[]
+  emailSecurityChecks EmailSecurityCheck[]
+  signatureRequests   SignatureRequest[]
+  callLogs            CallLog[]
+  pushSubscriptions   PushSubscription[]
 
   @@index([customDomain])
   @@index([slug])
@@ -1074,6 +1083,9 @@ enum NotificationType {
 
 model Notification {
   id         String           @id @default(uuid())
+  // Multi-tenant : nullable transitoire (herite User.tenantId).
+  tenantId   String?
+  tenant     Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   userId     String
   user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   type       NotificationType @default(GENERIC)
@@ -1085,6 +1097,7 @@ model Notification {
   readAt     DateTime?
   createdAt  DateTime         @default(now())
 
+  @@index([tenantId])
   @@index([userId, readAt])
   @@index([createdAt])
 }
@@ -1408,6 +1421,9 @@ enum BankTransactionSide {
 // rapprochement avec les factures (par client) et vue tresorerie.
 model BankTransaction {
   id             String              @id @default(uuid())
+  // Multi-tenant : nullable transitoire (Qonto = un compte par tenant).
+  tenantId       String?
+  tenant         Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   source         BankSource          @default(QONTO)
   externalId     String              @unique  // qonto transaction id
   bookedAt       DateTime
@@ -1427,6 +1443,7 @@ model BankTransaction {
 
   importedAt     DateTime            @default(now())
 
+  @@index([tenantId])
   @@index([bookedAt])
   @@index([companyId])
   @@index([invoiceId])
@@ -1918,6 +1935,9 @@ enum ClientReportStatus {
 
 model ClientReport {
   id              String              @id @default(uuid())
+  // Multi-tenant : nullable transitoire.
+  tenantId        String?
+  tenant          Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   companyId       String
   company         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Periode couverte : mois entier en general (1er → dernier jour).
@@ -1944,6 +1964,7 @@ model ClientReport {
   generatedById   String?
   createdAt       DateTime            @default(now())
 
+  @@index([tenantId])
   @@index([companyId, periodStart])
   @@index([accessToken])
   @@index([tokenExpiresAt])
@@ -2267,6 +2288,9 @@ enum CustomerSuccessReviewStatus {
 
 model CustomerSuccessReview {
   id            String                       @id @default(uuid())
+  // Multi-tenant : nullable transitoire.
+  tenantId      String?
+  tenant        Tenant?                      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   companyId     String
   company       Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -2289,6 +2313,7 @@ model CustomerSuccessReview {
   createdAt     DateTime                     @default(now())
   updatedAt     DateTime                     @updatedAt
 
+  @@index([tenantId])
   @@index([companyId])
   @@index([scheduledAt, status])
   @@index([ownerId, status])
@@ -2686,6 +2711,9 @@ enum WebhookEvent {
 
 model WebhookEndpoint {
   id          String        @id @default(uuid())
+  // Multi-tenant : nullable transitoire.
+  tenantId    String?
+  tenant      Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   url         String        // URL HTTPS du webhook
   description String?       // libelle pour identification UI
   // Liste des events souscrits (array PostgreSQL)
@@ -2713,6 +2741,7 @@ model WebhookEndpoint {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
+  @@index([tenantId])
   @@index([isActive])
   @@index([companyId])
 }
@@ -3026,10 +3055,12 @@ model KbArticle {
 
 model EmailSecurityCheck {
   id            String   @id @default(uuid())
-  // Domaine au format racine ("mdoservices.fr"). Pas de FK dure vers Asset
-  // car on peut re-verifier un domaine meme si l'asset est supprime entre-temps
-  // — utile pour conserver l'historique.
-  domain        String   @unique
+  // Multi-tenant : nullable transitoire. Domaine passe d'unique global a
+  // unique par tenant (un meme domaine peut etre verifie par plusieurs
+  // tenants si un fournisseur est commun).
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  domain        String
   // Si rattachable a une societe (via lookup Asset), on denormalise pour
   // pouvoir filtrer par client cote UI.
   companyId     String?
@@ -3057,6 +3088,8 @@ model EmailSecurityCheck {
   lastCheckedAt DateTime @default(now())
   createdAt     DateTime @default(now())
 
+  @@unique([tenantId, domain])
+  @@index([tenantId])
   @@index([companyId])
   @@index([scorePct])
 }
@@ -3173,6 +3206,9 @@ enum SignatureStatus {
 
 model SignatureRequest {
   id                String            @id @default(uuid())
+  // Multi-tenant : nullable transitoire.
+  tenantId          String?
+  tenant            Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   // Polymorphe (pas de FK Prisma — l'entite est dereferencable a la main).
   // Utiliser type discriminant ('Quote' | 'Contract') + id pour retrouver l'entite.
   entityType        String            // 'Quote' | 'Contract'
@@ -3217,6 +3253,7 @@ model SignatureRequest {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
+  @@index([tenantId])
   @@index([entityType, entityId])
   @@index([status])
   @@index([companyId])
@@ -3248,6 +3285,9 @@ enum CallStatus {
 
 model CallLog {
   id            String        @id @default(uuid())
+  // Multi-tenant : nullable transitoire.
+  tenantId      String?
+  tenant        Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   direction     CallDirection
   status        CallStatus    @default(RINGING)
   // Numeros normalises E.164 (+33...) si possible. On garde les versions
@@ -3288,6 +3328,7 @@ model CallLog {
 
   createdAt     DateTime      @default(now())
 
+  @@index([tenantId])
   @@index([contactId])
   @@index([companyId])
   @@index([userId])
@@ -3609,6 +3650,9 @@ model ApiKey {
 
 model PushSubscription {
   id          String   @id @default(uuid())
+  // Multi-tenant : nullable transitoire (herite User.tenantId).
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   // URL de push specifique au browser/device. Format long, contient un ID
@@ -3626,5 +3670,6 @@ model PushSubscription {
   lastUsedAt  DateTime?
   createdAt   DateTime @default(now())
 
+  @@index([tenantId])
   @@index([userId])
 }

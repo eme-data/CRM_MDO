@@ -32,39 +32,44 @@ export class EmailSecurityService {
       error = err.message?.slice(0, 500) ?? 'unknown';
     }
 
-    return this.prisma.emailSecurityCheck.upsert({
-      where: { domain: cleanDomain },
-      create: {
-        domain: cleanDomain,
-        companyId: companyId ?? null,
-        spfRecord: spf.record,
-        spfPolicy: spf.policy,
-        dmarcRecord: dmarc.record,
-        dmarcPolicy: dmarc.policy,
-        dmarcRua: dmarc.rua,
-        dmarcSubdomainPolicy: dmarc.subdomainPolicy,
-        dkimSelector: dkim.selector,
-        dkimRecord: dkim.record,
-        dkimPresent: dkim.present,
-        scorePct: score,
-        error,
-        lastCheckedAt: new Date(),
-      },
-      update: {
-        companyId: companyId ?? undefined,
-        spfRecord: spf.record,
-        spfPolicy: spf.policy,
-        dmarcRecord: dmarc.record,
-        dmarcPolicy: dmarc.policy,
-        dmarcRua: dmarc.rua,
-        dmarcSubdomainPolicy: dmarc.subdomainPolicy,
-        dkimSelector: dkim.selector,
-        dkimRecord: dkim.record,
-        dkimPresent: dkim.present,
-        scorePct: score,
-        error,
-        lastCheckedAt: new Date(),
-      },
+    // Multi-tenant : domaine deduplique PAR tenant. On herite le tenantId
+    // de la company si on en a une (cas standard), sinon null (tenant 'mdo'
+    // au prochain boot via retro-compat).
+    let tenantId: string | null = null;
+    if (companyId) {
+      const c = await this.prisma.company.findUnique({
+        where: { id: companyId },
+        select: { tenantId: true },
+      });
+      tenantId = c?.tenantId ?? null;
+    }
+    const existing = await this.prisma.emailSecurityCheck.findFirst({
+      where: { tenantId, domain: cleanDomain },
+      select: { id: true },
+    });
+    const data = {
+      companyId: companyId ?? null,
+      spfRecord: spf.record,
+      spfPolicy: spf.policy,
+      dmarcRecord: dmarc.record,
+      dmarcPolicy: dmarc.policy,
+      dmarcRua: dmarc.rua,
+      dmarcSubdomainPolicy: dmarc.subdomainPolicy,
+      dkimSelector: dkim.selector,
+      dkimRecord: dkim.record,
+      dkimPresent: dkim.present,
+      scorePct: score,
+      error,
+      lastCheckedAt: new Date(),
+    };
+    if (existing) {
+      return this.prisma.emailSecurityCheck.update({
+        where: { id: existing.id },
+        data,
+      });
+    }
+    return this.prisma.emailSecurityCheck.create({
+      data: { tenantId, domain: cleanDomain, ...data },
     });
   }
 
@@ -87,7 +92,9 @@ export class EmailSecurityService {
   }
 
   async findByDomain(domain: string) {
-    return this.prisma.emailSecurityCheck.findUnique({
+    // Domaine plus unique seul (compound avec tenantId). On retourne le
+    // premier enregistrement trouve — typiquement scope MDO en single-tenant.
+    return this.prisma.emailSecurityCheck.findFirst({
       where: { domain: domain.toLowerCase().trim() },
       include: { company: { select: { id: true, name: true } } },
     });

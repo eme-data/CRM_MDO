@@ -271,6 +271,44 @@ export class TenantsService implements OnModuleInit {
       where: { tenantId: null }, data: { tenantId: tenant.id },
     });
     if (complianceUpdated.count > 0) this.logger.log(`Retro-compat : ${complianceUpdated.count} compliance assessment(s) assignes`);
+    // Vague 8 : Notifications + BankTransaction + ClientReport + CustomerSuccess +
+    // WebhookEndpoint + EmailSecurityCheck + SignatureRequest + CallLog + PushSubscription.
+    const notificationsUpdated = await this.prisma.notification.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (notificationsUpdated.count > 0) this.logger.log(`Retro-compat : ${notificationsUpdated.count} notification(s) assignees`);
+    const bankTxUpdated = await this.prisma.bankTransaction.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (bankTxUpdated.count > 0) this.logger.log(`Retro-compat : ${bankTxUpdated.count} bank transaction(s) assignees`);
+    const clientReportsUpdated = await this.prisma.clientReport.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (clientReportsUpdated.count > 0) this.logger.log(`Retro-compat : ${clientReportsUpdated.count} client report(s) assignes`);
+    const cstSuccessUpdated = await this.prisma.customerSuccessReview.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (cstSuccessUpdated.count > 0) this.logger.log(`Retro-compat : ${cstSuccessUpdated.count} customer success review(s) assignes`);
+    const webhooksUpdated = await this.prisma.webhookEndpoint.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (webhooksUpdated.count > 0) this.logger.log(`Retro-compat : ${webhooksUpdated.count} webhook endpoint(s) assignes`);
+    const emailSecUpdated = await this.prisma.emailSecurityCheck.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (emailSecUpdated.count > 0) this.logger.log(`Retro-compat : ${emailSecUpdated.count} email security check(s) assignes`);
+    const signaturesUpdated = await this.prisma.signatureRequest.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (signaturesUpdated.count > 0) this.logger.log(`Retro-compat : ${signaturesUpdated.count} signature request(s) assignees`);
+    const callLogsUpdated = await this.prisma.callLog.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (callLogsUpdated.count > 0) this.logger.log(`Retro-compat : ${callLogsUpdated.count} call log(s) assignes`);
+    const pushSubsUpdated = await this.prisma.pushSubscription.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (pushSubsUpdated.count > 0) this.logger.log(`Retro-compat : ${pushSubsUpdated.count} push subscription(s) assignees`);
   }
 
   // ============================================================
