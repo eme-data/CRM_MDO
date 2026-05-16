@@ -15,6 +15,7 @@ import { PhishingService } from './phishing.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Phishing simulations')
 @ApiBearerAuth()
@@ -25,15 +26,16 @@ export class PhishingController {
 
   @Get('campaigns')
   list(
+    @CurrentUser() user: JwtUser,
     @Query('companyId') companyId?: string,
     @Query('status') status?: PhishingCampaignStatus,
   ) {
-    return this.service.list({ companyId, status });
+    return this.service.list(user, { companyId, status });
   }
 
   @Get('campaigns/:id')
-  get(@Param('id') id: string) {
-    return this.service.findOne(id);
+  get(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findOne(id, user);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
@@ -46,30 +48,34 @@ export class PhishingController {
     templateName?: string;
     notes?: string;
     externalId?: string;
-  }) {
-    return this.service.create(body);
+  }, @CurrentUser() user: JwtUser) {
+    return this.service.create(body, user);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Patch('campaigns/:id')
-  update(@Param('id') id: string, @Body() body: any) {
-    return this.service.update(id, body);
+  update(@Param('id') id: string, @Body() body: any, @CurrentUser() user: JwtUser) {
+    return this.service.update(id, body, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Delete('campaigns/:id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.remove(id, user);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post('campaigns/:id/import')
-  importResults(@Param('id') id: string, @Body() body: { rows: any[] }) {
-    return this.service.importResults(id, body.rows ?? []);
+  importResults(@Param('id') id: string, @Body() body: { rows: any[] }, @CurrentUser() user: JwtUser) {
+    return this.service.importResults(id, body.rows ?? [], user);
   }
 
   @Get('companies/:companyId/risky-users')
-  topRiskyUsers(@Param('companyId') companyId: string, @Query('limit') limit?: string) {
-    return this.service.topRiskyUsers(companyId, limit ? parseInt(limit, 10) : 20);
+  topRiskyUsers(
+    @Param('companyId') companyId: string,
+    @CurrentUser() user: JwtUser,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.topRiskyUsers(companyId, user, limit ? parseInt(limit, 10) : 20);
   }
 }

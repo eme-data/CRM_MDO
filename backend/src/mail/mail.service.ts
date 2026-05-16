@@ -40,6 +40,9 @@ interface SendOptions {
   attachments?: MailAttachment[];
   relatedEntity?: string;
   relatedEntityId?: string;
+  // Multi-tenant : si fourni, le SMTP / from sera resolu depuis les settings
+  // du tenant (cf vague 12). Sinon : config globale (compat MDO single-instance).
+  tenantId?: string | null;
 }
 
 interface SendResult {

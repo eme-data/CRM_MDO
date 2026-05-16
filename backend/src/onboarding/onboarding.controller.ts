@@ -26,13 +26,13 @@ export class OnboardingController {
 
   // ---------- Templates ----------
   @Get('templates')
-  listTemplates(@Query('includeInactive') includeInactive?: string) {
-    return this.service.listTemplates(includeInactive === 'true');
+  listTemplates(@CurrentUser() user: JwtUser, @Query('includeInactive') includeInactive?: string) {
+    return this.service.listTemplates(user, includeInactive === 'true');
   }
 
   @Get('templates/:id')
-  getTemplate(@Param('id') id: string) {
-    return this.service.findTemplate(id);
+  getTemplate(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findTemplate(id, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
@@ -42,34 +42,35 @@ export class OnboardingController {
     description?: string;
     offer?: ContractOffer | null;
     steps: Array<{ title: string; description?: string; dueDateOffsetDays?: number; assigneeRole?: Role }>;
-  }) {
-    return this.service.createTemplate(body);
+  }, @CurrentUser() user: JwtUser) {
+    return this.service.createTemplate(body, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Patch('templates/:id')
-  updateTemplate(@Param('id') id: string, @Body() body: any) {
-    return this.service.updateTemplate(id, body);
+  updateTemplate(@Param('id') id: string, @Body() body: any, @CurrentUser() user: JwtUser) {
+    return this.service.updateTemplate(id, body, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Delete('templates/:id')
-  removeTemplate(@Param('id') id: string) {
-    return this.service.removeTemplate(id);
+  removeTemplate(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.removeTemplate(id, user);
   }
 
   // ---------- Runs ----------
   @Get('runs')
   listRuns(
+    @CurrentUser() user: JwtUser,
     @Query('companyId') companyId?: string,
     @Query('status') status?: 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED',
   ) {
-    return this.service.listRuns({ companyId, status });
+    return this.service.listRuns(user, { companyId, status });
   }
 
   @Get('runs/:id')
-  getRun(@Param('id') id: string) {
-    return this.service.findRun(id);
+  getRun(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findRun(id, user);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
@@ -77,14 +78,15 @@ export class OnboardingController {
   startForContract(
     @Param('contractId') contractId: string,
     @Body() body: { templateId?: string },
+    @CurrentUser() user: JwtUser,
   ) {
-    return this.service.startForContract(contractId, body.templateId);
+    return this.service.startForContract(contractId, user, body.templateId);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Post('runs/:id/cancel')
-  cancelRun(@Param('id') id: string) {
-    return this.service.cancelRun(id);
+  cancelRun(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.cancelRun(id, user);
   }
 
   @Patch('steps/:id')
@@ -98,6 +100,6 @@ export class OnboardingController {
     },
     @CurrentUser() user: JwtUser,
   ) {
-    return this.service.updateStep(id, body, user.id);
+    return this.service.updateStep(id, body, user);
   }
 }

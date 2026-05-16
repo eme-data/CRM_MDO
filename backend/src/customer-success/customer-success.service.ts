@@ -2,6 +2,8 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { CustomerSuccessReviewStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 import { SettingsService } from '../settings/settings.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -11,6 +13,7 @@ export class CustomerSuccessService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
     private readonly settings: SettingsService,
     private readonly notifications: NotificationsService,
   ) {}
@@ -18,13 +21,13 @@ export class CustomerSuccessService {
   // ============================================================
   // Listing
   // ============================================================
-  list(params: { companyId?: string; status?: CustomerSuccessReviewStatus; ownerId?: string } = {}) {
+  list(me: JwtUser, params: { companyId?: string; status?: CustomerSuccessReviewStatus; ownerId?: string } = {}) {
     return this.prisma.customerSuccessReview.findMany({
-      where: {
+      where: this.scope.scopedWhere(me, {
         ...(params.companyId ? { companyId: params.companyId } : {}),
         ...(params.status ? { status: params.status } : {}),
         ...(params.ownerId ? { ownerId: params.ownerId } : {}),
-      },
+      }),
       include: {
         company: { select: { id: true, name: true } },
         owner: { select: { id: true, firstName: true, lastName: true } },
@@ -33,9 +36,9 @@ export class CustomerSuccessService {
     });
   }
 
-  async findOne(id: string) {
-    const r = await this.prisma.customerSuccessReview.findUnique({
-      where: { id },
+  async findOne(id: string, me: JwtUser) {
+    const r = await this.prisma.customerSuccessReview.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: {
         company: true,
         owner: { select: { id: true, firstName: true, lastName: true } },
@@ -45,9 +48,11 @@ export class CustomerSuccessService {
     return r;
   }
 
-  async createManual(input: { companyId: string; scheduledAt: string; ownerId?: string }) {
+  async createManual(input: { companyId: string; scheduledAt: string; ownerId?: string }, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(input.companyId, me);
     return this.prisma.customerSuccessReview.create({
       data: {
+        tenantId: me.tenantId,
         companyId: input.companyId,
         scheduledAt: new Date(input.scheduledAt),
         ownerId: input.ownerId,
@@ -62,8 +67,8 @@ export class CustomerSuccessService {
     notes?: string | null;
     satisfactionScore?: number | null;
     ownerId?: string | null;
-  }) {
-    await this.findOne(id);
+  }, me: JwtUser) {
+    await this.findOne(id, me);
     const data: Prisma.CustomerSuccessReviewUpdateInput = {};
     if (input.scheduledAt !== undefined) data.scheduledAt = new Date(input.scheduledAt);
     if (input.status !== undefined) {
@@ -78,8 +83,8 @@ export class CustomerSuccessService {
     return this.prisma.customerSuccessReview.update({ where: { id }, data });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, me: JwtUser) {
+    await this.findOne(id, me);
     await this.prisma.customerSuccessReview.delete({ where: { id } });
     return { ok: true };
   }
@@ -90,6 +95,8 @@ export class CustomerSuccessService {
   // Compose des points d'agenda a partir des donnees client : contrats qui
   // expirent, opportunites en cours, alertes Health Score, factures en
   // retard, anciennete du compte, etc.
+  // Note tenant : tous les filtres sont scopes par companyId qui appartient
+  // au tenant verifie en amont — donc les donnees sont implicitement isolees.
   async generateAgenda(companyId: string) {
     const now = new Date();
     const in90 = new Date(now.getTime() + 90 * 86400_000);
@@ -134,8 +141,8 @@ export class CustomerSuccessService {
     };
   }
 
-  async refreshAgenda(id: string) {
-    const r = await this.findOne(id);
+  async refreshAgenda(id: string, me: JwtUser) {
+    const r = await this.findOne(id, me);
     return this.prisma.customerSuccessReview.update({
       where: { id },
       data: { agendaItems: (await this.generateAgenda(r.companyId)) as any },
@@ -143,70 +150,79 @@ export class CustomerSuccessService {
   }
 
   // ============================================================
-  // Cron mensuel : programme les reviews dues
+  // Cron mensuel : programme les reviews dues PAR TENANT
   // 1er du mois a 09:00 Europe/Paris (apres rapport mensuel a 08h00)
+  // Itere chaque tenant pour utiliser SES propres reglages enabled +
+  // frequencyDays + scheduleAheadDays.
   // ============================================================
   @Cron('0 9 1 * *', { name: 'customer-success-schedule', timeZone: 'Europe/Paris' })
   async runScheduleCron() {
-    const enabled = await this.settings.getBool('customerSuccess.enabled');
-    if (!enabled) {
-      this.logger.log('Cron QBR : desactive via Settings');
-      return;
-    }
-    const freqDays = await this.settings.getInt('customerSuccess.frequencyDays', 90);
-    const aheadDays = await this.settings.getInt('customerSuccess.scheduleAheadDays', 7);
+    const tenants = await this.prisma.tenant.findMany({ where: { isActive: true }, select: { id: true } });
+    let totalScheduled = 0;
+    for (const t of tenants) {
+      try {
+        const enabled = await this.settings.getBool('customerSuccess.enabled', t.id);
+        if (!enabled) continue;
+        const freqDays = await this.settings.getInt('customerSuccess.frequencyDays', 90, t.id);
+        const aheadDays = await this.settings.getInt('customerSuccess.scheduleAheadDays', 7, t.id);
 
-    const customers = await this.prisma.company.findMany({
-      where: { status: 'CUSTOMER' },
-      select: {
-        id: true, name: true, ownerId: true,
-        customerSuccessReviews: {
-          orderBy: { scheduledAt: 'desc' },
-          take: 1,
-          select: { scheduledAt: true, status: true, heldAt: true },
-        },
-      },
-    });
-
-    let scheduled = 0;
-    for (const c of customers) {
-      const last = c.customerSuccessReviews[0];
-      // Skip si une review est deja SCHEDULED dans le futur
-      if (last && last.status === 'SCHEDULED' && last.scheduledAt > new Date()) continue;
-      // Reference pour le calcul d'eligibilite : derniere date utile (heldAt si
-      // completee, sinon scheduledAt). Si jamais de review : c'est le 1er.
-      const lastDate = last?.heldAt ?? last?.scheduledAt;
-      if (lastDate && (Date.now() - lastDate.getTime()) < freqDays * 86400_000) continue;
-
-      const scheduledAt = new Date(Date.now() + aheadDays * 86400_000);
-      await this.prisma.customerSuccessReview.create({
-        data: {
-          companyId: c.id,
-          scheduledAt,
-          ownerId: c.ownerId,
-          agendaItems: (await this.generateAgenda(c.id)) as any,
-        },
-      });
-      scheduled++;
-
-      // Notifie l'owner (si defini)
-      if (c.ownerId) {
-        await this.notifications.push({
-          userId: c.ownerId,
-          type: 'GENERIC',
-          title: 'QBR programme : ' + c.name,
-          body: 'Revue trimestrielle prevue le ' + scheduledAt.toISOString().slice(0, 10) + '. Agenda pre-genere.',
-          entity: 'Company',
-          entityId: c.id,
-          url: '/companies/' + c.id,
+        const customers = await this.prisma.company.findMany({
+          where: { tenantId: t.id, status: 'CUSTOMER' },
+          select: {
+            id: true, name: true, ownerId: true,
+            customerSuccessReviews: {
+              orderBy: { scheduledAt: 'desc' },
+              take: 1,
+              select: { scheduledAt: true, status: true, heldAt: true },
+            },
+          },
         });
+
+        for (const c of customers) {
+          const last = c.customerSuccessReviews[0];
+          // Skip si une review est deja SCHEDULED dans le futur
+          if (last && last.status === 'SCHEDULED' && last.scheduledAt > new Date()) continue;
+          // Reference pour le calcul d'eligibilite : derniere date utile (heldAt si
+          // completee, sinon scheduledAt). Si jamais de review : c'est le 1er.
+          const lastDate = last?.heldAt ?? last?.scheduledAt;
+          if (lastDate && (Date.now() - lastDate.getTime()) < freqDays * 86400_000) continue;
+
+          const scheduledAt = new Date(Date.now() + aheadDays * 86400_000);
+          await this.prisma.customerSuccessReview.create({
+            data: {
+              tenantId: t.id,
+              companyId: c.id,
+              scheduledAt,
+              ownerId: c.ownerId,
+              agendaItems: (await this.generateAgenda(c.id)) as any,
+            },
+          });
+          totalScheduled++;
+
+          // Notifie l'owner (si defini)
+          if (c.ownerId) {
+            await this.notifications.push({
+              userId: c.ownerId,
+              type: 'GENERIC',
+              title: 'QBR programme : ' + c.name,
+              body: 'Revue trimestrielle prevue le ' + scheduledAt.toISOString().slice(0, 10) + '. Agenda pre-genere.',
+              entity: 'Company',
+              entityId: c.id,
+              url: '/companies/' + c.id,
+            });
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn('QBR cron tenant ' + t.id + ' echec : ' + err.message);
       }
     }
-    this.logger.log('Cron QBR : ' + scheduled + ' review(s) programme(s)');
+    this.logger.log('Cron QBR : ' + totalScheduled + ' review(s) programme(s) sur ' + tenants.length + ' tenant(s)');
   }
 
   // Cron quotidien : envoie un rappel J-7 a l'owner pour les reviews
   // SCHEDULED qui approchent (et n'ont pas encore eu de reminder).
+  // Cron systeme global : itere toutes les reviews tous tenants — chaque
+  // notification est rattachee au user owner (qui est lui-meme dans son tenant).
   @Cron('0 8 * * *', { name: 'customer-success-reminder', timeZone: 'Europe/Paris' })
   async runReminderCron() {
     const j7 = new Date(Date.now() + 7 * 86400_000);

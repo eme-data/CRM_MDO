@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PhishingCampaignStatus, PhishingVendor, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 // CSV import : on accepte un format simple
 //   email,name,opened,clicked,reportedAsPhish,dataEntered,openedAt,clickedAt
@@ -21,17 +23,20 @@ function parseDate(v: any): Date | null {
 
 @Injectable()
 export class PhishingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
+  ) {}
 
   // ============================================================
   // Campagnes
   // ============================================================
-  list(params: { companyId?: string; status?: PhishingCampaignStatus } = {}) {
+  list(me: JwtUser, params: { companyId?: string; status?: PhishingCampaignStatus } = {}) {
     return this.prisma.phishingCampaign.findMany({
-      where: {
+      where: this.scope.scopedWhere(me, {
         ...(params.companyId ? { companyId: params.companyId } : {}),
         ...(params.status ? { status: params.status } : {}),
-      },
+      }),
       include: {
         company: { select: { id: true, name: true } },
         _count: { select: { results: true } },
@@ -40,9 +45,9 @@ export class PhishingService {
     });
   }
 
-  async findOne(id: string) {
-    const c = await this.prisma.phishingCampaign.findUnique({
-      where: { id },
+  async findOne(id: string, me: JwtUser) {
+    const c = await this.prisma.phishingCampaign.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: {
         company: { select: { id: true, name: true } },
         results: { orderBy: { userEmail: 'asc' } },
@@ -60,9 +65,11 @@ export class PhishingService {
     templateName?: string;
     notes?: string;
     externalId?: string;
-  }) {
+  }, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(input.companyId, me);
     return this.prisma.phishingCampaign.create({
       data: {
+        tenantId: me.tenantId,
         name: input.name,
         vendor: input.vendor ?? 'GOPHISH',
         companyId: input.companyId,
@@ -82,8 +89,8 @@ export class PhishingService {
     completedAt: string | null;
     templateName: string | null;
     notes: string | null;
-  }>) {
-    await this.findOne(id);
+  }>, me: JwtUser) {
+    await this.findOne(id, me);
     const data: Prisma.PhishingCampaignUpdateInput = {};
     if (input.name !== undefined) data.name = input.name;
     if (input.status !== undefined) data.status = input.status;
@@ -94,8 +101,8 @@ export class PhishingService {
     return this.prisma.phishingCampaign.update({ where: { id }, data });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, me: JwtUser) {
+    await this.findOne(id, me);
     await this.prisma.phishingCampaign.delete({ where: { id } });
     return { ok: true };
   }
@@ -114,8 +121,8 @@ export class PhishingService {
     clickedAt?: any;
     reportedAt?: any;
     dataEnteredAt?: any;
-  }>) {
-    await this.findOne(campaignId);
+  }>, me: JwtUser) {
+    await this.findOne(campaignId, me);
     if (rows.length === 0) throw new BadRequestException('Aucune ligne a importer');
     let imported = 0;
     for (const r of rows) {
@@ -173,7 +180,8 @@ export class PhishingService {
   // ============================================================
   // Stats par client : top utilisateurs failli (a former en priorite)
   // ============================================================
-  async topRiskyUsers(companyId: string, limit = 20) {
+  async topRiskyUsers(companyId: string, me: JwtUser, limit = 20) {
+    await this.scope.assertCompanyInTenant(companyId, me);
     const results = await this.prisma.phishingResult.findMany({
       where: { campaign: { companyId } },
       select: { userEmail: true, userName: true, clicked: true, dataEntered: true, reportedAsPhish: true },

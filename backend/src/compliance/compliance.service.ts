@@ -1,13 +1,23 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { ComplianceControlStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 import { FRAMEWORK_SEEDS } from './compliance.seeds';
+
+// NOTE multi-tenant : ComplianceFramework (NIS2/ISO27001) reste un catalogue
+// PARTAGE entre tenants — les referentiels reglementaires sont les memes pour
+// tout le monde. ComplianceAssessment (audit applique a un client) est SCOPE
+// par tenant via companyId/tenantId.
 
 @Injectable()
 export class ComplianceService implements OnModuleInit {
   private readonly logger = new Logger(ComplianceService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
+  ) {}
 
   // ============================================================
   // Seed initial des frameworks (NIS2, ISO27001) au demarrage
@@ -39,7 +49,7 @@ export class ComplianceService implements OnModuleInit {
   }
 
   // ============================================================
-  // Frameworks (templates)
+  // Frameworks (templates) - catalogue global, lecture pour tous
   // ============================================================
   listFrameworks(includeInactive = false) {
     return this.prisma.complianceFramework.findMany({
@@ -59,9 +69,10 @@ export class ComplianceService implements OnModuleInit {
   }
 
   // ============================================================
-  // Assessments (audits par client)
+  // Assessments (audits par client) - scope par tenant
   // ============================================================
-  async listAssessmentsForCompany(companyId: string) {
+  async listAssessmentsForCompany(companyId: string, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(companyId, me);
     return this.prisma.complianceAssessment.findMany({
       where: { companyId },
       include: {
@@ -72,9 +83,9 @@ export class ComplianceService implements OnModuleInit {
     });
   }
 
-  async getAssessment(id: string) {
-    const a = await this.prisma.complianceAssessment.findUnique({
-      where: { id },
+  async getAssessment(id: string, me: JwtUser) {
+    const a = await this.prisma.complianceAssessment.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: {
         framework: { select: { id: true, code: true, name: true } },
         company: { select: { id: true, name: true } },
@@ -89,7 +100,8 @@ export class ComplianceService implements OnModuleInit {
     return a;
   }
 
-  async startAssessment(companyId: string, frameworkId: string, ownerId: string | undefined, userId: string) {
+  async startAssessment(companyId: string, frameworkId: string, ownerId: string | undefined, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(companyId, me);
     const fw = await this.prisma.complianceFramework.findUnique({
       where: { id: frameworkId },
       include: { controls: true },
@@ -107,6 +119,7 @@ export class ComplianceService implements OnModuleInit {
     const created = await this.prisma.$transaction(async (tx) => {
       const a = await tx.complianceAssessment.create({
         data: {
+          tenantId: me.tenantId,
           companyId,
           frameworkId,
           ownerId,
@@ -119,7 +132,8 @@ export class ComplianceService implements OnModuleInit {
       });
       await tx.activity.create({
         data: {
-          userId,
+          userId: me.id,
+          tenantId: me.tenantId,
           action: 'COMPLIANCE_START',
           entity: 'ComplianceAssessment',
           entityId: a.id,
@@ -131,13 +145,14 @@ export class ComplianceService implements OnModuleInit {
     return created;
   }
 
-  async deleteAssessment(id: string, userId: string) {
-    const a = await this.getAssessment(id);
+  async deleteAssessment(id: string, me: JwtUser) {
+    const a = await this.getAssessment(id, me);
     await this.prisma.$transaction(async (tx) => {
       await tx.complianceAssessment.delete({ where: { id } });
       await tx.activity.create({
         data: {
-          userId,
+          userId: me.id,
+          tenantId: me.tenantId,
           action: 'COMPLIANCE_DELETE',
           entity: 'ComplianceAssessment',
           entityId: id,
@@ -157,18 +172,23 @@ export class ComplianceService implements OnModuleInit {
       notes?: string | null;
       dueDate?: string | null;
     },
-    userId: string,
+    me: JwtUser,
   ) {
     const ca = await this.prisma.complianceControlAssessment.findUnique({
       where: { id: controlAssessmentId },
+      include: { assessment: { select: { tenantId: true } } },
     });
     if (!ca) throw new NotFoundException('Controle introuvable');
+    // Garde tenant : verifier que l'assessment-mere appartient au tenant courant.
+    if (!me.isSuperAdmin && ca.assessment.tenantId !== me.tenantId) {
+      throw new NotFoundException('Controle introuvable');
+    }
 
     const data: Prisma.ComplianceControlAssessmentUpdateInput = {};
     if (update.status !== undefined) {
       data.status = update.status;
       data.lastReviewedAt = new Date();
-      data.reviewedBy = { connect: { id: userId } };
+      data.reviewedBy = { connect: { id: me.id } };
     }
     if (update.evidence !== undefined) data.evidence = update.evidence;
     if (update.evidenceUrl !== undefined) data.evidenceUrl = update.evidenceUrl;
@@ -218,16 +238,20 @@ export class ComplianceService implements OnModuleInit {
     });
   }
 
-  // Stats pour dashboard global
-  async stats() {
+  // Stats pour dashboard - scope par tenant
+  async stats(me: JwtUser) {
+    const assessmentScope = me.isSuperAdmin ? {} : { tenantId: me.tenantId };
+    const controlScope = me.isSuperAdmin ? {} : { assessment: { tenantId: me.tenantId } };
     const [byFw, expired] = await Promise.all([
       this.prisma.complianceAssessment.groupBy({
         by: ['frameworkId'],
+        where: assessmentScope,
         _count: true,
         _avg: { scorePct: true },
       }),
       this.prisma.complianceControlAssessment.count({
         where: {
+          ...controlScope,
           dueDate: { lt: new Date() },
           status: { notIn: ['COMPLIANT', 'NOT_APPLICABLE'] },
         },

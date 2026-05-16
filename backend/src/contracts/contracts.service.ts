@@ -222,7 +222,7 @@ export class ContractsService {
     // (n'echoue pas l'update si pas de template configure).
     if (existing.status !== 'ACTIVE' && updated.status === 'ACTIVE') {
       this.onboarding
-        .startForContract(updated.id)
+        .startForContractSystem(updated.id)
         .catch((err) => this.logger.warn('Auto-onboarding skip pour ' + updated.id + ' : ' + err.message));
     }
 

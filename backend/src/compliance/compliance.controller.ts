@@ -24,7 +24,7 @@ import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorato
 export class ComplianceController {
   constructor(private readonly service: ComplianceService) {}
 
-  // ---------- Frameworks (templates) ----------
+  // ---------- Frameworks (catalogue global lecture) ----------
   @Get('frameworks')
   listFrameworks(@Query('includeInactive') includeInactive?: string) {
     return this.service.listFrameworks(includeInactive === 'true');
@@ -35,21 +35,21 @@ export class ComplianceController {
     return this.service.getFramework(id);
   }
 
-  // ---------- Stats ----------
+  // ---------- Stats (par tenant) ----------
   @Get('stats')
-  stats() {
-    return this.service.stats();
+  stats(@CurrentUser() user: JwtUser) {
+    return this.service.stats(user);
   }
 
-  // ---------- Assessments ----------
+  // ---------- Assessments (par tenant) ----------
   @Get('companies/:companyId/assessments')
-  listForCompany(@Param('companyId') companyId: string) {
-    return this.service.listAssessmentsForCompany(companyId);
+  listForCompany(@Param('companyId') companyId: string, @CurrentUser() user: JwtUser) {
+    return this.service.listAssessmentsForCompany(companyId, user);
   }
 
   @Get('assessments/:id')
-  getAssessment(@Param('id') id: string) {
-    return this.service.getAssessment(id);
+  getAssessment(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.getAssessment(id, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
@@ -59,13 +59,13 @@ export class ComplianceController {
     @Body() body: { frameworkId: string; ownerId?: string },
     @CurrentUser() user: JwtUser,
   ) {
-    return this.service.startAssessment(companyId, body.frameworkId, body.ownerId, user.id);
+    return this.service.startAssessment(companyId, body.frameworkId, body.ownerId, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Delete('assessments/:id')
   remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.deleteAssessment(id, user.id);
+    return this.service.deleteAssessment(id, user);
   }
 
   @Patch('control-assessments/:id')
@@ -80,6 +80,6 @@ export class ComplianceController {
     },
     @CurrentUser() user: JwtUser,
   ) {
-    return this.service.updateControlAssessment(id, body, user.id);
+    return this.service.updateControlAssessment(id, body, user);
   }
 }

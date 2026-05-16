@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { Cron } from '@nestjs/schedule';
 import { DripCampaignTrigger, DripEnrollmentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 import { MailService } from '../mail/mail.service';
 
 @Injectable()
@@ -10,15 +12,16 @@ export class DripService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
     private readonly mail: MailService,
   ) {}
 
   // ============================================================
-  // Campagnes (templates)
+  // Campagnes (templates) - par tenant
   // ============================================================
-  list(includeInactive = false) {
+  list(me: JwtUser, includeInactive = false) {
     return this.prisma.dripCampaign.findMany({
-      where: includeInactive ? {} : { isActive: true },
+      where: this.scope.scopedWhere(me, includeInactive ? {} : { isActive: true }),
       include: {
         steps: { orderBy: { position: 'asc' } },
         _count: { select: { enrollments: true } },
@@ -27,9 +30,9 @@ export class DripService {
     });
   }
 
-  async findOne(id: string) {
-    const c = await this.prisma.dripCampaign.findUnique({
-      where: { id },
+  async findOne(id: string, me: JwtUser) {
+    const c = await this.prisma.dripCampaign.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: {
         steps: { orderBy: { position: 'asc' } },
       },
@@ -43,10 +46,11 @@ export class DripService {
     description?: string;
     trigger?: DripCampaignTrigger;
     steps: Array<{ dayOffset: number; subject: string; bodyHtml: string }>;
-  }) {
+  }, me: JwtUser) {
     if (input.steps.length === 0) throw new BadRequestException('Au moins une etape requise');
     return this.prisma.dripCampaign.create({
       data: {
+        tenantId: me.tenantId,
         name: input.name,
         description: input.description,
         trigger: input.trigger ?? 'MANUAL',
@@ -69,8 +73,8 @@ export class DripService {
     trigger?: DripCampaignTrigger;
     isActive?: boolean;
     steps?: Array<{ dayOffset: number; subject: string; bodyHtml: string }>;
-  }) {
-    await this.findOne(id);
+  }, me: JwtUser) {
+    await this.findOne(id, me);
     const data: Prisma.DripCampaignUpdateInput = {};
     if (input.name !== undefined) data.name = input.name;
     if (input.description !== undefined) data.description = input.description;
@@ -93,8 +97,8 @@ export class DripService {
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, me: JwtUser) {
+    await this.findOne(id, me);
     await this.prisma.dripCampaign.delete({ where: { id } });
     return { ok: true };
   }
@@ -108,7 +112,10 @@ export class DripService {
     recipientName?: string;
     contactId?: string;
     companyId?: string;
-  }) {
+  }, me: JwtUser) {
+    // Verifie que la campagne appartient bien au tenant courant.
+    await this.findOne(input.campaignId, me);
+    if (input.companyId) await this.scope.assertCompanyInTenant(input.companyId, me);
     return this.prisma.dripEnrollment.upsert({
       where: { campaignId_recipientEmail: { campaignId: input.campaignId, recipientEmail: input.recipientEmail.toLowerCase() } },
       create: {
@@ -128,9 +135,12 @@ export class DripService {
     });
   }
 
-  async listEnrollments(params: { campaignId?: string; status?: DripEnrollmentStatus } = {}) {
+  async listEnrollments(me: JwtUser, params: { campaignId?: string; status?: DripEnrollmentStatus } = {}) {
     return this.prisma.dripEnrollment.findMany({
       where: {
+        // Scope tenant via la campagne (DripEnrollment n'a pas de tenantId
+        // direct ; on filtre via campaign.tenantId).
+        campaign: this.scope.scopedWhere(me),
         ...(params.campaignId ? { campaignId: params.campaignId } : {}),
         ...(params.status ? { status: params.status } : {}),
       },
@@ -145,14 +155,30 @@ export class DripService {
     });
   }
 
-  async unsubscribe(enrollmentId: string) {
+  // Verifie qu'un enrollment appartient au tenant courant via sa campagne.
+  private async assertEnrollmentInTenant(enrollmentId: string, me: JwtUser) {
+    if (me.isSuperAdmin) {
+      const e = await this.prisma.dripEnrollment.findUnique({ where: { id: enrollmentId } });
+      if (!e) throw new NotFoundException();
+      return e;
+    }
+    const e = await this.prisma.dripEnrollment.findFirst({
+      where: { id: enrollmentId, campaign: { tenantId: me.tenantId } },
+    });
+    if (!e) throw new NotFoundException();
+    return e;
+  }
+
+  async unsubscribe(enrollmentId: string, me: JwtUser) {
+    await this.assertEnrollmentInTenant(enrollmentId, me);
     return this.prisma.dripEnrollment.update({
       where: { id: enrollmentId },
       data: { status: 'UNSUBSCRIBED' },
     });
   }
 
-  async pauseResume(enrollmentId: string, status: 'PAUSED' | 'RUNNING') {
+  async pauseResume(enrollmentId: string, status: 'PAUSED' | 'RUNNING', me: JwtUser) {
+    await this.assertEnrollmentInTenant(enrollmentId, me);
     return this.prisma.dripEnrollment.update({
       where: { id: enrollmentId },
       data: { status },
@@ -162,6 +188,9 @@ export class DripService {
   // ============================================================
   // Cron quotidien : envoie les emails dont le step matche aujourd'hui
   // 10:00 Europe/Paris (heure de bureau, taux d'ouverture maximal)
+  // Cron systeme : itere TOUS les enrollments tous tenants confondus
+  // (chaque mail est envoye via le SMTP du tenant de la campagne — cf
+  // mail.service qui devra recevoir le tenantId, vague 12).
   // ============================================================
   @Cron('0 10 * * *', { name: 'drip-daily-send', timeZone: 'Europe/Paris' })
   async runDaily() {
@@ -214,6 +243,7 @@ export class DripService {
           html,
           relatedEntity: 'DripEnrollment',
           relatedEntityId: e.id,
+          tenantId: e.campaign.tenantId,
         });
         const sendStatus = r.status === 'SENT' ? 'SENT' : 'FAILED';
         const sendError = r.status === 'SENT' ? null : (r.error ?? 'unknown');

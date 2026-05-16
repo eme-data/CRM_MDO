@@ -1,19 +1,24 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ContractOffer, OnboardingStepStatus, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 @Injectable()
 export class OnboardingService {
   private readonly logger = new Logger(OnboardingService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
+  ) {}
 
   // ============================================================
-  // Templates
+  // Templates (par tenant)
   // ============================================================
-  listTemplates(includeInactive = false) {
+  listTemplates(me: JwtUser, includeInactive = false) {
     return this.prisma.onboardingTemplate.findMany({
-      where: includeInactive ? {} : { isActive: true },
+      where: this.scope.scopedWhere(me, includeInactive ? {} : { isActive: true }),
       include: {
         _count: { select: { steps: true, runs: true } },
         steps: { orderBy: { position: 'asc' } },
@@ -22,9 +27,9 @@ export class OnboardingService {
     });
   }
 
-  async findTemplate(id: string) {
-    const t = await this.prisma.onboardingTemplate.findUnique({
-      where: { id },
+  async findTemplate(id: string, me: JwtUser) {
+    const t = await this.prisma.onboardingTemplate.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: { steps: { orderBy: { position: 'asc' } } },
     });
     if (!t) throw new NotFoundException('Template introuvable');
@@ -36,9 +41,10 @@ export class OnboardingService {
     description?: string;
     offer?: ContractOffer | null;
     steps: Array<{ title: string; description?: string; dueDateOffsetDays?: number; assigneeRole?: Role }>;
-  }) {
+  }, me: JwtUser) {
     return this.prisma.onboardingTemplate.create({
       data: {
+        tenantId: me.tenantId,
         name: input.name,
         description: input.description,
         offer: input.offer ?? null,
@@ -62,8 +68,8 @@ export class OnboardingService {
     offer?: ContractOffer | null;
     isActive?: boolean;
     steps?: Array<{ title: string; description?: string; dueDateOffsetDays?: number; assigneeRole?: Role }>;
-  }) {
-    await this.findTemplate(id);
+  }, me: JwtUser) {
+    await this.findTemplate(id, me);
     const data: Prisma.OnboardingTemplateUpdateInput = {};
     if (input.name !== undefined) data.name = input.name;
     if (input.description !== undefined) data.description = input.description;
@@ -88,9 +94,9 @@ export class OnboardingService {
     });
   }
 
-  async removeTemplate(id: string) {
-    const t = await this.prisma.onboardingTemplate.findUnique({
-      where: { id },
+  async removeTemplate(id: string, me: JwtUser) {
+    const t = await this.prisma.onboardingTemplate.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: { _count: { select: { runs: true } } },
     });
     if (!t) throw new NotFoundException('Template introuvable');
@@ -104,14 +110,14 @@ export class OnboardingService {
   }
 
   // ============================================================
-  // Runs (instances)
+  // Runs (instances) - par tenant
   // ============================================================
-  listRuns(params: { companyId?: string; status?: 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' } = {}) {
+  listRuns(me: JwtUser, params: { companyId?: string; status?: 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' } = {}) {
     return this.prisma.onboardingRun.findMany({
-      where: {
+      where: this.scope.scopedWhere(me, {
         ...(params.companyId ? { companyId: params.companyId } : {}),
         ...(params.status ? { status: params.status } : {}),
-      },
+      }),
       include: {
         company: { select: { id: true, name: true } },
         contract: { select: { id: true, reference: true, offer: true } },
@@ -121,9 +127,9 @@ export class OnboardingService {
     });
   }
 
-  async findRun(id: string) {
-    const r = await this.prisma.onboardingRun.findUnique({
-      where: { id },
+  async findRun(id: string, me: JwtUser) {
+    const r = await this.prisma.onboardingRun.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: {
         company: { select: { id: true, name: true } },
         contract: { select: { id: true, reference: true, offer: true } },
@@ -141,31 +147,51 @@ export class OnboardingService {
     return r;
   }
 
+  // Variante systeme : appelee par contracts.service apres update DRAFT->ACTIVE.
+  // Pas de garde tenant cote appelant (le caller a deja valide), on charge
+  // le contrat et utilise son tenantId comme contexte.
+  async startForContractSystem(contractId: string, templateId?: string) {
+    const contract = await this.prisma.contract.findUnique({ where: { id: contractId } });
+    if (!contract) throw new NotFoundException('Contrat introuvable');
+    const synthetic = {
+      id: contract.ownerId ?? '',
+      tenantId: contract.tenantId,
+      isSuperAdmin: false,
+      role: 'ADMIN',
+      email: '',
+      firstName: '',
+      lastName: '',
+    } as JwtUser;
+    return this.startForContract(contractId, synthetic, templateId);
+  }
+
   // Demarre un onboarding pour un contrat. Idempotent : si un run existe deja
   // pour ce contrat, on le retourne au lieu d'en creer un nouveau.
-  async startForContract(contractId: string, templateId?: string) {
-    const contract = await this.prisma.contract.findUnique({ where: { id: contractId } });
+  async startForContract(contractId: string, me: JwtUser, templateId?: string) {
+    const contract = await this.prisma.contract.findFirst({
+      where: this.scope.scopedWhere(me, { id: contractId }),
+    });
     if (!contract) throw new NotFoundException('Contrat introuvable');
 
     const existing = await this.prisma.onboardingRun.findUnique({ where: { contractId } });
     if (existing) return existing;
 
-    // Resolution du template : explicite, sinon par offre (active), sinon
-    // global actif. Si rien : pas d'auto-onboarding (c'est OK).
+    // Resolution du template : explicite (et tenant-scope), sinon par offre
+    // (active dans le tenant), sinon global actif du tenant.
     let template;
     if (templateId) {
-      template = await this.prisma.onboardingTemplate.findUnique({
-        where: { id: templateId },
+      template = await this.prisma.onboardingTemplate.findFirst({
+        where: this.scope.scopedWhere(me, { id: templateId }),
         include: { steps: { orderBy: { position: 'asc' } } },
       });
     } else {
       template =
         (await this.prisma.onboardingTemplate.findFirst({
-          where: { isActive: true, offer: contract.offer },
+          where: this.scope.scopedWhere(me, { isActive: true, offer: contract.offer }),
           include: { steps: { orderBy: { position: 'asc' } } },
         })) ??
         (await this.prisma.onboardingTemplate.findFirst({
-          where: { isActive: true, offer: null },
+          where: this.scope.scopedWhere(me, { isActive: true, offer: null }),
           include: { steps: { orderBy: { position: 'asc' } } },
         }));
     }
@@ -176,14 +202,18 @@ export class OnboardingService {
       );
     }
 
-    // Resolution des assignees par role (premier user actif du role)
+    // Resolution des assignees par role (premier user actif du role DANS LE TENANT)
     const roleAssignees = new Map<Role, string | null>();
     const rolesNeeded: Role[] = Array.from(
       new Set(template.steps.map((s) => s.assigneeRole).filter((r): r is Role => !!r)),
     );
     for (const role of rolesNeeded) {
       const u = await this.prisma.user.findFirst({
-        where: { role: role as Role, isActive: true },
+        where: {
+          role: role as Role,
+          isActive: true,
+          ...(me.tenantId ? { tenantId: me.tenantId } : {}),
+        },
         orderBy: { createdAt: 'asc' },
       });
       roleAssignees.set(role, u?.id ?? null);
@@ -192,6 +222,7 @@ export class OnboardingService {
     const startedAt = new Date();
     return this.prisma.onboardingRun.create({
       data: {
+        tenantId: me.tenantId,
         templateId: template.id,
         contractId,
         companyId: contract.companyId,
@@ -210,8 +241,8 @@ export class OnboardingService {
     });
   }
 
-  async cancelRun(id: string) {
-    await this.findRun(id);
+  async cancelRun(id: string, me: JwtUser) {
+    await this.findRun(id, me);
     return this.prisma.onboardingRun.update({
       where: { id },
       data: { status: 'CANCELLED', completedAt: new Date() },
@@ -226,16 +257,23 @@ export class OnboardingService {
     assigneeId?: string | null;
     notes?: string | null;
     dueDate?: string | null;
-  }, userId: string) {
-    const step = await this.prisma.onboardingRunStep.findUnique({ where: { id } });
+  }, me: JwtUser) {
+    const step = await this.prisma.onboardingRunStep.findUnique({
+      where: { id },
+      include: { run: { select: { id: true, tenantId: true } } },
+    });
     if (!step) throw new NotFoundException('Etape introuvable');
+    // Garde tenant : verifier que la run-mere appartient au tenant courant.
+    if (!me.isSuperAdmin && step.run.tenantId !== me.tenantId) {
+      throw new NotFoundException('Etape introuvable');
+    }
 
     const data: Prisma.OnboardingRunStepUpdateInput = {};
     if (input.status !== undefined) {
       data.status = input.status;
       if (input.status === 'DONE') {
         data.doneAt = new Date();
-        data.doneBy = { connect: { id: userId } };
+        data.doneBy = { connect: { id: me.id } };
       } else if (input.status === 'PENDING' || input.status === 'IN_PROGRESS') {
         data.doneAt = null;
         data.doneBy = { disconnect: true };
