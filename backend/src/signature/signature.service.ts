@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, SignatureProvider, SignatureStatus } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 import { SettingsService } from '../settings/settings.service';
 import { PdfService } from '../pdf/pdf.service';
 import { DocuSealProvider } from './providers/docuseal.provider';
@@ -18,29 +20,32 @@ export class SignatureService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
     private readonly settings: SettingsService,
     private readonly pdf: PdfService,
   ) {}
 
   // ============================================================
-  // Resolution du provider actif (selon Settings)
+  // Resolution du provider actif (selon Settings du TENANT)
+  // Critique : sans tenantId, on lirait la config DocuSeal/Yousign MDO et
+  // tous les tenants signeraient au nom MDO.
   // ============================================================
-  async getActiveProvider(): Promise<SignatureProviderApi | null> {
-    const kind = await this.settings.get('signature.provider');
+  async getActiveProvider(tenantId: string | null = null): Promise<SignatureProviderApi | null> {
+    const kind = await this.settings.get('signature.provider', tenantId);
     if (!kind || kind === 'DISABLED') return null;
     if (kind === 'DOCUSEAL') {
-      const apiUrl = await this.settings.get('signature.docuseal.apiUrl');
-      const apiKey = await this.settings.get('signature.docuseal.apiKey');
-      const webhookSecret = await this.settings.get('signature.docuseal.webhookSecret');
+      const apiUrl = await this.settings.get('signature.docuseal.apiUrl', tenantId);
+      const apiKey = await this.settings.get('signature.docuseal.apiKey', tenantId);
+      const webhookSecret = await this.settings.get('signature.docuseal.webhookSecret', tenantId);
       if (!apiUrl || !apiKey) {
         throw new BadRequestException('DocuSeal selectionne mais apiUrl/apiKey non configures');
       }
       return new DocuSealProvider({ apiUrl, apiKey, webhookSecret: webhookSecret ?? undefined });
     }
     if (kind === 'YOUSIGN') {
-      const apiUrl = await this.settings.get('signature.yousign.apiUrl');
-      const apiKey = await this.settings.get('signature.yousign.apiKey');
-      const webhookSecret = await this.settings.get('signature.yousign.webhookSecret');
+      const apiUrl = await this.settings.get('signature.yousign.apiUrl', tenantId);
+      const apiKey = await this.settings.get('signature.yousign.apiKey', tenantId);
+      const webhookSecret = await this.settings.get('signature.yousign.webhookSecret', tenantId);
       if (!apiUrl || !apiKey) {
         throw new BadRequestException('Yousign selectionne mais apiUrl/apiKey non configures');
       }
@@ -52,37 +57,33 @@ export class SignatureService {
   // Resout un provider precis pour les webhooks (le payload arrive avec
   // /webhook/docuseal ou /webhook/yousign — on n'utilise pas le setting
   // global car le user peut switcher de provider sans empecher de finaliser
-  // une signature deja en cours sur l'ancien).
-  async getProviderByName(name: string): Promise<SignatureProviderApi | null> {
+  // une signature deja en cours sur l'ancien). PAR TENANT.
+  async getProviderByName(name: string, tenantId: string | null = null): Promise<SignatureProviderApi | null> {
     const upper = name.toUpperCase();
-    const original = await this.settings.get('signature.provider');
-    // Re-utilise getActiveProvider en truquant temporairement le setting via
-    // une lecture directe des cles du provider demande.
     if (upper === 'DOCUSEAL') {
-      const apiUrl = await this.settings.get('signature.docuseal.apiUrl');
-      const apiKey = await this.settings.get('signature.docuseal.apiKey');
-      const webhookSecret = await this.settings.get('signature.docuseal.webhookSecret');
+      const apiUrl = await this.settings.get('signature.docuseal.apiUrl', tenantId);
+      const apiKey = await this.settings.get('signature.docuseal.apiKey', tenantId);
+      const webhookSecret = await this.settings.get('signature.docuseal.webhookSecret', tenantId);
       if (!apiUrl || !apiKey) return null;
       return new DocuSealProvider({ apiUrl, apiKey, webhookSecret: webhookSecret ?? undefined });
     }
     if (upper === 'YOUSIGN') {
-      const apiUrl = await this.settings.get('signature.yousign.apiUrl');
-      const apiKey = await this.settings.get('signature.yousign.apiKey');
-      const webhookSecret = await this.settings.get('signature.yousign.webhookSecret');
+      const apiUrl = await this.settings.get('signature.yousign.apiUrl', tenantId);
+      const apiKey = await this.settings.get('signature.yousign.apiKey', tenantId);
+      const webhookSecret = await this.settings.get('signature.yousign.webhookSecret', tenantId);
       if (!apiUrl || !apiKey) return null;
       return new YousignProvider({ apiUrl, apiKey, webhookSecret: webhookSecret ?? undefined });
     }
-    if (original) this.logger.debug('Provider configure : ' + original);
     return null;
   }
 
   // ============================================================
-  // Construction du PDF a signer pour une entite donnee
+  // Construction du PDF a signer pour une entite donnee (scope tenant)
   // ============================================================
-  private async buildPdfForEntity(entityType: SignableEntityType, entityId: string): Promise<{ buffer: Buffer; documentName: string; companyId: string; defaultSigner: { name: string; email: string; phone?: string } | null }> {
+  private async buildPdfForEntity(entityType: SignableEntityType, entityId: string, me: JwtUser): Promise<{ buffer: Buffer; documentName: string; companyId: string; defaultSigner: { name: string; email: string; phone?: string } | null }> {
     if (entityType === 'Quote') {
-      const q = await this.prisma.quote.findUnique({
-        where: { id: entityId },
+      const q = await this.prisma.quote.findFirst({
+        where: this.scope.scopedWhere(me, { id: entityId }),
         include: { company: true, contact: true, lines: { orderBy: { position: 'asc' } } },
       });
       if (!q) throw new NotFoundException('Quote introuvable');
@@ -132,8 +133,8 @@ export class SignatureService {
       };
     }
     // Contract
-    const c = await this.prisma.contract.findUnique({
-      where: { id: entityId },
+    const c = await this.prisma.contract.findFirst({
+      where: this.scope.scopedWhere(me, { id: entityId }),
       include: { company: true },
     });
     if (!c) throw new NotFoundException('Contract introuvable');
@@ -182,9 +183,9 @@ export class SignatureService {
       signerPhone?: string;
       message?: string;
     },
-    userId: string,
+    me: JwtUser,
   ) {
-    const provider = await this.getActiveProvider();
+    const provider = await this.getActiveProvider(me.tenantId);
     if (!provider) {
       throw new BadRequestException('Signature electronique non configuree (Settings > Signature)');
     }
@@ -192,6 +193,7 @@ export class SignatureService {
     const { buffer, documentName, companyId, defaultSigner } = await this.buildPdfForEntity(
       input.entityType,
       input.entityId,
+      me,
     );
 
     const signerName = input.signerName ?? defaultSigner?.name;
@@ -214,6 +216,7 @@ export class SignatureService {
 
     const sig = await this.prisma.signatureRequest.create({
       data: {
+        tenantId: me.tenantId,
         entityType: input.entityType,
         entityId: input.entityId,
         provider: provider.name as SignatureProvider,
@@ -223,13 +226,14 @@ export class SignatureService {
         signerEmail,
         signerPhone,
         companyId,
-        createdById: userId,
+        createdById: me.id,
       },
     });
 
     await this.prisma.activity.create({
       data: {
-        userId,
+        userId: me.id,
+        tenantId: me.tenantId,
         action: 'SIGN_REQUEST',
         entity: input.entityType,
         entityId: input.entityId,
@@ -241,10 +245,10 @@ export class SignatureService {
   }
 
   // ============================================================
-  // CRUD lecture
+  // CRUD lecture - scope par tenant
   // ============================================================
-  async findAll(params: { entityType?: SignableEntityType; entityId?: string; status?: SignatureStatus; companyId?: string }) {
-    const where: Prisma.SignatureRequestWhereInput = {};
+  async findAll(me: JwtUser, params: { entityType?: SignableEntityType; entityId?: string; status?: SignatureStatus; companyId?: string }) {
+    const where: Prisma.SignatureRequestWhereInput = this.scope.scopedWhere(me);
     if (params.entityType) where.entityType = params.entityType;
     if (params.entityId) where.entityId = params.entityId;
     if (params.status) where.status = params.status;
@@ -260,9 +264,9 @@ export class SignatureService {
     });
   }
 
-  async findOne(id: string) {
-    const s = await this.prisma.signatureRequest.findUnique({
-      where: { id },
+  async findOne(id: string, me: JwtUser) {
+    const s = await this.prisma.signatureRequest.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: {
         company: { select: { id: true, name: true } },
         createdBy: { select: { id: true, firstName: true, lastName: true } },
@@ -272,11 +276,11 @@ export class SignatureService {
     return s;
   }
 
-  async cancel(id: string, userId: string) {
-    const s = await this.findOne(id);
+  async cancel(id: string, me: JwtUser) {
+    const s = await this.findOne(id, me);
     if (s.status === 'SIGNED') throw new BadRequestException('Document deja signe — annulation impossible');
     if (s.status === 'CANCELLED') return s;
-    const provider = await this.getProviderByName(s.provider);
+    const provider = await this.getProviderByName(s.provider, s.tenantId);
     if (provider && s.providerSubmissionId) {
       try {
         await provider.cancelSubmission(s.providerSubmissionId);
@@ -289,30 +293,51 @@ export class SignatureService {
       data: { status: 'CANCELLED' },
     });
     await this.prisma.activity.create({
-      data: { userId, action: 'SIGN_CANCEL', entity: 'SignatureRequest', entityId: id },
+      data: { userId: me.id, tenantId: me.tenantId, action: 'SIGN_CANCEL', entity: 'SignatureRequest', entityId: id },
     });
     return updated;
   }
 
   // ============================================================
   // Webhook : reception evenements provider
+  // En multi-tenant, le webhook URL est commun mais chaque tenant a son
+  // propre secret HMAC. Strategie : on cherche d'abord la SignatureRequest
+  // via providerSubmissionId (unique global), puis on verifie le HMAC avec
+  // le secret du tenant proprietaire de cette signature.
   // ============================================================
   async handleWebhook(providerName: string, rawBody: Buffer, signatureHeader: string | undefined) {
-    const provider = await this.getProviderByName(providerName);
+    let payload: any;
+    try {
+      payload = JSON.parse(rawBody.toString('utf-8'));
+    } catch {
+      throw new BadRequestException('Payload non JSON');
+    }
+
+    // Tente d'abord d'extraire le submissionId pour resoudre le tenant.
+    // Pour ca on parse l'event sans verifier le HMAC (provider stateless).
+    // Ce n'est pas une fuite : on n'agit pas sur l'event tant que le HMAC
+    // n'est pas verifie. On utilise juste le submissionId pour trouver le
+    // bon secret tenant.
+    const probeProvider = await this.getProviderByName(providerName, null);
+    const probedEvent = probeProvider ? probeProvider.parseWebhookEvent(payload) : null;
+    let tenantId: string | null = null;
+    if (probedEvent?.submissionId) {
+      const existing = await this.prisma.signatureRequest.findUnique({
+        where: { providerSubmissionId: probedEvent.submissionId },
+        select: { tenantId: true },
+      });
+      tenantId = existing?.tenantId ?? null;
+    }
+
+    const provider = await this.getProviderByName(providerName, tenantId);
     if (!provider) {
-      this.logger.warn('Webhook recu pour provider inconnu : ' + providerName);
+      this.logger.warn('Webhook recu pour provider inconnu ou non configure : ' + providerName);
       return { ok: false };
     }
     const valid = await provider.verifyWebhookSignature(rawBody, signatureHeader);
     if (!valid) {
       this.logger.warn('Webhook ' + providerName + ' : signature HMAC invalide');
       throw new BadRequestException('Signature webhook invalide');
-    }
-    let payload: any;
-    try {
-      payload = JSON.parse(rawBody.toString('utf-8'));
-    } catch {
-      throw new BadRequestException('Payload non JSON');
     }
     const event = provider.parseWebhookEvent(payload);
     if (!event) {
@@ -364,7 +389,7 @@ export class SignatureService {
       await this.propagateSignatureToEntity(sig.entityType as SignableEntityType, sig.entityId);
       // Tente de telecharger le document signe et stocker l'URL
       try {
-        const provider = await this.getProviderByName(sig.provider);
+        const provider = await this.getProviderByName(sig.provider, sig.tenantId);
         if (provider && sig.providerSubmissionId) {
           const doc = await provider.fetchSignedDocument(sig.providerSubmissionId);
           if (doc.url) {

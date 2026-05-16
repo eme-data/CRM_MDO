@@ -42,26 +42,27 @@ export class CallsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Get()
   list(
+    @CurrentUser() user: JwtUser,
     @Query('contactId') contactId?: string,
     @Query('companyId') companyId?: string,
     @Query('userId') userId?: string,
     @Query('direction') direction?: CallDirection,
   ) {
-    return this.service.findAll({ contactId, companyId, userId, direction });
+    return this.service.findAll(user, { contactId, companyId, userId, direction });
   }
 
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Get('stats')
-  stats() {
-    return this.service.stats();
+  stats(@CurrentUser() user: JwtUser) {
+    return this.service.stats(user);
   }
 
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.service.findOne(id);
+  get(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findOne(id, user);
   }
 
   // Click-to-call (initie un appel sortant)
@@ -69,13 +70,13 @@ export class CallsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Post('click')
   click(@Body() body: { number: string }, @CurrentUser() user: JwtUser) {
-    return this.service.clickToCall(body.number, user.id);
+    return this.service.clickToCall(body.number, user);
   }
 
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Patch(':id/notes')
-  addNote(@Param('id') id: string, @Body() body: { notes: string }) {
-    return this.service.addNote(id, body.notes);
+  addNote(@Param('id') id: string, @Body() body: { notes: string }, @CurrentUser() user: JwtUser) {
+    return this.service.addNote(id, body.notes, user);
   }
 }

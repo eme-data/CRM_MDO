@@ -52,19 +52,20 @@ export class SignatureController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Get()
   list(
+    @CurrentUser() user: JwtUser,
     @Query('entityType') entityType?: 'Quote' | 'Contract',
     @Query('entityId') entityId?: string,
     @Query('status') status?: SignatureStatus,
     @Query('companyId') companyId?: string,
   ) {
-    return this.service.findAll({ entityType, entityId, status, companyId });
+    return this.service.findAll(user, { entityType, entityId, status, companyId });
   }
 
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.service.findOne(id);
+  get(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findOne(id, user);
   }
 
   @ApiBearerAuth()
@@ -72,7 +73,7 @@ export class SignatureController {
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post()
   create(@Body() dto: CreateSignatureDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(dto, user.id);
+    return this.service.create(dto, user);
   }
 
   @ApiBearerAuth()
@@ -80,6 +81,6 @@ export class SignatureController {
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post(':id/cancel')
   cancel(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.cancel(id, user.id);
+    return this.service.cancel(id, user);
   }
 }
