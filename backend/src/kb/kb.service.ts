@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { KbScope, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 function slugify(input: string): string {
   return input
@@ -14,15 +16,19 @@ function slugify(input: string): string {
 
 @Injectable()
 export class KbService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
+  ) {}
 
   // ============================================================
-  // Slug unique : si collision, on suffixe -2, -3, ...
+  // Slug unique PAR TENANT : si collision, on suffixe -2, -3, ...
+  // (le schema porte @@unique([tenantId, slug]) depuis vague 6).
   // ============================================================
-  private async uniqueSlug(base: string): Promise<string> {
+  private async uniqueSlug(base: string, tenantId: string | null): Promise<string> {
     const slug = slugify(base) || 'article';
     const existing = await this.prisma.kbArticle.findMany({
-      where: { slug: { startsWith: slug } },
+      where: { tenantId, slug: { startsWith: slug } },
       select: { slug: true },
     });
     if (existing.length === 0) return slug;
@@ -35,16 +41,18 @@ export class KbService {
   // ============================================================
   // Recherche / liste
   // ============================================================
-  async search(params: {
+  async search(me: JwtUser, params: {
     q?: string;
     scope?: KbScope;
     companyId?: string;
     category?: string;
     publishedOnly?: boolean;
   }) {
-    const where: Prisma.KbArticleWhereInput = {};
+    const where: Prisma.KbArticleWhereInput = this.scope.scopedWhere(me);
     if (params.scope) where.scope = params.scope;
     if (params.companyId) {
+      // Verifie l'acces tenant a la company demandee.
+      await this.scope.assertCompanyInTenant(params.companyId, me);
       // Si on cible un client : on lui montre ses CLIENT articles + tous les
       // GLOBAL et INTERNAL (les INTERNAL sont seulement listes pour le tech
       // qui consulte la fiche, pas pour le portail — gere cote portail).
@@ -91,9 +99,9 @@ export class KbService {
     });
   }
 
-  async findOne(id: string, incrementView = false) {
-    const a = await this.prisma.kbArticle.findUnique({
-      where: { id },
+  async findOne(id: string, me: JwtUser, incrementView = false) {
+    const a = await this.prisma.kbArticle.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: {
         author: { select: { id: true, firstName: true, lastName: true } },
         company: { select: { id: true, name: true } },
@@ -122,13 +130,15 @@ export class KbService {
     tags?: string[];
     isPublished?: boolean;
     sourceTicketId?: string;
-  }, authorId: string) {
+  }, me: JwtUser) {
     if (input.scope === 'CLIENT' && !input.companyId) {
       throw new BadRequestException('Scope CLIENT requiert un companyId');
     }
-    const slug = await this.uniqueSlug(input.title);
+    if (input.companyId) await this.scope.assertCompanyInTenant(input.companyId, me);
+    const slug = await this.uniqueSlug(input.title, me.tenantId ?? null);
     return this.prisma.kbArticle.create({
       data: {
+        tenantId: me.tenantId,
         title: input.title,
         slug,
         content: input.content,
@@ -140,7 +150,7 @@ export class KbService {
         isPublished: input.isPublished ?? false,
         publishedAt: input.isPublished ? new Date() : null,
         sourceTicketId: input.sourceTicketId,
-        authorId,
+        authorId: me.id,
       },
     });
   }
@@ -155,14 +165,15 @@ export class KbService {
     tags?: string[];
     isPublished?: boolean;
     markReviewed?: boolean;
-  }) {
-    const existing = await this.findOne(id);
+  }, me: JwtUser) {
+    const existing = await this.findOne(id, me);
     const data: Prisma.KbArticleUpdateInput = {};
     if (input.title !== undefined) data.title = input.title;
     if (input.content !== undefined) data.content = input.content;
     if (input.excerpt !== undefined) data.excerpt = input.excerpt;
     if (input.scope !== undefined) data.scope = input.scope;
     if (input.companyId !== undefined) {
+      if (input.companyId) await this.scope.assertCompanyInTenant(input.companyId, me);
       data.company = input.companyId ? { connect: { id: input.companyId } } : { disconnect: true };
     }
     if (input.category !== undefined) data.category = input.category;
@@ -176,13 +187,15 @@ export class KbService {
     return this.prisma.kbArticle.update({ where: { id }, data });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, me: JwtUser) {
+    await this.findOne(id, me);
     await this.prisma.kbArticle.delete({ where: { id } });
     return { ok: true };
   }
 
-  async markHelpful(id: string) {
+  async markHelpful(id: string, me: JwtUser) {
+    // Garde tenant : pas de leak de l'existence d'un article cross-tenant.
+    await this.findOne(id, me);
     return this.prisma.kbArticle.update({
       where: { id },
       data: { helpfulCount: { increment: 1 } },
@@ -193,9 +206,9 @@ export class KbService {
   // ============================================================
   // Generation depuis ticket : pre-remplit titre/contenu/tags
   // ============================================================
-  async draftFromTicket(ticketId: string, userId: string) {
-    const ticket = await this.prisma.ticket.findUnique({
-      where: { id: ticketId },
+  async draftFromTicket(ticketId: string, me: JwtUser) {
+    const ticket = await this.prisma.ticket.findFirst({
+      where: this.scope.scopedWhere(me, { id: ticketId }),
       include: {
         company: { select: { id: true, name: true } },
         messages: {
@@ -224,16 +237,16 @@ export class KbService {
         sourceTicketId: ticketId,
         isPublished: false,
       },
-      userId,
+      me,
     );
   }
 
   // ============================================================
-  // Categories existantes (pour datalist UI)
+  // Categories existantes (pour datalist UI) — par tenant
   // ============================================================
-  async categories(): Promise<string[]> {
+  async categories(me: JwtUser): Promise<string[]> {
     const rows = await this.prisma.kbArticle.findMany({
-      where: { category: { not: null } },
+      where: this.scope.scopedWhere(me, { category: { not: null } }),
       select: { category: true },
       distinct: ['category'],
     });

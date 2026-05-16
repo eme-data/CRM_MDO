@@ -15,7 +15,7 @@ import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorato
 export class RunbooksController {
   constructor(private readonly service: RunbooksService) {}
 
-  // ----- Catalogue -----
+  // ----- Catalogue (partage entre tenants — modif super-admin uniquement) -----
 
   @Get('runbooks')
   list() { return this.service.list(); }
@@ -28,41 +28,53 @@ export class RunbooksController {
 
   @Roles('ADMIN', 'MANAGER')
   @Post('runbooks')
-  create(@Body() dto: UpsertRunbookDto) { return this.service.create(dto); }
+  create(@Body() dto: UpsertRunbookDto, @CurrentUser() user: JwtUser) {
+    return this.service.create(dto, user);
+  }
 
   @Roles('ADMIN', 'MANAGER')
   @Patch('runbooks/:id')
-  update(@Param('id') id: string, @Body() dto: UpsertRunbookDto) {
-    return this.service.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpsertRunbookDto, @CurrentUser() user: JwtUser) {
+    return this.service.update(id, dto, user);
   }
 
   @Roles('ADMIN')
   @Delete('runbooks/:id')
-  remove(@Param('id') id: string) { return this.service.remove(id); }
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.remove(id, user);
+  }
 
-  // ----- Runs -----
+  // ----- Runs (par tenant) -----
 
   @Get('runbook-runs')
-  listRuns(@Query('companyId') companyId?: string, @Query('runbookId') runbookId?: string) {
-    return this.service.listRuns({ companyId, runbookId });
+  listRuns(
+    @CurrentUser() user: JwtUser,
+    @Query('companyId') companyId?: string,
+    @Query('runbookId') runbookId?: string,
+  ) {
+    return this.service.listRuns(user, { companyId, runbookId });
   }
 
   @Get('runbook-runs/:id')
-  oneRun(@Param('id') id: string) { return this.service.findRun(id); }
+  oneRun(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findRun(id, user);
+  }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post('runbook-runs')
   start(@Body() body: { runbookId: string; companyId: string }, @CurrentUser() user: JwtUser) {
-    return this.service.start(body.runbookId, body.companyId, user.id);
+    return this.service.start(body.runbookId, body.companyId, user);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Patch('runbook-runs/:id')
-  updateRun(@Param('id') id: string, @Body() dto: UpdateRunDto) {
-    return this.service.updateRun(id, dto);
+  updateRun(@Param('id') id: string, @Body() dto: UpdateRunDto, @CurrentUser() user: JwtUser) {
+    return this.service.updateRun(id, dto, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Delete('runbook-runs/:id')
-  removeRun(@Param('id') id: string) { return this.service.removeRun(id); }
+  removeRun(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.removeRun(id, user);
+  }
 }

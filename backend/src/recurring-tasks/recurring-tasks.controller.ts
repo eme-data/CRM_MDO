@@ -27,36 +27,36 @@ export class RecurringTasksController {
   constructor(private readonly service: RecurringTasksService) {}
 
   @Get()
-  list() {
-    return this.service.list();
+  list(@CurrentUser() user: JwtUser) {
+    return this.service.list(user);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findOne(id, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Post()
   create(@Body() dto: CreateRecurringTaskTemplateDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(dto, user.id);
+    return this.service.create(dto, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateRecurringTaskTemplateDto) {
-    return this.service.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateRecurringTaskTemplateDto, @CurrentUser() user: JwtUser) {
+    return this.service.update(id, dto, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.remove(id, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Post(':id/run-now')
-  runNow(@Param('id') id: string) {
-    return this.service.runNow(id);
+  runNow(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.runNow(id, user);
   }
 }

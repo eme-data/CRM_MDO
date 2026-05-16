@@ -25,13 +25,14 @@ export class KbController {
 
   @Get()
   list(
+    @CurrentUser() user: JwtUser,
     @Query('q') q?: string,
     @Query('scope') scope?: KbScope,
     @Query('companyId') companyId?: string,
     @Query('category') category?: string,
     @Query('publishedOnly') publishedOnly?: string,
   ) {
-    return this.service.search({
+    return this.service.search(user, {
       q,
       scope,
       companyId,
@@ -41,37 +42,37 @@ export class KbController {
   }
 
   @Get('categories')
-  categories() {
-    return this.service.categories();
+  categories(@CurrentUser() user: JwtUser) {
+    return this.service.categories(user);
   }
 
   @Get(':id')
-  get(@Param('id') id: string, @Query('view') view?: string) {
-    return this.service.findOne(id, view === 'true');
+  get(@Param('id') id: string, @CurrentUser() user: JwtUser, @Query('view') view?: string) {
+    return this.service.findOne(id, user, view === 'true');
   }
 
   @Post()
   create(@Body() body: any, @CurrentUser() user: JwtUser) {
-    return this.service.create(body, user.id);
+    return this.service.create(body, user);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: any) {
-    return this.service.update(id, body);
+  update(@Param('id') id: string, @Body() body: any, @CurrentUser() user: JwtUser) {
+    return this.service.update(id, body, user);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.remove(id, user);
   }
 
   @Post(':id/helpful')
-  helpful(@Param('id') id: string) {
-    return this.service.markHelpful(id);
+  helpful(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.markHelpful(id, user);
   }
 
   @Post('from-ticket/:ticketId')
   fromTicket(@Param('ticketId') ticketId: string, @CurrentUser() user: JwtUser) {
-    return this.service.draftFromTicket(ticketId, user.id);
+    return this.service.draftFromTicket(ticketId, user);
   }
 }

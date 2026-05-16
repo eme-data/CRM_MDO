@@ -8,6 +8,8 @@ import {
   InvoiceStatus,
 } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
   substitutePlaceholders,
@@ -29,14 +31,16 @@ export class WorkflowService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
     private readonly notifications: NotificationsService,
   ) {}
 
   // ============================================================
   // CRUD
   // ============================================================
-  list() {
+  list(me: JwtUser) {
     return this.prisma.workflowRule.findMany({
+      where: this.scope.scopedWhere(me),
       include: {
         assignee: { select: { id: true, firstName: true, lastName: true } },
         _count: { select: { executions: true } },
@@ -45,9 +49,9 @@ export class WorkflowService {
     });
   }
 
-  async findOne(id: string) {
-    const rule = await this.prisma.workflowRule.findUnique({
-      where: { id },
+  async findOne(id: string, me: JwtUser) {
+    const rule = await this.prisma.workflowRule.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: {
         assignee: { select: { id: true, firstName: true, lastName: true } },
         executions: {
@@ -70,7 +74,7 @@ export class WorkflowService {
       actionParams: any;
       assigneeId?: string;
     },
-    userId: string,
+    me: JwtUser,
   ) {
     // Validation cote service en plus du DTO (defense en profondeur).
     const tErr = validateTriggerParams(input.trigger, input.triggerParams);
@@ -80,6 +84,7 @@ export class WorkflowService {
 
     return this.prisma.workflowRule.create({
       data: {
+        tenantId: me.tenantId,
         name: input.name,
         description: input.description,
         trigger: input.trigger,
@@ -87,13 +92,17 @@ export class WorkflowService {
         action: input.action,
         actionParams: input.actionParams as Prisma.InputJsonValue,
         assigneeId: input.assigneeId,
-        createdById: userId,
+        createdById: me.id,
       },
     });
   }
 
-  async update(id: string, input: Partial<{ name: string; description: string | null; trigger: WorkflowTrigger; triggerParams: any; action: WorkflowAction; actionParams: any; assigneeId: string | null; isActive: boolean }>) {
-    await this.findOne(id);
+  async update(
+    id: string,
+    input: Partial<{ name: string; description: string | null; trigger: WorkflowTrigger; triggerParams: any; action: WorkflowAction; actionParams: any; assigneeId: string | null; isActive: boolean }>,
+    me: JwtUser,
+  ) {
+    await this.findOne(id, me);
     if (input.trigger && input.triggerParams !== undefined) {
       const err = validateTriggerParams(input.trigger, input.triggerParams);
       if (err) throw new BadRequestException('triggerParams : ' + err);
@@ -108,8 +117,8 @@ export class WorkflowService {
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, me: JwtUser) {
+    await this.findOne(id, me);
     await this.prisma.workflowRule.delete({ where: { id } });
     return { ok: true };
   }
@@ -118,16 +127,24 @@ export class WorkflowService {
    * Reset les executions d'une regle (utile pour re-tirer apres correction
    * d'un parametre ou nettoyage manuel des Tasks creees).
    */
-  async resetExecutions(id: string) {
-    await this.findOne(id);
+  async resetExecutions(id: string, me: JwtUser) {
+    await this.findOne(id, me);
     const r = await this.prisma.workflowExecution.deleteMany({ where: { ruleId: id } });
     return { deleted: r.count };
+  }
+
+  // Bypass-tenant pour le cron : appelle evaluateRuleInternal sans scope.
+  async evaluateRule(id: string, me: JwtUser): Promise<number> {
+    await this.findOne(id, me); // verifie l'acces tenant
+    return this.evaluateRuleInternal(id);
   }
 
   // ============================================================
   // Cron principal : evalue toutes les regles actives quotidiennement.
   // Cadence : 07:00 Europe/Paris (apres le cron recurring-tasks de 06:30,
   // ainsi les Tasks creees par les workflows arrivent juste apres).
+  // Cron systeme : itere TOUTES les regles tous tenants confondus mais
+  // chaque trigger filtre par rule.tenantId pour ne pas leaker.
   // ============================================================
   @Cron('0 7 * * *', { name: 'workflow-daily', timeZone: 'Europe/Paris' })
   async runDaily() {
@@ -136,7 +153,7 @@ export class WorkflowService {
     let totalFired = 0;
     for (const rule of rules) {
       try {
-        const fired = await this.evaluateRule(rule.id);
+        const fired = await this.evaluateRuleInternal(rule.id);
         totalFired += fired;
       } catch (err: any) {
         this.logger.warn('Regle ' + rule.id + ' (' + rule.name + ') echec : ' + err.message);
@@ -147,14 +164,16 @@ export class WorkflowService {
   }
 
   /**
-   * Evalue une regle : execute son trigger, dispatche l'action sur chaque
-   * entite cible non-deja-tiree. Retourne le nombre d'executions creees.
+   * Evalue une regle : execute son trigger SCOPE par tenant, dispatche
+   * l'action sur chaque entite cible non-deja-tiree. Retourne le nombre
+   * d'executions creees. Methode interne au cron (pas de garde tenant
+   * cote appelant : la garde est dans la query SQL via tenantId).
    */
-  async evaluateRule(ruleId: string): Promise<number> {
+  private async evaluateRuleInternal(ruleId: string): Promise<number> {
     const rule = await this.prisma.workflowRule.findUnique({ where: { id: ruleId } });
     if (!rule || !rule.isActive) return 0;
 
-    const targets = await this.runTrigger(rule.trigger, rule.triggerParams as any);
+    const targets = await this.runTrigger(rule.trigger, rule.triggerParams as any, rule.tenantId);
 
     let fired = 0;
     for (const target of targets) {
@@ -204,16 +223,21 @@ export class WorkflowService {
   }
 
   // ============================================================
-  // Triggers : retournent la liste des entites cibles a traiter
+  // Triggers : retournent la liste des entites cibles a traiter,
+  // strictement scopees au tenant de la regle (sinon, une regle du
+  // tenant A pourrait trigger sur des Contracts du tenant B).
   // ============================================================
-  private async runTrigger(trigger: WorkflowTrigger, params: any): Promise<TargetEntity[]> {
+  private async runTrigger(trigger: WorkflowTrigger, params: any, tenantId: string | null): Promise<TargetEntity[]> {
     const now = new Date();
+    // Si la regle n'a pas de tenantId (regles legacy), on bypass : pas de
+    // scope. C'est le comportement avant vague 11.
+    const tenantWhere = tenantId ? { tenantId } : {};
     switch (trigger) {
       case 'CONTRACT_EXPIRING': {
         const days = params.daysBefore;
         const until = new Date(now.getTime() + days * 86400_000);
         const contracts = await this.prisma.contract.findMany({
-          where: { status: 'ACTIVE', endDate: { gte: now, lte: until } },
+          where: { ...tenantWhere, status: 'ACTIVE', endDate: { gte: now, lte: until } },
           include: { company: { select: { id: true, name: true, ownerId: true } } },
         });
         return contracts.map((c) => ({
@@ -234,6 +258,7 @@ export class WorkflowService {
       case 'TICKET_OVERDUE': {
         const tickets = await this.prisma.ticket.findMany({
           where: {
+            ...tenantWhere,
             status: { notIn: ['RESOLVED', 'CLOSED', 'CANCELLED'] },
             dueDate: { lt: now },
           },
@@ -258,7 +283,7 @@ export class WorkflowService {
         const days = params.daysBefore;
         const until = new Date(now.getTime() + days * 86400_000);
         const assets = await this.prisma.asset.findMany({
-          where: { status: 'ACTIVE', expiresAt: { gte: now, lte: until } },
+          where: { ...tenantWhere, status: 'ACTIVE', expiresAt: { gte: now, lte: until } },
           include: { company: { select: { id: true, name: true, ownerId: true } } },
         });
         return assets.map((a) => ({
@@ -283,6 +308,7 @@ export class WorkflowService {
         const dueBefore = new Date(now.getTime() - days * 86400_000);
         const invoices = await this.prisma.invoice.findMany({
           where: {
+            ...tenantWhere,
             paidAt: null,
             status: { in: [InvoiceStatus.ISSUED, InvoiceStatus.OVERDUE] },
             dueDate: { lt: dueBefore },
@@ -314,7 +340,7 @@ export class WorkflowService {
   // Retourne une chaine de resultat (audit).
   // ============================================================
   private async runAction(
-    rule: { id: string; action: WorkflowAction; actionParams: any; assigneeId: string | null; createdById: string },
+    rule: { id: string; tenantId: string | null; action: WorkflowAction; actionParams: any; assigneeId: string | null; createdById: string },
     target: TargetEntity,
   ): Promise<string> {
     const params = rule.actionParams as any;
@@ -333,6 +359,7 @@ export class WorkflowService {
           null;
         const task = await this.prisma.task.create({
           data: {
+            tenantId: rule.tenantId,
             title,
             description:
               'Cree automatiquement par la regle workflow. Cible : ' +
@@ -355,7 +382,7 @@ export class WorkflowService {
           ? substitutePlaceholders(String(params.body), target.context).slice(0, 1000)
           : undefined;
         const targetRole: 'ADMIN' | 'MANAGER' | 'OWNER' = params.targetRole ?? 'ADMIN';
-        // Resolution des destinataires
+        // Resolution des destinataires (scope : utilisateurs du tenant de la regle)
         let recipients: Array<{ id: string }> = [];
         if (targetRole === 'OWNER') {
           // Owner de la company associee
@@ -363,7 +390,11 @@ export class WorkflowService {
           if (ownerId) recipients = [{ id: ownerId }];
         } else {
           recipients = await this.prisma.user.findMany({
-            where: { isActive: true, role: targetRole },
+            where: {
+              isActive: true,
+              role: targetRole,
+              ...(rule.tenantId ? { tenantId: rule.tenantId } : {}),
+            },
             select: { id: true },
           });
         }

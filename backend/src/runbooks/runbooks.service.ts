@@ -1,6 +1,17 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { RunbookCategory } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
+
+// NOTE multi-tenant : Runbook (le template) reste un catalogue PARTAGE entre
+// tous les tenants — c'est volontaire (procedures cyber/IT communes a tous
+// les MSP/DSI). Pour eviter qu'un user d'un tenant client modifie le catalogue
+// utilise par les autres, le CRUD du catalogue est restreint au super-admin
+// (cf garde explicite ci-dessous, en plus du @Roles ADMIN).
+//
+// RunbookRun (l'instance executee chez un client) est SCOPE par tenant via
+// son companyId.
 
 export interface UpsertStepDto {
   id?: string;
@@ -24,9 +35,20 @@ export interface UpdateRunDto {
 
 @Injectable()
 export class RunbooksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
+  ) {}
 
-  // ============= Runbook templates (catalogue) =============
+  private assertCatalogAdmin(me: JwtUser) {
+    if (!me.isSuperAdmin) {
+      throw new ForbiddenException(
+        'Le catalogue runbooks est partage : seul le super-admin peut le modifier.',
+      );
+    }
+  }
+
+  // ============= Runbook templates (catalogue partage) =============
 
   list() {
     return this.prisma.runbook.findMany({
@@ -47,7 +69,8 @@ export class RunbooksService {
     return r;
   }
 
-  async create(dto: UpsertRunbookDto) {
+  async create(dto: UpsertRunbookDto, me: JwtUser) {
+    this.assertCatalogAdmin(me);
     if (!dto.steps || dto.steps.length === 0) {
       throw new BadRequestException('Au moins une etape est requise');
     }
@@ -70,7 +93,8 @@ export class RunbooksService {
     });
   }
 
-  async update(id: string, dto: UpsertRunbookDto) {
+  async update(id: string, dto: UpsertRunbookDto, me: JwtUser) {
+    this.assertCatalogAdmin(me);
     await this.findOne(id);
     return this.prisma.$transaction(async (tx) => {
       await tx.runbook.update({
@@ -102,7 +126,8 @@ export class RunbooksService {
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, me: JwtUser) {
+    this.assertCatalogAdmin(me);
     const usage = await this.prisma.runbookRun.count({ where: { runbookId: id } });
     if (usage > 0) {
       throw new BadRequestException(
@@ -113,14 +138,14 @@ export class RunbooksService {
     return { success: true };
   }
 
-  // ============= Runs (instances par client) =============
+  // ============= Runs (instances par tenant/client) =============
 
-  listRuns(params: { companyId?: string; runbookId?: string }) {
+  listRuns(me: JwtUser, params: { companyId?: string; runbookId?: string }) {
     return this.prisma.runbookRun.findMany({
-      where: {
+      where: this.scope.scopedWhere(me, {
         companyId: params.companyId,
         runbookId: params.runbookId,
-      },
+      }),
       orderBy: { startedAt: 'desc' },
       include: {
         runbook: { select: { id: true, name: true, category: true } },
@@ -129,9 +154,9 @@ export class RunbooksService {
     });
   }
 
-  async findRun(id: string) {
-    const r = await this.prisma.runbookRun.findUnique({
-      where: { id },
+  async findRun(id: string, me: JwtUser) {
+    const r = await this.prisma.runbookRun.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: {
         runbook: { include: { steps: { orderBy: { position: 'asc' } } } },
         company: { select: { id: true, name: true } },
@@ -141,13 +166,15 @@ export class RunbooksService {
     return r;
   }
 
-  async start(runbookId: string, companyId: string, userId: string) {
+  async start(runbookId: string, companyId: string, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(companyId, me);
     const rb = await this.findOne(runbookId);
     return this.prisma.runbookRun.create({
       data: {
+        tenantId: me.tenantId,
         runbookId: rb.id,
         companyId,
-        startedById: userId,
+        startedById: me.id,
         state: {},
       },
       include: {
@@ -158,8 +185,8 @@ export class RunbooksService {
 
   // Met a jour l'etat des cases cochees. Marque completedAt si toutes
   // les etapes "required" sont cochees.
-  async updateRun(id: string, dto: UpdateRunDto) {
-    const run = await this.findRun(id);
+  async updateRun(id: string, dto: UpdateRunDto, me: JwtUser) {
+    const run = await this.findRun(id, me);
     const merged = { ...((run.state as any) ?? {}), ...(dto.state ?? {}) };
     const requiredIds = run.runbook.steps.filter((s) => s.required).map((s) => s.id);
     const allDone = requiredIds.every((sid) => merged[sid]?.done === true);
@@ -175,7 +202,8 @@ export class RunbooksService {
     });
   }
 
-  async removeRun(id: string) {
+  async removeRun(id: string, me: JwtUser) {
+    await this.findRun(id, me);
     await this.prisma.runbookRun.delete({ where: { id } });
     return { success: true };
   }

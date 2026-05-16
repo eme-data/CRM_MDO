@@ -1,6 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 import { computeNextRunAt } from './recurring-tasks.helpers';
 import {
   CreateRecurringTaskTemplateDto,
@@ -11,13 +13,17 @@ import {
 export class RecurringTasksService {
   private readonly logger = new Logger(RecurringTasksService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
+  ) {}
 
   // ============================================================
   // CRUD
   // ============================================================
-  list() {
+  list(me: JwtUser) {
     return this.prisma.recurringTaskTemplate.findMany({
+      where: this.scope.scopedWhere(me),
       include: {
         company: { select: { id: true, name: true } },
         assignee: { select: { id: true, firstName: true, lastName: true } },
@@ -28,9 +34,9 @@ export class RecurringTasksService {
     });
   }
 
-  async findOne(id: string) {
-    const t = await this.prisma.recurringTaskTemplate.findUnique({
-      where: { id },
+  async findOne(id: string, me: JwtUser) {
+    const t = await this.prisma.recurringTaskTemplate.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: {
         company: { select: { id: true, name: true } },
         assignee: { select: { id: true, firstName: true, lastName: true } },
@@ -46,13 +52,15 @@ export class RecurringTasksService {
     return t;
   }
 
-  async create(dto: CreateRecurringTaskTemplateDto, userId: string) {
+  async create(dto: CreateRecurringTaskTemplateDto, me: JwtUser) {
+    if (dto.companyId) await this.scope.assertCompanyInTenant(dto.companyId, me);
     const startsOn = dto.startsOn ?? new Date();
     // Le premier nextRunAt = startsOn (la 1ere instance est cree au prochain
     // tick du cron suivant startsOn).
     const nextRunAt = startsOn;
     return this.prisma.recurringTaskTemplate.create({
       data: {
+        tenantId: me.tenantId,
         name: dto.name,
         title: dto.title,
         description: dto.description,
@@ -66,13 +74,13 @@ export class RecurringTasksService {
         companyId: dto.companyId,
         assigneeId: dto.assigneeId,
         contractId: dto.contractId,
-        createdById: userId,
+        createdById: me.id,
       },
     });
   }
 
-  async update(id: string, dto: UpdateRecurringTaskTemplateDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateRecurringTaskTemplateDto, me: JwtUser) {
+    await this.findOne(id, me);
     // Si frequency ou dayOfMonth changent, on ne recalcule PAS nextRunAt
     // automatiquement : on laisse l'utilisateur faire un "Force run now" s'il
     // veut declencher tout de suite, sinon la prochaine generation utilisera
@@ -83,8 +91,8 @@ export class RecurringTasksService {
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, me: JwtUser) {
+    await this.findOne(id, me);
     await this.prisma.recurringTaskTemplate.delete({ where: { id } });
     return { ok: true };
   }
@@ -93,10 +101,10 @@ export class RecurringTasksService {
    * Force la generation d'une instance maintenant (bouton "Run now" admin).
    * Recalcule aussi nextRunAt apres pour preserver la cadence.
    */
-  async runNow(id: string) {
-    const t = await this.findOne(id);
+  async runNow(id: string, me: JwtUser) {
+    const t = await this.findOne(id, me);
     await this.generateOneInstance(t.id);
-    return this.findOne(t.id);
+    return this.findOne(t.id, me);
   }
 
   // ============================================================
@@ -105,6 +113,8 @@ export class RecurringTasksService {
   // Tourne tous les jours a 06:30 Europe/Paris. nextRunAt est positionne a
   // 06:00 par computeNextRunAt, donc le cron arrive 30min apres pour etre
   // sur que le tick a deja passe (decalage de fuseaux DST-safe).
+  // Cron systeme : itere TOUS les templates tous tenants confondus (chaque
+  // template porte son tenantId qui est repercute dans la Task generee).
   @Cron('30 6 * * *', { name: 'recurring-tasks-daily', timeZone: 'Europe/Paris' })
   async runDaily() {
     const now = new Date();
@@ -136,6 +146,7 @@ export class RecurringTasksService {
   /**
    * Cree UNE Task a partir du template + avance nextRunAt selon la frequence.
    * Tout en transaction pour eviter d'avancer nextRunAt sans Task creee.
+   * La Task heritera du tenantId du template.
    */
   private async generateOneInstance(templateId: string) {
     const t = await this.prisma.recurringTaskTemplate.findUnique({
@@ -159,6 +170,7 @@ export class RecurringTasksService {
     await this.prisma.$transaction([
       this.prisma.task.create({
         data: {
+          tenantId: t.tenantId,
           title: t.title,
           description: t.description,
           priority: t.priority,
