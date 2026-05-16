@@ -31,7 +31,7 @@ export class EmergencyPdfController {
     const { buffer, filename } = await this.service.generateForCompany(id);
     // Audit : qui a sorti le dossier d'urgence
     await this.prisma.activity.create({
-      data: { userId: user.id, action: 'EXPORT_EMERGENCY_PDF', entity: 'Company', entityId: id },
+      data: { userId: user.id, tenantId: user.tenantId, action: 'EXPORT_EMERGENCY_PDF', entity: 'Company', entityId: id },
     });
     this.logger.log('Emergency PDF genere par user ' + user.id + ' pour company ' + id);
     res.setHeader('Content-Type', 'application/pdf');

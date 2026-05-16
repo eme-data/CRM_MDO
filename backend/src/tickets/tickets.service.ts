@@ -175,6 +175,7 @@ export class TicketsService {
       await tx.activity.create({
         data: {
           userId,
+          tenantId,
           action: 'CREATE',
           entity: 'Ticket',
           entityId: created.id,
@@ -238,7 +239,7 @@ export class TicketsService {
 
     const updated = await this.prisma.ticket.update({ where: { id }, data });
     await this.prisma.activity.create({
-      data: { userId, action: 'UPDATE', entity: 'Ticket', entityId: id },
+      data: { userId, tenantId, action: 'UPDATE', entity: 'Ticket', entityId: id },
     });
 
     // Trigger NPS si on vient de passer en RESOLVED. Non-bloquant : si l'envoi
@@ -323,7 +324,7 @@ export class TicketsService {
       });
     }
     await this.prisma.activity.create({
-      data: { userId, action: 'COMMENT', entity: 'Ticket', entityId: ticketId },
+      data: { userId, tenantId, action: 'COMMENT', entity: 'Ticket', entityId: ticketId },
     });
 
     // Si non-interne et ticket lie a un destinataire => envoi email
@@ -442,6 +443,7 @@ export class TicketsService {
     await this.prisma.activity.create({
       data: {
         userId,
+        tenantId,
         action: 'BULK_UPDATE',
         entity: 'Ticket',
         metadata: { count: result.count, ...update },
@@ -458,6 +460,7 @@ export class TicketsService {
     await this.prisma.activity.create({
       data: {
         userId,
+        tenantId,
         action: 'BULK_DELETE',
         entity: 'Ticket',
         metadata: { count: result.count, ids },

@@ -109,7 +109,7 @@ export class TicketTriageService {
     update: { category?: TicketCategory; priority?: TicketPriority },
     userId: string,
   ) {
-    await this.prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    const ticket = await this.prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } });
     const u = await this.prisma.ticket.update({
       where: { id: ticketId },
       data: {
@@ -120,6 +120,7 @@ export class TicketTriageService {
     await this.prisma.activity.create({
       data: {
         userId,
+        tenantId: ticket.tenantId,
         action: 'AI_TRIAGE_APPLIED',
         entity: 'Ticket',
         entityId: ticketId,

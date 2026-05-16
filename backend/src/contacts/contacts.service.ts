@@ -52,7 +52,7 @@ export class ContactsService {
       data: { ...dto, ownerId: dto.ownerId ?? userId, tenantId: tenantId ?? undefined },
     });
     await this.prisma.activity.create({
-      data: { userId, action: 'CREATE', entity: 'Contact', entityId: contact.id },
+      data: { userId, tenantId, action: 'CREATE', entity: 'Contact', entityId: contact.id },
     });
     return contact;
   }
@@ -61,7 +61,7 @@ export class ContactsService {
     await this.findOne(id, tenantId);
     const updated = await this.prisma.contact.update({ where: { id }, data: dto });
     await this.prisma.activity.create({
-      data: { userId, action: 'UPDATE', entity: 'Contact', entityId: id },
+      data: { userId, tenantId, action: 'UPDATE', entity: 'Contact', entityId: id },
     });
     return updated;
   }
@@ -70,7 +70,7 @@ export class ContactsService {
     await this.findOne(id, tenantId);
     await this.prisma.contact.delete({ where: { id } });
     await this.prisma.activity.create({
-      data: { userId, action: 'DELETE', entity: 'Contact', entityId: id },
+      data: { userId, tenantId, action: 'DELETE', entity: 'Contact', entityId: id },
     });
     return { success: true };
   }

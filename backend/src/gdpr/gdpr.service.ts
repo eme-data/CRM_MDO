@@ -200,6 +200,8 @@ export class GdprService {
       this.prisma.activity.create({
         data: {
           userId: performedBy,
+          // Audit RGPD trace dans le tenant du contact (jamais purgee).
+          tenantId: contact.tenantId,
           action: 'GDPR_ANONYMIZE',
           entity: 'Contact',
           entityId: contactId,

@@ -80,7 +80,7 @@ export class AuthService {
     });
 
     await this.prisma.activity.create({
-      data: { userId: user.id, action: 'LOGIN', entity: 'User', entityId: user.id },
+      data: { userId: user.id, tenantId: user.tenantId, action: 'LOGIN', entity: 'User', entityId: user.id },
     });
 
     const mfaPending = await this.computeMfaPending(user.id, user.role);

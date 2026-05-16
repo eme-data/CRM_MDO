@@ -43,7 +43,7 @@ export class CronDashboardService {
   // ============================================================
   // Trigger a cron NOW (sans attendre la prochaine occurrence)
   // ============================================================
-  async runNow(name: string, userId: string) {
+  async runNow(name: string, userId: string, tenantId: string | null = null) {
     const map = this.scheduler.getCronJobs();
     const job = map.get(name);
     if (!job) throw new NotFoundException('Cron "' + name + '" introuvable');
@@ -51,6 +51,7 @@ export class CronDashboardService {
     await this.prisma.activity.create({
       data: {
         userId,
+        tenantId,
         action: 'CRON_TRIGGER_MANUAL',
         entity: 'CronJob',
         entityId: name,

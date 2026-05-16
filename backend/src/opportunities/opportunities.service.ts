@@ -88,7 +88,7 @@ export class OpportunitiesService {
       },
     });
     await this.prisma.activity.create({
-      data: { userId, action: 'CREATE', entity: 'Opportunity', entityId: opp.id },
+      data: { userId, tenantId, action: 'CREATE', entity: 'Opportunity', entityId: opp.id },
     });
     return opp;
   }
@@ -103,7 +103,7 @@ export class OpportunitiesService {
     }
     const updated = await this.prisma.opportunity.update({ where: { id }, data });
     await this.prisma.activity.create({
-      data: { userId, action: 'UPDATE', entity: 'Opportunity', entityId: id },
+      data: { userId, tenantId, action: 'UPDATE', entity: 'Opportunity', entityId: id },
     });
     return updated;
   }
@@ -197,7 +197,7 @@ export class OpportunitiesService {
     await this.findOne(id, tenantId);
     await this.prisma.opportunity.delete({ where: { id } });
     await this.prisma.activity.create({
-      data: { userId, action: 'DELETE', entity: 'Opportunity', entityId: id },
+      data: { userId, tenantId, action: 'DELETE', entity: 'Opportunity', entityId: id },
     });
     return { success: true };
   }

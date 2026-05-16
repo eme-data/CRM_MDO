@@ -171,6 +171,7 @@ export class ContractsService {
         await tx.activity.create({
           data: {
             userId,
+            tenantId,
             action: 'CREATE',
             entity: 'Contract',
             entityId: created.id,
@@ -212,7 +213,7 @@ export class ContractsService {
         await this.createAlertsForContract(tx as any, id, u.endDate);
       }
       await tx.activity.create({
-        data: { userId, action: 'UPDATE', entity: 'Contract', entityId: id },
+        data: { userId, tenantId, action: 'UPDATE', entity: 'Contract', entityId: id },
       });
       return u;
     });
@@ -235,7 +236,7 @@ export class ContractsService {
     await this.prisma.$transaction(async (tx) => {
       await tx.contract.delete({ where: { id } });
       await tx.activity.create({
-        data: { userId, action: 'DELETE', entity: 'Contract', entityId: id },
+        data: { userId, tenantId, action: 'DELETE', entity: 'Contract', entityId: id },
       });
     });
     this.invalidateAggregates(existing.companyId);
@@ -253,7 +254,7 @@ export class ContractsService {
       },
     });
     await this.prisma.activity.create({
-      data: { userId, action: 'TERMINATE', entity: 'Contract', entityId: id, metadata: { reason } },
+      data: { userId, tenantId, action: 'TERMINATE', entity: 'Contract', entityId: id, metadata: { reason } },
     });
     this.invalidateAggregates(existing.companyId);
     return updated;
@@ -301,6 +302,7 @@ export class ContractsService {
       await tx.activity.create({
         data: {
           userId,
+          tenantId,
           action: 'RENEW',
           entity: 'Contract',
           entityId: created.id,

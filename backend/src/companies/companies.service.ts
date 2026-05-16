@@ -76,6 +76,7 @@ export class CompaniesService {
       await tx.activity.create({
         data: {
           userId,
+          tenantId,
           action: 'CREATE',
           entity: 'Company',
           entityId: company.id,
@@ -91,7 +92,7 @@ export class CompaniesService {
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.company.update({ where: { id }, data: dto });
       await tx.activity.create({
-        data: { userId, action: 'UPDATE', entity: 'Company', entityId: id, metadata: dto as any },
+        data: { userId, tenantId, action: 'UPDATE', entity: 'Company', entityId: id, metadata: dto as any },
       });
       return updated;
     });
@@ -124,7 +125,7 @@ export class CompaniesService {
     }
     return this.prisma.$transaction(async (tx) => {
       await tx.activity.create({
-        data: { userId, action: 'DELETE', entity: 'Company', entityId: id },
+        data: { userId, tenantId, action: 'DELETE', entity: 'Company', entityId: id },
       });
       await tx.company.delete({ where: { id } });
       return { success: true };

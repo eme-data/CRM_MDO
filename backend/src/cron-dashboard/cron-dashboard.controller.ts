@@ -28,6 +28,6 @@ export class CronDashboardController {
   @Roles('ADMIN')
   @Post(':name/run')
   runNow(@Param('name') name: string, @CurrentUser() user: JwtUser) {
-    return this.service.runNow(name, user.id);
+    return this.service.runNow(name, user.id, user.tenantId);
   }
 }

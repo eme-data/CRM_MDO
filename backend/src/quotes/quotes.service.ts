@@ -162,7 +162,7 @@ export class QuotesService {
         },
       });
       await tx.activity.create({
-        data: { userId, action: 'CREATE', entity: 'Quote', entityId: created.id },
+        data: { userId, tenantId, action: 'CREATE', entity: 'Quote', entityId: created.id },
       });
       return created;
     });
@@ -232,7 +232,7 @@ export class QuotesService {
       }
       const u = await tx.quote.update({ where: { id }, data });
       await tx.activity.create({
-        data: { userId, action: 'UPDATE', entity: 'Quote', entityId: id },
+        data: { userId, tenantId, action: 'UPDATE', entity: 'Quote', entityId: id },
       });
       return u;
     });
@@ -250,7 +250,7 @@ export class QuotesService {
     await this.prisma.$transaction(async (tx) => {
       await tx.quote.delete({ where: { id } });
       await tx.activity.create({
-        data: { userId, action: 'DELETE', entity: 'Quote', entityId: id },
+        data: { userId, tenantId, action: 'DELETE', entity: 'Quote', entityId: id },
       });
     });
     return { ok: true };
@@ -270,7 +270,7 @@ export class QuotesService {
         data: { status: 'SENT', sentAt: new Date() },
       });
       await tx.activity.create({
-        data: { userId, action: 'SEND', entity: 'Quote', entityId: id },
+        data: { userId, tenantId, action: 'SEND', entity: 'Quote', entityId: id },
       });
       return u;
     });
@@ -287,7 +287,7 @@ export class QuotesService {
         data: { status: 'ACCEPTED', acceptedAt: new Date() },
       });
       await tx.activity.create({
-        data: { userId, action: 'ACCEPT', entity: 'Quote', entityId: id },
+        data: { userId, tenantId, action: 'ACCEPT', entity: 'Quote', entityId: id },
       });
       return u;
     });
@@ -311,6 +311,7 @@ export class QuotesService {
       await tx.activity.create({
         data: {
           userId,
+          tenantId,
           action: 'REJECT',
           entity: 'Quote',
           entityId: id,
@@ -404,6 +405,7 @@ export class QuotesService {
       await tx.activity.create({
         data: {
           userId,
+          tenantId,
           action: 'CONVERT',
           entity: 'Quote',
           entityId: q.id,
