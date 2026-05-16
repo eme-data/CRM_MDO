@@ -26,14 +26,14 @@ export class WebhooksController {
 
   @Roles('ADMIN', 'MANAGER')
   @Get()
-  list(@Query('companyId') companyId?: string) {
-    return this.service.list({ companyId });
+  list(@CurrentUser() user: JwtUser, @Query('companyId') companyId?: string) {
+    return this.service.list(user, { companyId });
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.service.findOne(id);
+  get(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findOne(id, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
@@ -44,24 +44,24 @@ export class WebhooksController {
     events: WebhookEvent[];
     companyId?: string;
   }, @CurrentUser() user: JwtUser) {
-    return this.service.create(body, user.id);
+    return this.service.create(body, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: any) {
-    return this.service.update(id, body);
+  update(@Param('id') id: string, @Body() body: any, @CurrentUser() user: JwtUser) {
+    return this.service.update(id, body, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.remove(id, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Post(':id/regenerate-secret')
-  regenerateSecret(@Param('id') id: string) {
-    return this.service.regenerateSecret(id);
+  regenerateSecret(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.regenerateSecret(id, user);
   }
 }

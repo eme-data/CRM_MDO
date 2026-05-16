@@ -25,8 +25,8 @@ export class ApiKeysAdminController {
 
   @Roles('ADMIN', 'MANAGER')
   @Get()
-  list(@Query('companyId') companyId?: string) {
-    return this.service.list({ companyId });
+  list(@CurrentUser() user: JwtUser, @Query('companyId') companyId?: string) {
+    return this.service.list(user, { companyId });
   }
 
   @Roles('ADMIN', 'MANAGER')
@@ -35,12 +35,12 @@ export class ApiKeysAdminController {
     @Body() body: { name: string; scope: ApiKeyScope; companyId?: string; expiresAt?: string },
     @CurrentUser() user: JwtUser,
   ) {
-    return this.service.create({ ...body, createdById: user.id });
+    return this.service.create(body, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Delete(':id')
-  revoke(@Param('id') id: string) {
-    return this.service.revoke(id);
+  revoke(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.revoke(id, user);
   }
 }

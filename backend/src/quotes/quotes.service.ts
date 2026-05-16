@@ -294,7 +294,7 @@ export class QuotesService {
     this.webhooks.emit('QUOTE_ACCEPTED', {
       id: updated.id, reference: updated.reference, totalTtc: Number(updated.totalTtc),
       companyId: updated.companyId,
-    }, updated.companyId).catch((err) => this.logger.warn('Webhook fail : ' + err.message));
+    }, { companyId: updated.companyId, tenantId: updated.tenantId }).catch((err) => this.logger.warn('Webhook fail : ' + err.message));
     return updated;
   }
 
@@ -322,7 +322,7 @@ export class QuotesService {
     this.webhooks.emit('QUOTE_REJECTED', {
       id: updated.id, reference: updated.reference, reason: reason ?? null,
       companyId: updated.companyId,
-    }, updated.companyId).catch((err) => this.logger.warn('Webhook fail : ' + err.message));
+    }, { companyId: updated.companyId, tenantId: updated.tenantId }).catch((err) => this.logger.warn('Webhook fail : ' + err.message));
     return updated;
   }
 

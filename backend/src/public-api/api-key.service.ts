@@ -2,12 +2,17 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { createHash, randomBytes } from 'crypto';
 import { ApiKeyScope, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 const KEY_PREFIX_VISIBLE = 12; // chars visibles de la cle pour l'UI
 
 @Injectable()
 export class ApiKeyService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
+  ) {}
 
   // Format : mdo_live_<32_random_alpha_chars>
   private generate(): { full: string; prefix: string; hash: string } {
@@ -23,24 +28,25 @@ export class ApiKeyService {
     scope: ApiKeyScope;
     companyId?: string;
     expiresAt?: string;
-    createdById: string;
-  }) {
+  }, me: JwtUser) {
     if ((input.scope === 'CLIENT_READ' || input.scope === 'CLIENT_WRITE') && !input.companyId) {
       throw new BadRequestException('Scope CLIENT_* requiert un companyId');
     }
     if ((input.scope === 'GLOBAL_READ' || input.scope === 'GLOBAL_WRITE') && input.companyId) {
       throw new BadRequestException('Scope GLOBAL_* ne doit pas avoir de companyId');
     }
+    if (input.companyId) await this.scope.assertCompanyInTenant(input.companyId, me);
     const { full, prefix, hash } = this.generate();
     const created = await this.prisma.apiKey.create({
       data: {
+        tenantId: me.tenantId,
         name: input.name,
         scope: input.scope,
         keyHash: hash,
         prefix,
         companyId: input.companyId,
         expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
-        createdById: input.createdById,
+        createdById: me.id,
       },
     });
     // ATTENTION : la cle complete `full` est renvoyee uniquement ICI, jamais
@@ -48,18 +54,20 @@ export class ApiKeyService {
     return { ...created, plaintextKey: full };
   }
 
-  async list(params: { companyId?: string } = {}) {
+  async list(me: JwtUser, params: { companyId?: string } = {}) {
     return this.prisma.apiKey.findMany({
-      where: {
+      where: this.scope.scopedWhere(me, {
         ...(params.companyId ? { companyId: params.companyId } : {}),
-      },
+      }),
       include: { company: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async revoke(id: string) {
-    const k = await this.prisma.apiKey.findUnique({ where: { id } });
+  async revoke(id: string, me: JwtUser) {
+    const k = await this.prisma.apiKey.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
+    });
     if (!k) throw new NotFoundException('Cle API introuvable');
     if (k.revokedAt) return k;
     return this.prisma.apiKey.update({

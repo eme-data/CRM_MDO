@@ -206,7 +206,7 @@ export class TicketsService {
       priority: ticket.priority,
       category: ticket.category,
       companyId: ticket.companyId,
-    }, ticket.companyId).catch((err) => this.logger.warn('Webhook emit failed : ' + err.message));
+    }, { companyId: ticket.companyId, tenantId: ticket.tenantId }).catch((err) => this.logger.warn('Webhook emit failed : ' + err.message));
 
     return ticket;
   }

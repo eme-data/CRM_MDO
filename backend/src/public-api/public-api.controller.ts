@@ -15,7 +15,11 @@ import { PrismaService } from '../database/prisma.service';
 
 // API publique v1 — authentifiee uniquement par cle API (Bearer mdo_live_...)
 // Pas de JWT, pas de session. Endpoints scopés par la cle (CLIENT_* limite
-// a la societe associee, GLOBAL_* acces a tout).
+// a la societe associee, GLOBAL_* acces a tout DU TENANT de la cle).
+//
+// CRITIQUE multi-tenant : le scope GLOBAL_* d'une cle ne donne acces qu'aux
+// donnees de SON propre tenant — JAMAIS aux autres tenants. Le helper
+// scopedWhere injecte systematiquement key.tenantId.
 //
 // Tous les endpoints sont @Public pour bypasser le JwtAuthGuard global. Le
 // ApiKeyGuard gere l'auth a la place.
@@ -35,6 +39,7 @@ export class PublicApiController {
       keyId: k.id,
       keyName: k.name,
       scope: k.scope,
+      tenantId: k.tenantId,
       company: k.company ?? null,
       expiresAt: k.expiresAt,
     };
@@ -137,8 +142,9 @@ export class PublicApiController {
     if ((k.scope === 'CLIENT_READ' || k.scope === 'CLIENT_WRITE') && k.companyId !== id) {
       throw new ForbiddenException('Hors scope');
     }
-    return this.prisma.company.findUnique({
-      where: { id },
+    // GLOBAL_*: doit appartenir au meme tenant que la cle.
+    return this.prisma.company.findFirst({
+      where: { id, ...(k.tenantId ? { tenantId: k.tenantId } : {}) },
       select: {
         id: true, name: true, siret: true, sector: true, status: true,
         address: true, postalCode: true, city: true,
@@ -147,13 +153,17 @@ export class PublicApiController {
   }
 
   // Helper : retourne le filtre WHERE Prisma pour scoper aux entites du client
-  private scopedWhere(k: { scope: string; companyId: string | null }) {
+  // ET du tenant de la cle. Critique : sans le filtre tenantId, une cle
+  // GLOBAL d'un tenant pourrait lister les contracts/tickets/invoices/assets
+  // de TOUS les autres tenants.
+  private scopedWhere(k: { scope: string; companyId: string | null; tenantId: string | null }) {
+    const tenantFilter = k.tenantId ? { tenantId: k.tenantId } : {};
     if (k.scope === 'CLIENT_READ' || k.scope === 'CLIENT_WRITE') {
       if (!k.companyId) {
         throw new ForbiddenException('Cle CLIENT sans companyId — incoherent');
       }
-      return { companyId: k.companyId };
+      return { ...tenantFilter, companyId: k.companyId };
     }
-    return {};
+    return tenantFilter;
   }
 }

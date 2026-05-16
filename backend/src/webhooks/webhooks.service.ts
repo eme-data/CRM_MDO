@@ -1,9 +1,11 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { createHash, createHmac, randomBytes } from 'crypto';
+import { createHmac, randomBytes } from 'crypto';
 import { Prisma, WebhookEvent } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 import { assertSafePublicUrl } from '../common/http/safe-fetch';
 
 export const WEBHOOKS_QUEUE = 'webhooks';
@@ -14,18 +16,19 @@ export class WebhooksService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
     @InjectQueue(WEBHOOKS_QUEUE) private readonly queue: Queue,
   ) {}
 
   // ============================================================
-  // CRUD endpoints
+  // CRUD endpoints (par tenant)
   // ============================================================
-  list(params: { companyId?: string; isActive?: boolean } = {}) {
+  list(me: JwtUser, params: { companyId?: string; isActive?: boolean } = {}) {
     return this.prisma.webhookEndpoint.findMany({
-      where: {
+      where: this.scope.scopedWhere(me, {
         ...(params.companyId !== undefined ? { companyId: params.companyId } : {}),
         ...(params.isActive !== undefined ? { isActive: params.isActive } : {}),
-      },
+      }),
       include: {
         company: { select: { id: true, name: true } },
         createdBy: { select: { firstName: true, lastName: true } },
@@ -35,9 +38,9 @@ export class WebhooksService {
     });
   }
 
-  async findOne(id: string) {
-    const e = await this.prisma.webhookEndpoint.findUnique({
-      where: { id },
+  async findOne(id: string, me: JwtUser) {
+    const e = await this.prisma.webhookEndpoint.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: {
         company: { select: { id: true, name: true } },
         deliveries: { orderBy: { createdAt: 'desc' }, take: 30 },
@@ -52,13 +55,14 @@ export class WebhooksService {
     description?: string;
     events: WebhookEvent[];
     companyId?: string;
-  }, userId: string) {
+  }, me: JwtUser) {
     if (!input.url.startsWith('https://')) {
       throw new BadRequestException('URL doit etre HTTPS');
     }
     if (!input.events || input.events.length === 0) {
       throw new BadRequestException('Au moins un event a souscrire');
     }
+    if (input.companyId) await this.scope.assertCompanyInTenant(input.companyId, me);
     // Anti-SSRF : refuse les URLs vers IP privee (ex. 169.254.169.254 metadata
     // cloud, 127.0.0.1, services LAN). Recheck a chaque delivery contre le
     // DNS rebinding (cf processDelivery).
@@ -66,12 +70,13 @@ export class WebhooksService {
     const secret = 'whsec_' + randomBytes(24).toString('base64url');
     return this.prisma.webhookEndpoint.create({
       data: {
+        tenantId: me.tenantId,
         url: input.url,
         description: input.description,
         events: input.events,
         companyId: input.companyId,
         secret,
-        createdById: userId,
+        createdById: me.id,
       },
     });
   }
@@ -81,8 +86,8 @@ export class WebhooksService {
     description: string | null;
     events: WebhookEvent[];
     isActive: boolean;
-  }>) {
-    await this.findOne(id);
+  }>, me: JwtUser) {
+    await this.findOne(id, me);
     const data: Prisma.WebhookEndpointUpdateInput = {};
     if (input.url !== undefined) {
       if (!input.url.startsWith('https://')) throw new BadRequestException('URL doit etre HTTPS');
@@ -95,14 +100,14 @@ export class WebhooksService {
     return this.prisma.webhookEndpoint.update({ where: { id }, data });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, me: JwtUser) {
+    await this.findOne(id, me);
     await this.prisma.webhookEndpoint.delete({ where: { id } });
     return { ok: true };
   }
 
-  async regenerateSecret(id: string) {
-    await this.findOne(id);
+  async regenerateSecret(id: string, me: JwtUser) {
+    await this.findOne(id, me);
     const secret = 'whsec_' + randomBytes(24).toString('base64url');
     await this.prisma.webhookEndpoint.update({ where: { id }, data: { secret } });
     // On expose le nouveau secret au caller — UI doit l'afficher une fois
@@ -113,14 +118,18 @@ export class WebhooksService {
   // EMIT — appele par les services metier (TicketService.create, etc.)
   // Trouve les endpoints qui souscrivent a l'event + queue les deliveries.
   // companyId : si l'event concerne un client specifique, ne fanout que vers
-  // les endpoints scoped a ce client + les endpoints globaux.
+  // les endpoints scoped a ce client + les endpoints globaux DU MEME TENANT.
+  // tenantId : OBLIGATOIRE pour le scope (sans, l'event d'un tenant fanout
+  // vers les endpoints de TOUS les tenants — exfiltration). Le caller le
+  // determine via l'entite (ticket.tenantId, contract.tenantId, etc.).
   // ============================================================
-  async emit(event: WebhookEvent, payload: Record<string, any>, companyId?: string) {
+  async emit(event: WebhookEvent, payload: Record<string, any>, opts: { companyId?: string | null; tenantId?: string | null } = {}) {
     const where: Prisma.WebhookEndpointWhereInput = {
       isActive: true,
       events: { has: event },
-      ...(companyId
-        ? { OR: [{ companyId }, { companyId: null }] }
+      ...(opts.tenantId ? { tenantId: opts.tenantId } : {}),
+      ...(opts.companyId
+        ? { OR: [{ companyId: opts.companyId }, { companyId: null }] }
         : { companyId: null }),
     };
     const endpoints = await this.prisma.webhookEndpoint.findMany({ where });
@@ -151,7 +160,6 @@ export class WebhooksService {
   async processDelivery(deliveryId: string, url: string, payload: any, secret: string): Promise<{ ok: boolean; httpStatus: number; body: string }> {
     const body = JSON.stringify(payload);
     const signature = createHmac('sha256', secret).update(body).digest('hex');
-    const start = Date.now();
     let httpStatus = 0;
     let responseBody = '';
     let error: string | null = null;
