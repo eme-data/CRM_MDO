@@ -7,6 +7,8 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { SsoService } from './sso/sso.service';
 import { SsoController } from './sso/sso.controller';
+import { WebAuthnService } from './webauthn/webauthn.service';
+import { WebAuthnController } from './webauthn/webauthn.controller';
 import { TenantsModule } from '../tenants/tenants.module';
 
 @Module({
@@ -22,8 +24,8 @@ import { TenantsModule } from '../tenants/tenants.module';
       }),
     }),
   ],
-  providers: [AuthService, JwtStrategy, SsoService],
-  controllers: [AuthController, SsoController],
-  exports: [AuthService, SsoService],
+  providers: [AuthService, JwtStrategy, SsoService, WebAuthnService],
+  controllers: [AuthController, SsoController, WebAuthnController],
+  exports: [AuthService, SsoService, WebAuthnService],
 })
 export class AuthModule {}

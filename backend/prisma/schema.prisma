@@ -183,6 +183,7 @@ model User {
   authoredDocPages   DocPage[]      @relation("DocPageAuthor")
   createdSecrets     SecretEntry[]  @relation("SecretEntryCreator")
   mfa                UserMfa?
+  webauthnCredentials WebAuthnCredential[]
   notes              Note[]
   activities         Activity[]
   refreshTokens      RefreshToken[]
@@ -1736,6 +1737,48 @@ model UserMfa {
   recoveryCodes String  // JSON liste de codes hashes
   enabledAt    DateTime?
   createdAt    DateTime @default(now())
+}
+
+// Credentials WebAuthn / Passkeys d'un utilisateur. Un user peut avoir
+// plusieurs credentials (ex: cle YubiKey + Touch ID Mac + Windows Hello).
+// Plus moderne et plus sur que TOTP : phishing-resistant car la cle est
+// liee a l'origine (domain) et signe le challenge serveur.
+//
+// Au login : si user a au moins un credential, on demande une assertion
+// WebAuthn EN PLUS du password (ou EN REMPLACEMENT du TOTP).
+// L'enrollement initial se fait depuis /settings/security.
+model WebAuthnCredential {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // credentialID renvoye par l'authenticator (base64url). Unique global
+  // car les credential IDs sont generes cote authenticator et sont
+  // statistiquement uniques (collisions improbables sur 16-32 bytes).
+  credentialId    String   @unique
+  // Cle publique COSE (Buffer encode base64url). Utilisee pour verifier
+  // les signatures lors de l'authentification.
+  publicKey       String
+  // Counter anti-rejeu : l'authenticator incremente a chaque usage. Si
+  // on recoit une assertion avec counter <= last counter, c'est un rejeu
+  // (cle clonee, vol de credential).
+  counter         BigInt   @default(0)
+  // Transports supportes par l'authenticator : usb, nfc, ble, internal,
+  // hybrid (cross-device QR). Permet au navigateur de filtrer les UI.
+  transports      String[]
+  // AAGUID = identifiant du modele d'authenticator (ex: YubiKey 5C, Touch ID).
+  // Optionnel ; null si attestation = "none".
+  aaguid          String?
+  // Nom libre pour l'utilisateur : "YubiKey perso", "Macbook Touch ID", etc.
+  name            String?
+  // Tracabilite usage
+  lastUsedAt      DateTime?
+  // Backup credential : indique si la cle est synchronisee (passkey iCloud,
+  // Google Password Manager). Aide a comprendre la posture securite.
+  isBackupEligible Boolean @default(false)
+  isBackedUp      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
 }
 
 // =================== PORTAIL CLIENT (sous-domaine client.mdoservices.fr) ===================
