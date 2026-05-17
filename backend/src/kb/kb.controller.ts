@@ -15,6 +15,8 @@ import { KbService } from './kb.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
+import { CreateKbArticleDto } from './dto/create-kb-article.dto';
+import { UpdateKbArticleDto } from './dto/update-kb-article.dto';
 
 @ApiTags('Knowledge Base')
 @ApiBearerAuth()
@@ -52,12 +54,12 @@ export class KbController {
   }
 
   @Post()
-  create(@Body() body: any, @CurrentUser() user: JwtUser) {
+  create(@Body() body: CreateKbArticleDto, @CurrentUser() user: JwtUser) {
     return this.service.create(body, user);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: any, @CurrentUser() user: JwtUser) {
+  update(@Param('id') id: string, @Body() body: UpdateKbArticleDto, @CurrentUser() user: JwtUser) {
     return this.service.update(id, body, user);
   }
 
