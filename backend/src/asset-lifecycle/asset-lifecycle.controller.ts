@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AssetLifecycleService, LifecycleStatus } from './asset-lifecycle.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Asset Lifecycle')
 @ApiBearerAuth()
@@ -13,14 +14,15 @@ export class AssetLifecycleController {
 
   @Get()
   list(
+    @CurrentUser() user: JwtUser,
     @Query('companyId') companyId?: string,
     @Query('status') status?: LifecycleStatus,
   ) {
-    return this.service.overview({ companyId, status });
+    return this.service.overview(user, { companyId, status });
   }
 
   @Get('stats')
-  stats() {
-    return this.service.stats();
+  stats(@CurrentUser() user: JwtUser) {
+    return this.service.stats(user);
   }
 }

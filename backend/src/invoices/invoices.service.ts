@@ -119,7 +119,7 @@ export class InvoicesService {
    * On consid?re comme "impayee" toute facture sans paidAt avec un status
    * dans (ISSUED, OVERDUE). DRAFT et CANCELLED sont exclues.
    */
-  async aging(): Promise<{
+  async aging(tenantId: string | null): Promise<{
     asOf: string;
     totals: { count: number; totalHt: number; totalTtc: number };
     buckets: Array<{
@@ -144,8 +144,11 @@ export class InvoicesService {
     }>;
   }> {
     const now = new Date();
+    // Scope tenant : sans, aging() exposait les factures impayees de tous
+    // les tenants — fuite massive de donnees business (CA, retards, clients).
     const unpaid = await this.prisma.invoice.findMany({
       where: {
+        tenantId,
         paidAt: null,
         status: { in: [InvoiceStatus.ISSUED, InvoiceStatus.OVERDUE] },
       },
@@ -202,14 +205,22 @@ export class InvoicesService {
     return { asOf: now.toISOString(), totals, buckets: out };
   }
 
-  async setStatus(id: string, status: InvoiceStatus) {
+  async setStatus(id: string, status: InvoiceStatus, tenantId: string | null) {
+    // Scope tenant : avant, setStatus(id) updatait ANY invoice. Maintenant
+    // on filtre par (id, tenantId) — un mismatch leve NotFound (sans reveler
+    // l'existence de l'invoice dans un autre tenant).
+    const existing = await this.prisma.invoice.findFirst({
+      where: { id, tenantId },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('Facture introuvable');
     const data: Prisma.InvoiceUpdateInput = { status };
     if (status === 'PAID') data.paidAt = new Date();
     return this.prisma.invoice.update({ where: { id }, data });
   }
 
-  async remove(id: string) {
-    const inv = await this.prisma.invoice.findUnique({ where: { id } });
+  async remove(id: string, tenantId: string | null) {
+    const inv = await this.prisma.invoice.findFirst({ where: { id, tenantId } });
     if (!inv) throw new NotFoundException();
     if (inv.status !== 'DRAFT') {
       throw new Error('Seules les factures DRAFT peuvent etre supprimees');

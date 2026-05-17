@@ -36,8 +36,8 @@ export class InvoicesController {
   // Aging report : factures impayees groupees par anciennete de la dueDate.
   // Placee avant /:id pour ne pas etre interceptee par la route /:id.
   @Get('aging')
-  aging() {
-    return this.service.aging();
+  aging(@CurrentUser() user: JwtUser) {
+    return this.service.aging(user.tenantId);
   }
 
   @Get(':id')
@@ -84,8 +84,12 @@ export class InvoicesController {
 
   @Roles('ADMIN', 'MANAGER')
   @Patch(':id/status')
-  setStatus(@Param('id') id: string, @Body() body: { status: InvoiceStatus }) {
-    return this.service.setStatus(id, body.status);
+  setStatus(
+    @Param('id') id: string,
+    @Body() body: { status: InvoiceStatus },
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.service.setStatus(id, body.status, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER')
@@ -96,5 +100,7 @@ export class InvoicesController {
 
   @Roles('ADMIN', 'MANAGER')
   @Delete(':id')
-  remove(@Param('id') id: string) { return this.service.remove(id); }
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.remove(id, user.tenantId);
+  }
 }

@@ -57,8 +57,12 @@ export class AttachmentsController {
   }
 
   @Get(':id')
-  async download(@Param('id') id: string, @Res({ passthrough: true }) res: Response) {
-    const att = await this.service.findById(id);
+  async download(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtUser,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const att = await this.service.findById(id, user.tenantId);
     const stream = this.service.getReadStream(att.storageKey);
     res.set({
       'Content-Type': att.mimeType || 'application/octet-stream',
@@ -71,7 +75,7 @@ export class AttachmentsController {
 
   @Delete(':id')
   async remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    const att = await this.service.findById(id);
+    const att = await this.service.findById(id, user.tenantId);
     const isOwner = att.uploadedById === user.id;
     const isPriv = user.role === 'ADMIN' || user.role === 'MANAGER';
     if (!isOwner && !isPriv) {

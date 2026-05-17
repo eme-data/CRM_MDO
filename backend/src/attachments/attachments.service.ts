@@ -86,8 +86,14 @@ export class AttachmentsService implements OnModuleInit {
     });
   }
 
-  async findById(id: string) {
-    const att = await this.prisma.attachment.findUnique({ where: { id } });
+  // Scope tenant : un user pouvait telecharger NIMPORTE quelle attachment
+  // d'un autre tenant en devinant l'UUID (pieces jointes tickets = pdf, scans
+  // d'incident, exports BDD parfois). On filtre par tenantId.
+  // Pour les flows internes (cron, listeners, portal), passer tenantId=null
+  // explicitement pour bypass (ils ont leur propre authz).
+  async findById(id: string, tenantId: string | null | undefined = null) {
+    const where = tenantId !== null ? { id, tenantId } : { id };
+    const att = await this.prisma.attachment.findFirst({ where });
     if (!att) throw new NotFoundException('Piece jointe introuvable');
     return att;
   }
