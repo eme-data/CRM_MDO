@@ -51,7 +51,7 @@ export class BrandingService {
       supportEmail: this.pick(tenant?.brandSupportEmail, 'BRAND_SUPPORT_EMAIL', 'support@mdoservices.fr'),
       dpoEmail: this.pick(tenant?.brandDpoEmail, 'BRAND_DPO_EMAIL', 'dpo@mdoservices.fr'),
       websiteUrl: this.pick(tenant?.brandWebsiteUrl, 'BRAND_WEBSITE_URL', 'https://www.mdoservices.fr'),
-      logoUrl: this.pick(tenant?.brandLogoUrl, 'BRAND_LOGO_URL', '/logo.png'),
+      logoUrl: this.pick(tenant?.brandLogoUrl, 'BRAND_LOGO_URL', '/logo.svg'),
       primaryColor: this.pick(tenant?.brandPrimaryColor, 'BRAND_PRIMARY_COLOR', '#1d4ed8'),
       footerText: this.pick(tenant?.brandFooterText, 'BRAND_FOOTER_TEXT',
         'MDO Services - Prestataire IT et Cybersecurite - Occitanie'),

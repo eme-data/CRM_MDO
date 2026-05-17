@@ -1,8 +1,9 @@
 'use client';
 import { Suspense, useEffect, useState } from 'react';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { ShieldCheck, KeyRound, Mail, ArrowLeft, LogIn } from 'lucide-react';
+import { ShieldCheck, KeyRound, Mail, ArrowLeft, LogIn, Loader2 } from 'lucide-react';
 import { login } from '@/lib/auth';
 import { useBranding } from '@/components/BrandingProvider';
 import { getSsoStatus, ssoStartUrl, SsoStatus } from '@/lib/sso';
@@ -36,13 +37,10 @@ function LoginPageInner() {
   const [loading, setLoading] = useState(false);
   const [sso, setSso] = useState<SsoStatus>({ enabled: false, tenantSlug: null });
 
-  // Charge le statut SSO du tenant courant (resolu par backend via Host).
-  // Si SSO est actif, on affiche le bouton "Sign in with SSO".
   useEffect(() => {
     getSsoStatus().then(setSso).catch(() => {});
   }, []);
 
-  // Si redirige ici apres echec SSO via /login?sso_error=...
   useEffect(() => {
     const ssoError = searchParams?.get('sso_error');
     if (ssoError) {
@@ -57,10 +55,6 @@ function LoginPageInner() {
       const code = needTotp ? totpCode.trim().replace(/\s/g, '') : undefined;
       const data = await login(email, password, code);
       toast.success('Connexion reussie');
-      // Si le compte exige la 2FA (role dans auth.mfaRequiredRoles) mais qu'elle
-      // n'est pas encore activee, on redirige vers /settings ou l'utilisateur
-      // pourra finaliser l'activation. Sinon tous les autres endpoints du CRM
-      // renverraient 403 MFA_REQUIRED sans message clair.
       if (data?.mfaPending) {
         toast.info('Activation de la 2FA requise pour acceder au CRM');
         router.replace('/settings?mfaSetup=1');
@@ -85,112 +79,173 @@ function LoginPageInner() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 p-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-md card p-8 space-y-5 shadow-lg">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-mdo-600 tracking-tight">CRM {branding.shortName}</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            {needTotp ? 'Verification a deux facteurs' : 'Connexion a votre espace'}
-          </p>
-        </div>
+    <div className="relative min-h-screen overflow-hidden bg-slate-950">
+      {/* Halos colores en fond — visuel premium sans surcharge */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-mdo-600/30 blur-[120px]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-40 -right-40 h-[480px] w-[480px] rounded-full bg-indigo-600/20 blur-[120px]"
+      />
 
-        {/* Bouton SSO : visible si le tenant a active sso.enabled. On le
-            propose AVANT le formulaire email/password pour pousser les users
-            vers leur IdP (Entra ID / Keycloak) qui gere deja la 2FA cote
-            entreprise. */}
-        {!needTotp && sso.enabled && sso.tenantSlug && (
-          <div className="space-y-3">
-            <a
-              href={ssoStartUrl(sso.tenantSlug, '/dashboard')}
-              className="btn w-full inline-flex items-center justify-center gap-2 bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
-            >
-              <LogIn size={16} />
-              Se connecter avec votre compte entreprise (SSO)
-            </a>
-            <div className="flex items-center gap-3 text-xs text-slate-400">
-              <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-              <span>ou</span>
-              <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-            </div>
-          </div>
-        )}
-
-        {!needTotp && (
-          <>
-            <div>
-              <label className="label">Email</label>
-              <div className="relative">
-                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="email"
-                  required
-                  className="input pl-9"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoFocus
-                  autoComplete="email"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="label">Mot de passe</label>
-              <div className="relative">
-                <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="password"
-                  required
-                  className="input pl-9"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                />
-              </div>
-            </div>
-          </>
-        )}
-
-        {needTotp && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 rounded-md bg-mdo-50 dark:bg-mdo-900/30 border border-mdo-200 dark:border-mdo-800 p-3 text-sm">
-              <ShieldCheck size={18} className="text-mdo-600 shrink-0" />
-              <div>
-                <p className="font-medium">Compte protege par 2FA</p>
-                <p className="text-xs text-slate-600 dark:text-slate-300">
-                  Ouvrez votre application authentificateur ({email})
-                </p>
-              </div>
-            </div>
-            <div>
-              <label className="label">Code a 6 chiffres ou code de recuperation</label>
-              <input
-                type="text"
-                required
-                autoFocus
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                className="input font-mono text-center text-lg tracking-[0.5em] py-3"
-                value={totpCode}
-                onChange={(e) => setTotpCode(e.target.value)}
-                placeholder="000000"
+      <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          {/* Header logo + nom complet */}
+          <div className="mb-8 flex flex-col items-center text-center">
+            {branding.logoUrl && (
+              <Image
+                src={branding.logoUrl}
+                alt={branding.name}
+                width={64}
+                height={64}
+                priority
+                className="mb-4 drop-shadow-[0_0_20px_rgba(59,130,246,0.4)]"
               />
-            </div>
+            )}
+            <h1 className="text-3xl font-bold tracking-tight text-white">
+              {branding.name}
+            </h1>
+            {branding.tagline && (
+              <p className="mt-1 text-sm text-slate-400">{branding.tagline}</p>
+            )}
           </div>
-        )}
 
-        <button type="submit" disabled={loading} className="btn btn-primary w-full">
-          {loading ? 'Connexion...' : (needTotp ? 'Verifier le code' : 'Se connecter')}
-        </button>
-
-        {needTotp && (
-          <button
-            type="button"
-            onClick={() => { setNeedTotp(false); setTotpCode(''); }}
-            className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 w-full inline-flex items-center justify-center gap-1"
+          {/* Card glassmorphism */}
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-5 rounded-2xl border border-slate-800/80 bg-slate-900/60 p-8 shadow-2xl backdrop-blur-xl"
           >
-            <ArrowLeft size={12} /> Retour
-          </button>
-        )}
-      </form>
+            <div className="text-center">
+              <p className="text-sm font-medium text-slate-300">
+                {needTotp ? 'Verification a deux facteurs' : 'Connexion a votre espace'}
+              </p>
+            </div>
+
+            {!needTotp && sso.enabled && sso.tenantSlug && (
+              <div className="space-y-3">
+                <a
+                  href={ssoStartUrl(sso.tenantSlug, '/dashboard')}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800/80 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-700"
+                >
+                  <LogIn size={16} />
+                  Se connecter avec votre compte entreprise (SSO)
+                </a>
+                <div className="flex items-center gap-3 text-xs text-slate-500">
+                  <div className="h-px flex-1 bg-slate-800" />
+                  <span>ou</span>
+                  <div className="h-px flex-1 bg-slate-800" />
+                </div>
+              </div>
+            )}
+
+            {!needTotp && (
+              <>
+                <div>
+                  <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-300">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      id="email"
+                      type="email"
+                      required
+                      className="w-full rounded-lg border border-slate-700 bg-slate-800/60 py-2.5 pl-10 pr-3 text-white placeholder-slate-500 transition focus:border-mdo-500 focus:outline-none focus:ring-2 focus:ring-mdo-500/30"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      autoFocus
+                      autoComplete="email"
+                      placeholder="vous@exemple.fr"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-slate-300">
+                    Mot de passe
+                  </label>
+                  <div className="relative">
+                    <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      id="password"
+                      type="password"
+                      required
+                      className="w-full rounded-lg border border-slate-700 bg-slate-800/60 py-2.5 pl-10 pr-3 text-white placeholder-slate-500 transition focus:border-mdo-500 focus:outline-none focus:ring-2 focus:ring-mdo-500/30"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="current-password"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {needTotp && (
+              <div className="space-y-3">
+                <div className="flex items-start gap-2 rounded-lg border border-mdo-800/60 bg-mdo-950/40 p-3 text-sm">
+                  <ShieldCheck size={18} className="mt-0.5 shrink-0 text-mdo-400" />
+                  <div>
+                    <p className="font-medium text-white">Compte protege par 2FA</p>
+                    <p className="text-xs text-slate-400">
+                      Ouvrez votre application authentificateur ({email})
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="totp" className="mb-1.5 block text-sm font-medium text-slate-300">
+                    Code a 6 chiffres ou code de recuperation
+                  </label>
+                  <input
+                    id="totp"
+                    type="text"
+                    required
+                    autoFocus
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-3 text-center font-mono text-lg tracking-[0.5em] text-white placeholder-slate-600 focus:border-mdo-500 focus:outline-none focus:ring-2 focus:ring-mdo-500/30"
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value)}
+                    placeholder="000000"
+                  />
+                </div>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-mdo-600 to-mdo-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-mdo-900/40 transition hover:from-mdo-500 hover:to-mdo-400 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Connexion...
+                </>
+              ) : (
+                <>{needTotp ? 'Verifier le code' : 'Se connecter'}</>
+              )}
+            </button>
+
+            {needTotp && (
+              <button
+                type="button"
+                onClick={() => { setNeedTotp(false); setTotpCode(''); }}
+                className="inline-flex w-full items-center justify-center gap-1 text-xs text-slate-400 transition hover:text-slate-200"
+              >
+                <ArrowLeft size={12} /> Retour
+              </button>
+            )}
+          </form>
+
+          {branding.footerText && (
+            <p className="mt-6 text-center text-xs text-slate-500">
+              {branding.footerText}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

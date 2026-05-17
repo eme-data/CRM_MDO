@@ -30,7 +30,7 @@ export const DEFAULT_BRANDING: Branding = {
   supportEmail: 'support@mdoservices.fr',
   dpoEmail: 'dpo@mdoservices.fr',
   websiteUrl: 'https://www.mdoservices.fr',
-  logoUrl: '/logo.png',
+  logoUrl: '/logo.svg',
   primaryColor: '#1d4ed8',
   footerText: 'MDO Services - Prestataire IT et Cybersecurite - Occitanie',
   instanceType: 'MDO',

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240" fill="none">
+  <title>MDO Services</title>
+  <defs>
+    <linearGradient id="shieldGradient" x1="0" y1="0" x2="0" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3b82f6" />
+      <stop offset="1" stop-color="#1d4ed8" />
+    </linearGradient>
+    <linearGradient id="fpGradient" x1="0" y1="0" x2="0" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#60a5fa" />
+      <stop offset="1" stop-color="#2563eb" />
+    </linearGradient>
+  </defs>
+  <path d="M100 8 L188 36 L188 120 C188 172 152 212 100 232 C48 212 12 172 12 120 L12 36 Z"
+        fill="url(#shieldGradient)" stroke="#1e3a8a" stroke-width="2" />
+  <g stroke="#ffffff" stroke-width="6" stroke-linecap="round" fill="none">
+    <path d="M60 92 C60 64 80 48 100 48 C120 48 140 64 140 92" />
+    <path d="M72 108 C72 82 86 68 100 68 C114 68 128 82 128 108 L128 138" />
+    <path d="M84 124 C84 104 92 92 100 92 C108 92 116 104 116 124 L116 156" />
+    <path d="M96 136 L96 168" />
+    <path d="M104 136 L104 168" />
+    <path d="M64 144 C66 158 70 170 76 180" />
+    <path d="M136 144 C134 158 130 170 124 180" />
+  </g>
+</svg>
