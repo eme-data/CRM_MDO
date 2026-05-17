@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Permet de declencher manuellement la CI depuis l'onglet Actions, utile
+  # pour relancer un build apres un fix infra sans avoir a push un commit.
+  workflow_dispatch:
 
 permissions:
   contents: read
