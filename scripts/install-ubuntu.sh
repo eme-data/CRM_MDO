@@ -682,20 +682,76 @@ ok "Cron backup configure (3h00 local, 4h00 offsite si /etc/crm-mdo/backup.env p
 mkdir -p /etc/crm-mdo
 if [[ ! -f /etc/crm-mdo/backup.env.example ]]; then
   cat > /etc/crm-mdo/backup.env.example <<'OFFSITE_EOF'
-# Configuration backup off-site restic.
-# Copier en /etc/crm-mdo/backup.env (chmod 600) et renseigner les valeurs.
-# === Backblaze B2 ===
-# export RESTIC_REPOSITORY="b2:bucket-name:/crm-mdo"
-# export B2_ACCOUNT_ID="..."
-# export B2_ACCOUNT_KEY="..."
-# === S3 / Scaleway / OVH Cloud ===
-# export RESTIC_REPOSITORY="s3:s3.eu-west-3.amazonaws.com/bucket-name/crm-mdo"
+# =============================================================================
+# Configuration backup OFFSITE chiffre (restic) — CRM MDO Services
+# =============================================================================
+# IMPORTANT : sans backup offsite, un crash disque du VPS = perte totale.
+# Le backup local (03h00) protege uniquement contre les erreurs humaines /
+# corruption logique. Pour la resilience hardware, il FAUT un offsite.
+#
+# Procedure :
+#   1. Choisir un provider (recommande : Backblaze B2 pour cout/perf, ou
+#      Hetzner StorageBox si tu veux du souverain EU complet).
+#   2. Copier ce fichier en /etc/crm-mdo/backup.env :
+#        sudo cp /etc/crm-mdo/backup.env.example /etc/crm-mdo/backup.env
+#        sudo chmod 600 /etc/crm-mdo/backup.env
+#   3. Decommenter le bloc correspondant a ton provider + renseigner les
+#      credentials.
+#   4. Generer une passphrase de chiffrement forte (irrecuperable si perdue) :
+#        openssl rand -hex 32
+#      Sauvegarder cette passphrase HORS du serveur (1Password, Bitwarden,
+#      coffre physique). Sans elle, AUCUN backup ne pourra etre restore.
+#   5. Initialiser le repo restic :
+#        source /etc/crm-mdo/backup.env && restic init
+#   6. Tester un backup manuel :
+#        sudo bash /opt/crm-mdo/scripts/backup-offsite.sh
+#   7. Verifier que le cron 04h00 s'execute (cf /var/log/crm-mdo-backup-offsite.log)
+#   8. **CRITIQUE** : tester une restauration tous les mois sur un env de test.
+#      Un backup non-teste = pas un backup.
+#
+# =============================================================================
+
+# === Option 1 : Backblaze B2 (recommande — ~0.005$/GB/mois, US/EU regions) ===
+# https://www.backblaze.com/cloud-storage
+# 1) Creer un bucket dedie (private), region EU pour RGPD
+# 2) Application Key avec accees limite au bucket (pas la master key !)
+# export RESTIC_REPOSITORY="b2:crm-mdo-backup-prod:/"
+# export B2_ACCOUNT_ID="00xxxxxxxxxxxxxxxxxx"
+# export B2_ACCOUNT_KEY="K00xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# === Option 2 : Hetzner StorageBox SFTP (souverain EU, ~3.5€/TB/mois) ===
+# https://www.hetzner.com/storage/storage-box
+# 1) Creer une box BX11 (1 To) en region Falkenstein
+# 2) Ajouter ta cle SSH publique (la cle root du VPS, generee via ssh-keygen)
+# 3) Activer "External reachability" pour SFTP depuis Internet
+# export RESTIC_REPOSITORY="sftp:u123456@u123456.your-storagebox.de:/crm-mdo"
+
+# === Option 3 : Scaleway Object Storage (souverain FR, S3 compatible) ===
+# https://console.scaleway.com/object-storage
+# 1) Creer un bucket private, region fr-par (Paris) ou nl-ams (Amsterdam)
+# 2) Generer une cle API avec scope ObjectStorage:FullAccess sur ce bucket
+# export RESTIC_REPOSITORY="s3:s3.fr-par.scw.cloud/crm-mdo-backup"
+# export AWS_ACCESS_KEY_ID="SCWXXXXXXXXXXXXXXXXX"
+# export AWS_SECRET_ACCESS_KEY="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# === Option 4 : OVH Object Storage (souverain FR alternatif) ===
+# https://www.ovhcloud.com/fr/public-cloud/object-storage/
+# export RESTIC_REPOSITORY="s3:s3.gra.io.cloud.ovh.net/crm-mdo-backup"
 # export AWS_ACCESS_KEY_ID="..."
 # export AWS_SECRET_ACCESS_KEY="..."
-# === Hetzner StorageBox SFTP ===
-# export RESTIC_REPOSITORY="sftp:user@u-host.your-storagebox.de:/crm-mdo"
-# Mot de passe de chiffrement (genere : openssl rand -hex 32)
-# export RESTIC_PASSWORD="..."
+
+# === Passphrase de chiffrement (OBLIGATOIRE — quel que soit le provider) ===
+# Generer via : openssl rand -hex 32
+# SAUVEGARDER HORS DU SERVEUR (1Password, Bitwarden, coffre physique).
+# Sans elle, AUCUN backup ne sera restore-able.
+# export RESTIC_PASSWORD="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# === Politique de retention (optionnel, defaut dans backup-offsite.sh) ===
+# Recommande : 7 quotidiens + 4 hebdomadaires + 12 mensuels + 5 annuels
+# export RESTIC_KEEP_DAILY=7
+# export RESTIC_KEEP_WEEKLY=4
+# export RESTIC_KEEP_MONTHLY=12
+# export RESTIC_KEEP_YEARLY=5
 OFFSITE_EOF
   chmod 644 /etc/crm-mdo/backup.env.example
 fi
