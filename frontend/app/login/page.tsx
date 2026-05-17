@@ -1,11 +1,15 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { ShieldCheck, KeyRound, Mail, ArrowLeft, LogIn } from 'lucide-react';
 import { login } from '@/lib/auth';
 import { useBranding } from '@/components/BrandingProvider';
 import { getSsoStatus, ssoStartUrl, SsoStatus } from '@/lib/sso';
+
+// useSearchParams() requiert un parent <Suspense> sous Next.js 14, sinon le
+// prerender statique echoue (cf. /portal/verify pour le meme pattern).
+export const dynamic = 'force-dynamic';
 
 function extractMessages(err: any): string[] {
   // NestJS peut retourner message comme string OU array (validation).
@@ -21,7 +25,7 @@ function extractMessages(err: any): string[] {
   return out;
 }
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const branding = useBranding();
@@ -188,5 +192,13 @@ export default function LoginPage() {
         )}
       </form>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
   );
 }
