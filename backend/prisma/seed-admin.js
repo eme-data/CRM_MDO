@@ -62,7 +62,9 @@ async function main() {
     process.exit(1);
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } });
+  // User.email n'est plus unique seul depuis la migration multi-tenant
+  // (@@unique([tenantId, email])). On cherche l'admin plateforme (tenantId: null).
+  const existing = await prisma.user.findFirst({ where: { email, tenantId: null } });
   if (existing) {
     console.log('Un compte existe deja avec cet email (' + email + ') : role=' + existing.role);
     await prisma.$disconnect();
