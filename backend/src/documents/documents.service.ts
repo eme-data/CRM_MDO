@@ -15,6 +15,8 @@ import { addDays, differenceInDays } from 'date-fns';
 import { PrismaService } from '../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { UpdateDocumentDto } from './dto/update-document.dto';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 interface IncomingFile {
   originalname: string;
@@ -58,6 +60,7 @@ export class DocumentsService implements OnModuleInit {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly scope: TenantScope,
   ) {}
 
   async onModuleInit() {
@@ -86,7 +89,7 @@ export class DocumentsService implements OnModuleInit {
     description?: string;
     expiresAt?: string;
     visibleToClient?: boolean;
-  }) {
+  }, me: JwtUser) {
     if (params.file.size > this.maxBytes) {
       throw new BadRequestException(
         'Fichier trop volumineux (max ' + Math.round(this.maxBytes / 1024 / 1024) + ' Mo)',
@@ -95,10 +98,13 @@ export class DocumentsService implements OnModuleInit {
     if (!ALLOWED_MIME.has(params.file.mimetype)) {
       throw new BadRequestException('Type de fichier refuse : ' + params.file.mimetype);
     }
-    // Verifie que la societe existe (et n'est pas soft-deleted).
+    // Verifie que la societe existe ET appartient au tenant courant (sinon
+    // un user du tenant A pouvait uploader un document dans une company du
+    // tenant B en devinant l'UUID).
+    await this.scope.assertCompanyInTenant(params.companyId, me);
     const company = await this.prisma.company.findUnique({
       where: { id: params.companyId },
-      select: { id: true },
+      select: { id: true, tenantId: true },
     });
     if (!company) throw new NotFoundException('Societe introuvable');
 
@@ -111,6 +117,9 @@ export class DocumentsService implements OnModuleInit {
     return this.prisma.companyDocument.create({
       data: {
         id,
+        // Heriter du tenantId de la company (sinon CompanyDocument.tenantId
+        // serait null et tout le filtrage scope tombe a l'eau).
+        tenantId: company.tenantId,
         companyId: params.companyId,
         filename: safeName,
         storageKey,
@@ -129,7 +138,18 @@ export class DocumentsService implements OnModuleInit {
   // ============================================================
   // Lecture
   // ============================================================
-  async listForCompany(companyId: string, opts: { visibleToClientOnly?: boolean } = {}) {
+  // Scope tenant : on filtre par companyId ET par tenantId pour empecher
+  // l'enumeration cross-tenant. Le scope.assertCompanyInTenant gere aussi
+  // le cas ou companyId n'existe pas / pas dans le tenant -> 403.
+  // Le portail client passe `me=null` car les portalUsers ont leur propre
+  // mechanism d'authorization (visibleToClientOnly + verif company ownership
+  // dans le caller).
+  async listForCompany(
+    companyId: string,
+    opts: { visibleToClientOnly?: boolean } = {},
+    me: JwtUser | null = null,
+  ) {
+    if (me) await this.scope.assertCompanyInTenant(companyId, me);
     const where: Prisma.CompanyDocumentWhereInput = { companyId };
     if (opts.visibleToClientOnly) where.visibleToClient = true;
     return this.prisma.companyDocument.findMany({
@@ -141,11 +161,11 @@ export class DocumentsService implements OnModuleInit {
     });
   }
 
-  async findById(id: string) {
-    const d = await this.prisma.companyDocument.findUnique({
-      where: { id },
+  async findById(id: string, me: JwtUser | null = null) {
+    const d = await this.prisma.companyDocument.findFirst({
+      where: me ? this.scope.scopedWhere(me, { id }) : { id },
       include: {
-        company: { select: { id: true, name: true } },
+        company: { select: { id: true, name: true, tenantId: true } },
         uploadedBy: { select: { id: true, firstName: true, lastName: true } },
       },
     });
@@ -168,8 +188,8 @@ export class DocumentsService implements OnModuleInit {
   // ============================================================
   // Update metadata + delete
   // ============================================================
-  async update(id: string, dto: UpdateDocumentDto) {
-    await this.findById(id);
+  async update(id: string, dto: UpdateDocumentDto, me: JwtUser) {
+    await this.findById(id, me); // assert tenant ownership
     const data: Prisma.CompanyDocumentUpdateInput = {};
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.description !== undefined) data.description = dto.description;
@@ -181,8 +201,8 @@ export class DocumentsService implements OnModuleInit {
     return this.prisma.companyDocument.update({ where: { id }, data });
   }
 
-  async remove(id: string) {
-    const d = await this.findById(id);
+  async remove(id: string, me: JwtUser) {
+    const d = await this.findById(id, me); // assert tenant ownership
     const fullPath = path.join(this.uploadsDir, d.storageKey);
     // Best-effort : si le fichier est deja absent ou inaccessible, on log et on
     // continue la suppression BDD (sinon on garde une row orpheline).

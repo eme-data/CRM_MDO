@@ -35,22 +35,26 @@ export class DocumentsController {
   // Liste les documents d'une societe (filtre obligatoire — on ne liste pas
   // tous les documents de tous les clients en un seul appel).
   @Get()
-  list(@Query('companyId') companyId: string) {
+  list(@Query('companyId') companyId: string, @CurrentUser() user: JwtUser) {
     if (!companyId) throw new BadRequestException('companyId requis');
-    return this.service.listForCompany(companyId);
+    return this.service.listForCompany(companyId, {}, user);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findById(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findById(id, user);
   }
 
   // Telecharge le fichier physique. Body content-disposition = attachment
   // pour forcer le telechargement (eviter qu'un PDF s'ouvre dans le navigateur
   // — le user telecharge pour signer ou archiver).
   @Get(':id/download')
-  async download(@Param('id') id: string, @Res({ passthrough: true }) res: Response) {
-    const d = await this.service.findById(id);
+  async download(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtUser,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const d = await this.service.findById(id, user);
     const stream = this.service.getReadStream(d.storageKey);
     res.set({
       'Content-Type': d.mimeType,
@@ -94,18 +98,18 @@ export class DocumentsController {
       // multipart/form-data envoie les booleens en string ('true'/'false')
       visibleToClient: body.visibleToClient === true || body.visibleToClient === 'true',
       uploadedById: user.id,
-    });
+    }, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateDocumentDto) {
-    return this.service.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateDocumentDto, @CurrentUser() user: JwtUser) {
+    return this.service.update(id, dto, user);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.remove(id, user);
   }
 }
