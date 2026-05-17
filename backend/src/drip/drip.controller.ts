@@ -16,6 +16,8 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
+import { CreateDripCampaignDto } from './dto/create-drip-campaign.dto';
+import { UpdateDripCampaignDto } from './dto/update-drip-campaign.dto';
 
 @ApiTags('Drip campaigns')
 @ApiBearerAuth()
@@ -37,13 +39,13 @@ export class DripController {
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post('campaigns')
-  create(@Body() body: any, @CurrentUser() user: JwtUser) {
+  create(@Body() body: CreateDripCampaignDto, @CurrentUser() user: JwtUser) {
     return this.service.create(body, user);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Patch('campaigns/:id')
-  update(@Param('id') id: string, @Body() body: any, @CurrentUser() user: JwtUser) {
+  update(@Param('id') id: string, @Body() body: UpdateDripCampaignDto, @CurrentUser() user: JwtUser) {
     return this.service.update(id, body, user);
   }
 

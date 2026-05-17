@@ -14,6 +14,7 @@ import { QuoteTemplatesService } from './quote-templates.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CreateQuoteTemplateDto, UpdateQuoteTemplateDto } from './dto/quote-template.dto';
 
 @ApiTags('Quote templates')
 @ApiBearerAuth()
@@ -41,13 +42,13 @@ export class QuoteTemplatesController {
 
   @Roles('ADMIN', 'MANAGER')
   @Post()
-  create(@Body() body: any) {
+  create(@Body() body: CreateQuoteTemplateDto) {
     return this.service.create(body);
   }
 
   @Roles('ADMIN', 'MANAGER')
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: any) {
+  update(@Param('id') id: string, @Body() body: UpdateQuoteTemplateDto) {
     return this.service.update(id, body);
   }
 
