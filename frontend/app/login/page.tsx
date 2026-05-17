@@ -1,6 +1,5 @@
 'use client';
 import { Suspense, useEffect, useState } from 'react';
-import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { ShieldCheck, KeyRound, Mail, ArrowLeft, LogIn, Loader2 } from 'lucide-react';
@@ -95,13 +94,16 @@ function LoginPageInner() {
           {/* Header logo + nom complet */}
           <div className="mb-8 flex flex-col items-center text-center">
             {branding.logoUrl && (
-              <Image
+              // <img> natif plutot que <Image> de Next.js : next/image refuse
+              // de servir des SVG sans dangerouslyAllowSVG=true. Pour un logo
+              // local trusted (pas d'user input), <img> est plus simple.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
                 src={branding.logoUrl}
                 alt={branding.name}
                 width={64}
                 height={64}
-                priority
-                className="mb-4 drop-shadow-[0_0_20px_rgba(59,130,246,0.4)]"
+                className="mb-4 h-16 w-16 drop-shadow-[0_0_20px_rgba(59,130,246,0.4)]"
               />
             )}
             <h1 className="text-3xl font-bold tracking-tight text-white">
