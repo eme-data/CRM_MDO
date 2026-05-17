@@ -360,10 +360,14 @@ export class QuotesService {
     const monthlyAmountHt = +(unitPriceHt * quantity).toFixed(2);
 
     // Reference contrat : on reutilise la convention existante MDO-YYYY-NNNN.
+    // Scope la sequence par tenant : sinon en multi-instance DSI, le tenant A
+    // et le tenant B partageraient le compteur (MDO-2026-0042 pourrait exister
+    // chez les deux). Avec le filtre tenantId, chaque tenant a sa propre
+    // sequence — la collision n'est plus possible.
     const year = start.getFullYear();
     const prefix = `MDO-${year}-`;
     const lastContract = await this.prisma.contract.findFirst({
-      where: { reference: { startsWith: prefix } },
+      where: { tenantId, reference: { startsWith: prefix } },
       orderBy: { reference: 'desc' },
       select: { reference: true },
     });
@@ -377,6 +381,10 @@ export class QuotesService {
     return this.prisma.$transaction(async (tx) => {
       const contract = await tx.contract.create({
         data: {
+          // Heriter du tenantId du quote, sinon le Contract serait global
+          // (tenantId=null) et invisible aux requetes scope. q.tenantId vient
+          // de findOne(id, tenantId) qui a deja scope par tenant.
+          tenantId: q.tenantId,
           reference,
           title: q.title,
           offer: dto.offer,

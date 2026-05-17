@@ -18,11 +18,14 @@ export class CallsService {
   ) {}
 
   // ============================================================
-  // Resolution numero -> Contact + Company (scope tenant)
-  // Sans le scope, un user du tenant A pourrait composer un numero qui se
+  // Resolution numero -> Contact + Company (scope tenant OBLIGATOIRE)
+  // Sans le scope, un user du tenant A composerait un numero qui se
   // resoudrait sur un contact du tenant B (rattachement croise du CallLog).
+  // tenantId est explicite (pas de default null) pour forcer chaque caller
+  // a prendre une decision consciente. Passer null = matching global (cas
+  // de webhook public sans tenant resolu, dont l'auth est ailleurs).
   // ============================================================
-  async resolvePhone(rawNumber: string, tenantId: string | null = null): Promise<{ contactId?: string; companyId?: string }> {
+  async resolvePhone(rawNumber: string, tenantId: string | null): Promise<{ contactId?: string; companyId?: string }> {
     const normalized = normalizePhoneFR(rawNumber);
     if (!normalized) return {};
     const variants = phoneSearchVariants(normalized);

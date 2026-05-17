@@ -61,7 +61,13 @@ export class BillingService {
     const provider = await this.getActiveProvider(me.tenantId);
     if (!provider) throw new Error('Aucun provider de facturation actif');
 
-    const c = await this.prisma.company.findUnique({ where: { id: companyId } });
+    // Defense en profondeur : meme si assertCompanyInTenant vient de garantir
+    // que companyId existe dans me.tenantId, on re-filtre par tenantId au
+    // findFirst — un dev qui retirerait l'assert par erreur ne creerait pas
+    // un leak silencieux.
+    const c = await this.prisma.company.findFirst({
+      where: me.isSuperAdmin ? { id: companyId } : { id: companyId, tenantId: me.tenantId },
+    });
     if (!c) throw new NotFoundException('Societe introuvable');
 
     // Si deja synchronise vers Qonto, on n'ecrase rien
