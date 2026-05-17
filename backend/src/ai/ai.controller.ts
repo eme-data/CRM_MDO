@@ -58,7 +58,7 @@ export class AiController {
   // ---------- Draft reponse ticket ----------
   @Post('draft/ticket/:id')
   draftTicket(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.draft.draftReply(id, user.id);
+    return this.draft.draftReply(id, user.tenantId, user.id);
   }
 
   // ---------- Resume thread ticket (avant de repondre sur un fil long) ----------

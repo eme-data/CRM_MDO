@@ -127,9 +127,13 @@ export class TicketDraftService {
     });
   }
 
-  async draftReply(ticketId: string, userId: string) {
-    const t = await this.prisma.ticket.findUnique({
-      where: { id: ticketId },
+  // Scope tenant : sans, un user du tenant A pouvait declencher Claude
+  // pour drafter une reponse a un ticket du tenant B en devinant l'UUID —
+  // Claude renvoyait alors une analyse contenant le contenu du ticket.
+  // Filtre tenantId obligatoire.
+  async draftReply(ticketId: string, tenantId: string | null, userId: string) {
+    const t = await this.prisma.ticket.findFirst({
+      where: { id: ticketId, tenantId },
       include: {
         company: { select: { id: true, name: true, sector: true } },
         contact: { select: { firstName: true, lastName: true } },

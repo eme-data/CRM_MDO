@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
+import { CreateCustomerSuccessReviewDto, UpdateCustomerSuccessReviewDto } from './dto/customer-success.dto';
 
 @ApiTags('Customer Success')
 @ApiBearerAuth()
@@ -41,13 +42,13 @@ export class CustomerSuccessController {
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Post()
-  create(@Body() body: { companyId: string; scheduledAt: string; ownerId?: string }, @CurrentUser() user: JwtUser) {
+  create(@Body() body: CreateCustomerSuccessReviewDto, @CurrentUser() user: JwtUser) {
     return this.service.createManual(body, user);
   }
 
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: any, @CurrentUser() user: JwtUser) {
+  update(@Param('id') id: string, @Body() body: UpdateCustomerSuccessReviewDto, @CurrentUser() user: JwtUser) {
     return this.service.update(id, body, user);
   }
 

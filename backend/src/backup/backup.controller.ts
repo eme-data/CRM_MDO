@@ -17,6 +17,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
+import { CreateBackupJobDto, RecordBackupRunDto, UpdateBackupJobDto } from './dto/backup.dto';
 
 @ApiTags('Backup verification')
 @Controller('backup-jobs')
@@ -62,7 +63,7 @@ export class BackupController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'MANAGER')
   @Post()
-  create(@Body() body: any, @CurrentUser() user: JwtUser) {
+  create(@Body() body: CreateBackupJobDto, @CurrentUser() user: JwtUser) {
     return this.service.create(body, user);
   }
 
@@ -70,7 +71,7 @@ export class BackupController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'MANAGER')
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: any, @CurrentUser() user: JwtUser) {
+  update(@Param('id') id: string, @Body() body: UpdateBackupJobDto, @CurrentUser() user: JwtUser) {
     return this.service.update(id, body, user);
   }
 
@@ -91,7 +92,7 @@ export class BackupController {
   @Post(':id/runs/manual')
   async recordManual(
     @Param('id') id: string,
-    @Body() body: any,
+    @Body() body: RecordBackupRunDto,
     @CurrentUser() user: JwtUser,
   ) {
     await this.service.findOne(id, user); // assert tenant ownership

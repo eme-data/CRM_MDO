@@ -386,7 +386,7 @@ export class SignatureService {
 
     // Retropropagation sur l'entite cible
     if (event.kind === 'signed') {
-      await this.propagateSignatureToEntity(sig.entityType as SignableEntityType, sig.entityId);
+      await this.propagateSignatureToEntity(sig.entityType as SignableEntityType, sig.entityId, sig.tenantId);
       // Tente de telecharger le document signe et stocker l'URL
       try {
         const provider = await this.getProviderByName(sig.provider, sig.tenantId);
@@ -407,9 +407,21 @@ export class SignatureService {
     return { ok: true, signatureRequestId: updated.id, status: updated.status };
   }
 
-  private async propagateSignatureToEntity(entityType: SignableEntityType, entityId: string) {
+  // Defense en profondeur : on filtre par tenantId pour s'assurer que le
+  // webhook signature n'agit que sur des entites du meme tenant que la
+  // signature elle-meme. En theorie sig.entityId vient deja d'un create
+  // scope par tenant, mais ce filtre attrape les bugs eventuels (entityId
+  // incoherent en BDD, double-write, etc.).
+  private async propagateSignatureToEntity(
+    entityType: SignableEntityType,
+    entityId: string,
+    tenantId: string | null,
+  ) {
     if (entityType === 'Quote') {
-      const q = await this.prisma.quote.findUnique({ where: { id: entityId }, select: { status: true } });
+      const q = await this.prisma.quote.findFirst({
+        where: { id: entityId, tenantId },
+        select: { status: true },
+      });
       if (!q) return;
       // Quote SENT -> ACCEPTED via signature client
       if (q.status === 'SENT') {
@@ -419,7 +431,10 @@ export class SignatureService {
         });
       }
     } else if (entityType === 'Contract') {
-      const c = await this.prisma.contract.findUnique({ where: { id: entityId }, select: { signedAt: true, status: true } });
+      const c = await this.prisma.contract.findFirst({
+        where: { id: entityId, tenantId },
+        select: { signedAt: true, status: true },
+      });
       if (!c) return;
       const data: Prisma.ContractUpdateInput = {};
       if (!c.signedAt) data.signedAt = new Date();
