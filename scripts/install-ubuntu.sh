@@ -311,6 +311,11 @@ fi
 # =============================================================================
 # Clonage / maj du repo
 # =============================================================================
+# Git 2.35.2+ refuse les operations cross-user (ownership "dubious"). Notre
+# repo est chown sur ${TARGET_USER} mais le script tourne en root → on
+# whitelist explicitement le dir pour root.
+git config --global --add safe.directory "${INSTALL_DIR}" 2>/dev/null || true
+
 if [[ -d "${INSTALL_DIR}/.git" ]]; then
   if [[ "${MODE}" == "upgrade" ]]; then
     log "Mode UPGRADE : git pull + rebuild..."
@@ -498,6 +503,32 @@ log "Demarrage de la stack..."
 mkdir -p /var/log/caddy
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ok "Stack demarree"
+
+# =============================================================================
+# Bootstrap Caddyfile dans le volume partage
+# =============================================================================
+# Le volume `caddy-config-shared` est cree vide au 1er boot. Caddy demarre
+# alors sans Caddyfile et n'expose que HTTP (pas de TLS, pas de domaine
+# resolu). On copie le Caddyfile du repo dans le volume et on reload.
+#
+# Apres le 1er boot, les tenants peuvent etre ajoutes/modifies dynamiquement
+# via CaddyProvisioningService qui ecrit dans le meme volume.
+log "Verification du Caddyfile dans le volume partage..."
+CADDY_FILE_SIZE=$(docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  exec -T caddy stat -c '%s' /etc/caddy/Caddyfile 2>/dev/null || echo "0")
+# Caddy ecrit un Caddyfile par defaut de qq dizaines d'octets si vide → on
+# considere < 200 octets comme "non bootstrap".
+if [[ "${CADDY_FILE_SIZE}" -lt 200 ]]; then
+  log "Bootstrap Caddyfile (taille actuelle: ${CADDY_FILE_SIZE} octets)..."
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+    cp docker/caddy/Caddyfile caddy:/etc/caddy/Caddyfile
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+    exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || \
+    docker compose -f docker-compose.yml -f docker-compose.prod.yml restart caddy
+  ok "Caddyfile bootstrap (HTTPS + ACME vont demarrer)"
+else
+  ok "Caddyfile deja en place (${CADDY_FILE_SIZE} octets)"
+fi
 
 # =============================================================================
 # Restore mode : injecter DB + uploads + caddy data

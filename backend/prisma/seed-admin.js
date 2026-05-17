@@ -62,14 +62,32 @@ async function main() {
     process.exit(1);
   }
 
-  // User.email n'est plus unique seul depuis la migration multi-tenant
-  // (@@unique([tenantId, email])). On cherche l'admin plateforme (tenantId: null).
-  const existing = await prisma.user.findFirst({ where: { email, tenantId: null } });
+  // Recupere le tenant 'mdo' (cree par TenantsService.onModuleInit au boot
+  // du backend). Si absent, c'est que le backend n'a pas encore boote — on
+  // refuse plutot que de creer un user orphelin (tenantId=null) qui ne
+  // pourrait pas se connecter (AuthService exige un tenant valide).
+  const tenant = await prisma.tenant.findUnique({ where: { slug: 'mdo' } });
+  if (!tenant) {
+    console.error('Tenant "mdo" introuvable. Lance d\'abord le backend une fois pour qu\'il l\'initialise via onModuleInit, puis relance ce seed.');
+    await prisma.$disconnect();
+    process.exit(1);
+  }
+
+  // Recherche dans le tenant 'mdo' (cle composite @@unique([tenantId, email]))
+  const existing = await prisma.user.findFirst({ where: { email, tenantId: tenant.id } });
   if (existing) {
-    console.log('Un compte existe deja avec cet email (' + email + ') : role=' + existing.role);
+    console.log('Un compte existe deja : ' + email + ' (role=' + existing.role + ', tenant=' + tenant.slug + ')');
     await prisma.$disconnect();
     process.exit(0);
   }
+
+  // Promotion super-admin : si c'est le 1er ADMIN actif sur le tenant 'mdo',
+  // on le promeut directement (sinon AuthService.login pour la 1ere session
+  // exigerait un autre user super-admin pour creer ce compte via l'UI).
+  const adminCount = await prisma.user.count({
+    where: { role: 'ADMIN', isActive: true, tenantId: tenant.id },
+  });
+  const isSuperAdmin = adminCount === 0;
 
   const passwordHash = await bcrypt.hash(password, 12);
   const user = await prisma.user.create({
@@ -79,9 +97,15 @@ async function main() {
       firstName,
       lastName,
       role: 'ADMIN',
+      tenantId: tenant.id,
+      isSuperAdmin,
     },
   });
-  console.log('Compte admin cree : ' + user.email);
+  console.log(
+    'Compte admin cree : ' + user.email +
+    ' (tenant=' + tenant.slug +
+    (isSuperAdmin ? ', SUPER-ADMIN' : '') + ')'
+  );
   await prisma.$disconnect();
 }
 
