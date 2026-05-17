@@ -171,33 +171,45 @@ export class BackupService {
   // ============================================================
   @Cron('0 6 * * *', { name: 'backup-overdue-check', timeZone: 'Europe/Paris' })
   async runOverdueCheck() {
-    const now = Date.now();
-    const jobs = await this.prisma.backupJob.findMany({
-      where: { isActive: true },
-      include: { company: { select: { id: true, name: true, ownerId: true } } },
-    });
-    let alerted = 0;
-    for (const j of jobs) {
-      const windowMs = j.expectedFrequencyHours * 3600_000;
-      const lastOk = j.lastSuccessAt?.getTime() ?? 0;
-      if (now - lastOk > windowMs) {
-        // Notifier l'owner du client (et ADMIN par defaut si pas d'owner)
-        const recipientId = j.company.ownerId;
-        if (recipientId) {
-          await this.notifications.push({
-            userId: recipientId,
-            type: 'GENERIC',
-            title: 'Backup en retard : ' + j.name,
-            body: 'Aucun SUCCESS depuis ' + (j.lastSuccessAt?.toISOString().slice(0, 16) ?? 'jamais') + ' (' + j.company.name + ')',
-            entity: 'BackupJob',
-            entityId: j.id,
-            url: '/backups/' + j.id,
-          });
-          alerted++;
+    // Try-catch root : une exception non geree (DB indispo, push notif KO)
+    // crash le scheduler @nestjs/schedule et empeche les autres crons de
+    // tourner. On log et on continue silencieusement.
+    try {
+      const now = Date.now();
+      const jobs = await this.prisma.backupJob.findMany({
+        where: { isActive: true },
+        include: { company: { select: { id: true, name: true, ownerId: true } } },
+      });
+      let alerted = 0;
+      for (const j of jobs) {
+        const windowMs = j.expectedFrequencyHours * 3600_000;
+        const lastOk = j.lastSuccessAt?.getTime() ?? 0;
+        if (now - lastOk > windowMs) {
+          // Notifier l'owner du client (et ADMIN par defaut si pas d'owner)
+          const recipientId = j.company.ownerId;
+          if (recipientId) {
+            try {
+              await this.notifications.push({
+                userId: recipientId,
+                type: 'GENERIC',
+                title: 'Backup en retard : ' + j.name,
+                body: 'Aucun SUCCESS depuis ' + (j.lastSuccessAt?.toISOString().slice(0, 16) ?? 'jamais') + ' (' + j.company.name + ')',
+                entity: 'BackupJob',
+                entityId: j.id,
+                url: '/backups/' + j.id,
+              });
+              alerted++;
+            } catch (notifErr: any) {
+              // Une notif KO ne doit pas stopper les autres
+              this.logger.warn('Backup overdue : notif KO pour job ' + j.id + ' : ' + notifErr.message);
+            }
+          }
         }
       }
+      if (alerted > 0) this.logger.warn('Backup overdue cron : ' + alerted + ' alerte(s) envoyee(s)');
+    } catch (err: any) {
+      this.logger.error('Backup overdue cron a echoue : ' + (err?.message ?? err));
     }
-    if (alerted > 0) this.logger.warn('Backup overdue cron : ' + alerted + ' alerte(s) envoyee(s)');
   }
 
   // ============================================================

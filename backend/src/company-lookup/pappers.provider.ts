@@ -21,8 +21,22 @@ export interface CompanyLookupResult {
 export class PappersProvider {
   private readonly logger = new Logger(PappersProvider.name);
   private readonly base = 'https://api.pappers.fr/v2';
+  // Timeout 8s : Pappers est utilise dans un autocomplete UI, au-dela
+  // l'utilisateur a deja tape autre chose. Sans timeout, fetch peut hang
+  // indefiniment et bloquer la queue HTTP du backend.
+  private readonly timeoutMs = 8000;
 
   constructor(private readonly settings: SettingsService) {}
+
+  private async fetchWithTimeout(url: string): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      return await fetch(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   async isEnabled(tenantId: string | null = null): Promise<boolean> {
     return Boolean(await this.settings.get('lookup.pappersApiKey', tenantId));
@@ -42,7 +56,7 @@ export class PappersProvider {
       '&precision=standard&page=1&par_page=' +
       limit;
     try {
-      const res = await fetch(url);
+      const res = await this.fetchWithTimeout(url);
       if (!res.ok) {
         this.logger.warn('Pappers search HTTP ' + res.status + ' ' + res.statusText);
         return [];
@@ -62,7 +76,7 @@ export class PappersProvider {
     const url =
       this.base + '/entreprise?api_token=' + encodeURIComponent(key) + '&siren=' + encodeURIComponent(siren);
     try {
-      const res = await fetch(url);
+      const res = await this.fetchWithTimeout(url);
       if (!res.ok) {
         this.logger.warn('Pappers detail HTTP ' + res.status);
         return null;

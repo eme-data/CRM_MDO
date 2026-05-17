@@ -80,11 +80,15 @@ export class CallsService {
       try {
         // Endpoint generique : la doc Coms Pro varie selon les contrats
         // (POST /click2call ou similaire). Adapter au besoin via setting.
+        // Timeout 10s : click2call est synchrone cote UI, l'user attend.
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10000);
         const res = await fetch(apiUrl.replace(/\/$/, '') + '/click2call', {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({ from: callerId, to: normalized }),
-        });
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timer));
         if (!res.ok) {
           this.logger.warn('Free PRO click2call HTTP ' + res.status);
           status = 'FAILED';

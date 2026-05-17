@@ -85,15 +85,21 @@ export class ContractAlertsProcessor {
   // Scan horaire : marquer EXPIRED les contrats dont la fin est passee
   @Cron(CronExpression.EVERY_HOUR)
   async markExpired() {
-    const result = await this.prisma.contract.updateMany({
-      where: {
-        status: 'ACTIVE',
-        endDate: { lt: new Date() },
-      },
-      data: { status: 'EXPIRED' },
-    });
-    if (result.count > 0) {
-      this.logger.log(result.count + ' contrats passes en EXPIRED');
+    // Try-catch root : une erreur Prisma (lock, indispo BDD) non geree crash
+    // le scheduler @nestjs/schedule pour TOUS les crons du process.
+    try {
+      const result = await this.prisma.contract.updateMany({
+        where: {
+          status: 'ACTIVE',
+          endDate: { lt: new Date() },
+        },
+        data: { status: 'EXPIRED' },
+      });
+      if (result.count > 0) {
+        this.logger.log(result.count + ' contrats passes en EXPIRED');
+      }
+    } catch (err: any) {
+      this.logger.error('markExpired a echoue : ' + (err?.message ?? err));
     }
   }
 }
