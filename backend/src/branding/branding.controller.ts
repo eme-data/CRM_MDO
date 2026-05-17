@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '../common/decorators/public.decorator';
 import { BrandingService } from './branding.service';
 import { OptionalTenant } from '../tenants/decorators/current-tenant.decorator';
@@ -15,6 +16,11 @@ export class BrandingController {
   constructor(private readonly service: BrandingService) {}
 
   @Public()
+  // Override le palier "short" : /branding est appele a chaque boot frontend
+  // et un Ctrl+F5 enchaine consomme ~5-10 requetes en burst. Avec 60/min on
+  // hit le 429 trop facilement en debug. 300/min reste un anti-spam decent
+  // sur un endpoint en lecture seule sans secret.
+  @Throttle({ short: { limit: 300, ttl: 60_000 } })
   @Get()
   get(@OptionalTenant() tenant?: Tenant) {
     // Multi-tenant : si on a un tenant resolu pour le domaine, on prend ses

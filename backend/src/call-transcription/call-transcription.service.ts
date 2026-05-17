@@ -106,10 +106,18 @@ export class CallTranscriptionService {
       });
       return { ok: true, transcriptLength: transcript.length, hasSummary: !!summary };
     } catch (err: any) {
+      // Best-effort : on tente d'enregistrer l'echec en BDD, mais s'il echoue
+      // aussi (DB indispo) on log l'erreur secondaire avant de re-throw
+      // l'erreur originale (qui est ce qui interesse le caller).
       await this.prisma.callLog.update({
         where: { id: callId },
         data: { transcriptionStatus: 'FAILED', transcriptionError: err.message?.slice(0, 500) },
-      }).catch(() => {});
+      }).catch((updateErr: any) => {
+        this.logger.warn(
+          'Impossible de marquer callLog ' + callId + ' en FAILED : ' +
+          (updateErr?.message ?? updateErr),
+        );
+      });
       throw err;
     }
   }

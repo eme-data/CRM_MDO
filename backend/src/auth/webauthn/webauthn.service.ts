@@ -188,7 +188,10 @@ export class WebAuthnService {
       },
     });
 
-    // Trace audit
+    // Trace audit : on log les erreurs (avant on silenciait avec .catch(()=>{}))
+    // — masquer une erreur d'ecriture en audit cache des incidents en prod.
+    // L'audit reste best-effort : on ne fait pas echouer l'enregistrement
+    // WebAuthn si l'audit echoue, mais on doit savoir que c'est arrive.
     await this.prisma.activity.create({
       data: {
         userId,
@@ -197,7 +200,9 @@ export class WebAuthnService {
         entityId: created.id,
         metadata: { name: credentialName, aaguid },
       },
-    }).catch(() => {});
+    }).catch((err: any) => {
+      this.logger.warn('Audit WEBAUTHN_REGISTER echoue (non bloquant) : ' + (err?.message ?? err));
+    });
 
     return { ok: true, id: created.id };
   }

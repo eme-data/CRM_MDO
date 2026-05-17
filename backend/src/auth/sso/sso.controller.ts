@@ -14,7 +14,7 @@ import { ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
 import { Public } from '../../common/decorators/public.decorator';
 import { AllowMfaPending } from '../../common/decorators/allow-mfa-pending.decorator';
 import { TenantsService } from '../../tenants/tenants.service';
@@ -48,6 +48,10 @@ export class SsoController {
   // bouton "Sign in with SSO". Resout le tenant depuis le Host (middleware
   // global) et renvoie { enabled, tenantSlug }. Pas de leak : on ne devoile
   // ni l'issuer, ni le clientId — juste si le bouton doit apparaitre.
+  // /status est appele a chaque chargement de /login (couple avec /branding).
+  // Le palier "short" par defaut (60/min) hit le 429 en debug avec quelques
+  // F5 enchaines. 300/min suffit, c'est un GET sans secret.
+  @Throttle({ short: { limit: 300, ttl: 60_000 } })
   @AllowMfaPending()
   @Get('status')
   async status(@Req() req: Request) {
