@@ -886,9 +886,10 @@ model EmailLog {
   // Permet de retrouver rapidement tous les emails lies a une entite donnee
   // (contrat, ticket, societe...) pour l'historique des relations.
   @@index([relatedEntity, relatedEntityId])
-  // Multi-tenant : queries filtrees par (tenantId, status) — dashboard admin
-  // "emails en echec", scan retry par tenant.
-  @@index([tenantId, status])
+  // Note : EmailLog n'a pas de champ tenantId par design — le scope tenant
+  // est implicite via relatedEntity/relatedEntityId. Si on veut filtrer
+  // EmailLog par tenant, ajouter d'abord le champ + backfill via le tenantId
+  // de l'entite liee, puis l'index.
 }
 
 // =================== TICKETS (support client) ===================
