@@ -108,14 +108,18 @@ import { RolesGuard } from './common/guards/roles.guard';
     AppLoggerModule,
     CacheModule,
     ScheduleModule.forRoot(),
-    // Rate-limiting global. Definit deux paliers :
+    // Rate-limiting global. Definit plusieurs paliers :
     //  - "short" : 60 req / minute (anti-burst)
     //  - "medium": 600 req / 10 min (utilisation normale)
-    // Les controleurs sensibles (auth) appliquent un palier "auth" plus strict via @Throttle.
+    //  - "auth"  : 10 req / 5 min (endpoints login/refresh)
+    //  - "aiCall": 20 req / 5 min (endpoints AI couteux, anti DoS economique
+    //              sur les tokens Claude — cf ai.controller AI_THROTTLE)
+    // Les controleurs sensibles appliquent les paliers stricts via @Throttle.
     ThrottlerModule.forRoot([
       { name: 'short', ttl: 60_000, limit: 60 },
       { name: 'medium', ttl: 600_000, limit: 600 },
       { name: 'auth', ttl: 300_000, limit: 10 },
+      { name: 'aiCall', ttl: 300_000, limit: 20 },
     ]),
     BullModule.forRootAsync({
       useFactory: () => ({

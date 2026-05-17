@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { TicketCategory, TicketPriority } from '@prisma/client';
 import { AiService } from './ai.service';
 import { TicketTriageService } from './use-cases/ticket-triage.service';
@@ -11,6 +12,13 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
+
+// Rate-limit AI : 20 calls / 5 min par (tenant, ip) — anti DoS economique.
+// Chaque call IA coute des tokens Claude (~0.01 $/document-extract sur PDF
+// 5MB). Sans throttle, un script pourrait invoquer document-extract 1000x
+// en quelques secondes → facture Anthropic exploose. 20/5min = 240/h max,
+// largement suffisant pour usage humain normal, casse les abus automatises.
+const AI_THROTTLE = { aiCall: { limit: 20, ttl: 300_000 } } as const;
 
 @ApiTags('AI')
 @ApiBearerAuth()
@@ -41,11 +49,14 @@ export class AiController {
   // Scope tenant : on passe user.tenantId pour que le service filtre Prisma
   // par tenantId — sinon un user pouvait declencher de l'IA sur les tickets
   // d'autres tenants via UUID guessing.
+  @Throttle(AI_THROTTLE)
   @Post('triage/ticket/:id')
   triageTicket(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.triage.triage(id, user.tenantId, user.id);
   }
 
+  // applyTriage : pas de cout token, juste un UPDATE Prisma → throttle "short"
+  // global suffit.
   @Post('triage/ticket/:id/apply')
   applyTriage(
     @Param('id') id: string,
@@ -56,24 +67,30 @@ export class AiController {
   }
 
   // ---------- Draft reponse ticket ----------
+  @Throttle(AI_THROTTLE)
   @Post('draft/ticket/:id')
   draftTicket(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.draft.draftReply(id, user.tenantId, user.id);
   }
 
   // ---------- Resume thread ticket (avant de repondre sur un fil long) ----------
+  @Throttle(AI_THROTTLE)
   @Post('summary/ticket/:id')
   summarizeTicket(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.ticketSummary.summarizeThread(id, user.tenantId, user.id);
   }
 
   // ---------- Extraction OCR / IA d'un document GED ----------
+  // Le plus couteux des endpoints AI (Claude Vision sur PDF 5MB ≈ 0.01 $/call).
+  // Throttle AI strict applique.
+  @Throttle(AI_THROTTLE)
   @Post('extract/document/:id')
   extractDocument(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.documentExtract.extract(id, user.tenantId, user.id);
   }
 
   // ---------- Resume client ----------
+  @Throttle(AI_THROTTLE)
   @Post('summary/company/:id')
   summarizeCompany(
     @Param('id') id: string,
