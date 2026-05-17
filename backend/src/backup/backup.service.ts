@@ -4,6 +4,8 @@ import { createHash, randomBytes } from 'crypto';
 import { BackupRunStatus, BackupSourceType, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 @Injectable()
 export class BackupService {
@@ -12,22 +14,23 @@ export class BackupService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly scope: TenantScope,
   ) {}
 
   // ============================================================
   // Jobs CRUD
   // ============================================================
-  list(params: { companyId?: string } = {}) {
+  list(me: JwtUser, params: { companyId?: string } = {}) {
     return this.prisma.backupJob.findMany({
-      where: params.companyId ? { companyId: params.companyId } : {},
+      where: this.scope.scopedWhere(me, params.companyId ? { companyId: params.companyId } : {}),
       include: { company: { select: { id: true, name: true } } },
       orderBy: [{ isActive: 'desc' }, { lastSuccessAt: 'asc' }],
     });
   }
 
-  async findOne(id: string) {
-    const j = await this.prisma.backupJob.findUnique({
-      where: { id },
+  async findOne(id: string, me: JwtUser) {
+    const j = await this.prisma.backupJob.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: {
         company: { select: { id: true, name: true } },
         runs: { orderBy: { startedAt: 'desc' }, take: 30 },
@@ -44,13 +47,23 @@ export class BackupService {
     sourceType?: BackupSourceType;
     sourceIdentifier?: string;
     expectedFrequencyHours?: number;
-  }) {
+  }, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(input.companyId, me);
+    // Recupere le tenantId de la company pour le copier sur le BackupJob.
+    // Sans ca, BackupJob.tenantId reste null et tout le filtrage scope echoue.
+    const company = await this.prisma.company.findUnique({
+      where: { id: input.companyId },
+      select: { tenantId: true },
+    });
+    if (!company) throw new NotFoundException('Societe introuvable');
+
     // Genere un secret webhook qu'on retournera UNE FOIS au caller. On ne
     // stocke que le hash pour eviter de l'exposer en cas de fuite BDD.
     const plainSecret = 'mdobk_' + randomBytes(24).toString('base64url');
     const secretHash = createHash('sha256').update(plainSecret).digest('hex');
     const created = await this.prisma.backupJob.create({
       data: {
+        tenantId: company.tenantId,
         companyId: input.companyId,
         name: input.name,
         vendor: input.vendor,
@@ -70,13 +83,13 @@ export class BackupService {
     sourceIdentifier?: string | null;
     expectedFrequencyHours?: number;
     isActive?: boolean;
-  }) {
-    await this.findOne(id);
+  }, me: JwtUser) {
+    await this.findOne(id, me); // assert tenant ownership
     return this.prisma.backupJob.update({ where: { id }, data: input });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, me: JwtUser) {
+    await this.findOne(id, me); // assert tenant ownership
     await this.prisma.backupJob.delete({ where: { id } });
     return { ok: true };
   }
@@ -84,6 +97,10 @@ export class BackupService {
   // ============================================================
   // Runs : ingestion
   // ============================================================
+  // recordRun n'est pas scope tenant : il est appele soit par le webhook public
+  // authentifie via secret (ingestViaSecret, le secret valide est l'authz),
+  // soit par recordManual du controller qui a deja fait findOne(id, me) avant.
+  // Pas de tenant check ici sinon le webhook ne pourrait pas tourner.
   async recordRun(jobId: string, run: {
     status: BackupRunStatus;
     startedAt: string | Date;
@@ -95,7 +112,11 @@ export class BackupService {
     externalRunId?: string;
     rawPayload?: any;
   }) {
-    const job = await this.findOne(jobId);
+    const job = await this.prisma.backupJob.findUnique({
+      where: { id: jobId },
+      include: { company: { select: { id: true, name: true, ownerId: true } } },
+    });
+    if (!job) throw new NotFoundException('Job introuvable');
     const startedAt = typeof run.startedAt === 'string' ? new Date(run.startedAt) : run.startedAt;
     const endedAt = run.endedAt ? (typeof run.endedAt === 'string' ? new Date(run.endedAt) : run.endedAt) : null;
 
@@ -215,9 +236,9 @@ export class BackupService {
   // ============================================================
   // Stats globales
   // ============================================================
-  async stats() {
+  async stats(me: JwtUser) {
     const jobs = await this.prisma.backupJob.findMany({
-      where: { isActive: true },
+      where: this.scope.scopedWhere(me, { isActive: true }),
       select: { lastRunStatus: true, lastSuccessAt: true, expectedFrequencyHours: true },
     });
     const now = Date.now();

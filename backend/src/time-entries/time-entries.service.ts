@@ -9,12 +9,15 @@ import { PrismaService } from '../database/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateTimeEntryDto } from './dto/create-time-entry.dto';
 import { UpdateTimeEntryDto } from './dto/update-time-entry.dto';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 @Injectable()
 export class TimeEntriesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settings: SettingsService,
+    private readonly scope: TenantScope,
   ) {}
 
   // Resout le taux horaire facturable a appliquer a une entree au moment du stop.
@@ -182,14 +185,17 @@ export class TimeEntriesService {
   }
 
   // Cumuls : par utilisateur, par ticket, par client (sur une periode)
-  async summary(params: { from?: string; to?: string; userId?: string }) {
-    const where: Prisma.TimeEntryWhereInput = { endedAt: { not: null } };
-    if (params.userId) where.userId = params.userId;
+  async summary(params: { from?: string; to?: string; userId?: string }, me: JwtUser) {
+    // Scope tenant : sinon un user pouvait voir les cumuls de temps de tous
+    // les tenants (volume d'heures, identite des consultants, etc.).
+    const extra: Prisma.TimeEntryWhereInput = { endedAt: { not: null } };
+    if (params.userId) extra.userId = params.userId;
     if (params.from || params.to) {
-      where.startedAt = {};
-      if (params.from) (where.startedAt as any).gte = new Date(params.from);
-      if (params.to) (where.startedAt as any).lte = new Date(params.to);
+      extra.startedAt = {};
+      if (params.from) (extra.startedAt as any).gte = new Date(params.from);
+      if (params.to) (extra.startedAt as any).lte = new Date(params.to);
     }
+    const where = this.scope.scopedWhere(me, extra) as Prisma.TimeEntryWhereInput;
     const entries = await this.prisma.timeEntry.findMany({
       where,
       select: {
@@ -260,13 +266,16 @@ export class TimeEntriesService {
    * Agregat de facturation : pour chaque societe, total d'heures billable
    * sur la periode, montant HT estime, statut facture/non facture.
    */
-  async billingByCompany(params: { from: string; to: string; onlyUnbilled?: boolean }) {
-    const where: Prisma.TimeEntryWhereInput = {
+  async billingByCompany(params: { from: string; to: string; onlyUnbilled?: boolean }, me: JwtUser) {
+    // Scope tenant : sans, un MANAGER pouvait voir les heures facturables et
+    // CA estime de tous les autres tenants (data business sensible).
+    const extra: Prisma.TimeEntryWhereInput = {
       endedAt: { not: null },
       billable: true,
       startedAt: { gte: new Date(params.from), lte: new Date(params.to) },
     };
-    if (params.onlyUnbilled) where.invoicedAt = null;
+    if (params.onlyUnbilled) extra.invoicedAt = null;
+    const where = this.scope.scopedWhere(me, extra) as Prisma.TimeEntryWhereInput;
 
     const entries = await this.prisma.timeEntry.findMany({
       where,
@@ -328,8 +337,9 @@ export class TimeEntriesService {
   }
 
   /** Detail des entries facturables d'une societe sur une periode. */
-  async billingDetail(params: { companyId: string; from: string; to: string; onlyUnbilled?: boolean }) {
-    const where: Prisma.TimeEntryWhereInput = {
+  async billingDetail(params: { companyId: string; from: string; to: string; onlyUnbilled?: boolean }, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(params.companyId, me);
+    const extra: Prisma.TimeEntryWhereInput = {
       endedAt: { not: null },
       billable: true,
       startedAt: { gte: new Date(params.from), lte: new Date(params.to) },
@@ -340,7 +350,8 @@ export class TimeEntriesService {
         { contract: { companyId: params.companyId } },
       ],
     };
-    if (params.onlyUnbilled) where.invoicedAt = null;
+    if (params.onlyUnbilled) extra.invoicedAt = null;
+    const where = this.scope.scopedWhere(me, extra) as Prisma.TimeEntryWhereInput;
     return this.prisma.timeEntry.findMany({
       where,
       orderBy: { startedAt: 'asc' },
@@ -377,8 +388,8 @@ export class TimeEntriesService {
   }
 
   /** Export CSV des entries facturables d'une societe (importable dans Qonto). */
-  async exportCsv(params: { companyId: string; from: string; to: string; onlyUnbilled?: boolean }): Promise<string> {
-    const items = await this.billingDetail(params);
+  async exportCsv(params: { companyId: string; from: string; to: string; onlyUnbilled?: boolean }, me: JwtUser): Promise<string> {
+    const items = await this.billingDetail(params, me);
     const lines: string[] = [];
     // En-tete CSV (UTF-8 avec BOM pour Excel FR)
     lines.push('Date;Duree (h);Description;Reference;Technicien;Taux HT;Montant HT');

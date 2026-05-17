@@ -43,11 +43,12 @@ export class TimeEntriesController {
 
   @Get('summary')
   summary(
+    @CurrentUser() user: JwtUser,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('userId') userId?: string,
   ) {
-    return this.service.summary({ from, to, userId });
+    return this.service.summary({ from, to, userId }, user);
   }
 
   @Get('current')
@@ -96,30 +97,33 @@ export class TimeEntriesController {
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('billing/by-company')
   billingByCompany(
+    @CurrentUser() user: JwtUser,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('onlyUnbilled') onlyUnbilled?: string,
   ) {
     if (!from || !to) throw new BadRequestException('from et to requis (YYYY-MM-DD)');
-    return this.service.billingByCompany({ from, to, onlyUnbilled: onlyUnbilled === 'true' });
+    return this.service.billingByCompany({ from, to, onlyUnbilled: onlyUnbilled === 'true' }, user);
   }
 
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('billing/companies/:companyId')
   billingDetail(
     @Param('companyId') companyId: string,
+    @CurrentUser() user: JwtUser,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('onlyUnbilled') onlyUnbilled?: string,
   ) {
     if (!from || !to) throw new BadRequestException('from et to requis (YYYY-MM-DD)');
-    return this.service.billingDetail({ companyId, from, to, onlyUnbilled: onlyUnbilled === 'true' });
+    return this.service.billingDetail({ companyId, from, to, onlyUnbilled: onlyUnbilled === 'true' }, user);
   }
 
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('billing/companies/:companyId/export.csv')
   async exportCsv(
     @Param('companyId') companyId: string,
+    @CurrentUser() user: JwtUser,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('onlyUnbilled') onlyUnbilled?: string,
@@ -128,7 +132,7 @@ export class TimeEntriesController {
     if (!from || !to) throw new BadRequestException('from et to requis (YYYY-MM-DD)');
     const csv = await this.service.exportCsv({
       companyId, from, to, onlyUnbilled: onlyUnbilled === 'true',
-    });
+    }, user);
     res!.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res!.setHeader('Content-Disposition', `attachment; filename="time-${companyId}-${from}-${to}.csv"`);
     res!.send(csv);
