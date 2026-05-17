@@ -89,6 +89,14 @@ export class SecretsService implements OnModuleInit {
 
   // Lookup d'un secret avec garde tenant : retourne 404 (pas 403) si le
   // secret existe dans un autre tenant — on ne revele pas son existence.
+  // SCOPE SECRETS : super-admin bypass intentionnel.
+  // Le super-admin (proprietaire de l'instance SaaS) doit pouvoir intervenir
+  // sur les secrets d'un tenant client en cas de support technique (ex.
+  // resetter un mot de passe perdu d'un client). Conforme au pattern
+  // TenantScope.scopedWhere global.
+  // RGPD : tout REVEAL est audit-tracable via Activity (REVEAL_SECRET) avec
+  // userId du super-admin et tenantId du secret — un client peut demander
+  // l'historique d'acces a ses propres credentials.
   private async findSecretInTenant(id: string, me: JwtUser) {
     const where: any = { id };
     if (!me.isSuperAdmin) where.tenantId = me.tenantId;

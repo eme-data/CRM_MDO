@@ -35,9 +35,12 @@ export class TicketSummaryService {
     private readonly ai: AiService,
   ) {}
 
-  async summarizeThread(ticketId: string, userId: string) {
-    const t = await this.prisma.ticket.findUnique({
-      where: { id: ticketId },
+  // Scope tenant : sans, un user du tenant A pouvait demander un resume IA
+  // d'un ticket du tenant B en devinant l'UUID — Claude exposait tout le
+  // contenu du ticket dans la reponse. Filtre par tenantId obligatoire.
+  async summarizeThread(ticketId: string, tenantId: string | null, userId: string) {
+    const t = await this.prisma.ticket.findFirst({
+      where: { id: ticketId, tenantId },
       select: {
         id: true,
         title: true,

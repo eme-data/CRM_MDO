@@ -37,9 +37,13 @@ export class TicketTriageService {
     private readonly ai: AiService,
   ) {}
 
-  async triage(ticketId: string, userId: string) {
-    const t = await this.prisma.ticket.findUnique({
-      where: { id: ticketId },
+  // Scope tenant : un user du tenant A pouvait declencher un triage IA sur
+  // un ticket du tenant B en devinant l'UUID — Claude analysait alors le
+  // contenu du ticket et le renvoyait dans la reponse (exfiltration via IA).
+  // Maintenant : findFirst({ id, tenantId }) — un mismatch leve NotFound.
+  async triage(ticketId: string, tenantId: string | null, userId: string) {
+    const t = await this.prisma.ticket.findFirst({
+      where: { id: ticketId, tenantId },
       include: {
         company: { select: { name: true, sector: true } },
         messages: {
@@ -107,9 +111,11 @@ export class TicketTriageService {
   async applyTriage(
     ticketId: string,
     update: { category?: TicketCategory; priority?: TicketPriority },
+    tenantId: string | null,
     userId: string,
   ) {
-    const ticket = await this.prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    const ticket = await this.prisma.ticket.findFirst({ where: { id: ticketId, tenantId } });
+    if (!ticket) throw new NotFoundException('Ticket introuvable');
     const u = await this.prisma.ticket.update({
       where: { id: ticketId },
       data: {

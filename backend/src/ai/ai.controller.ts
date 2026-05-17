@@ -38,9 +38,12 @@ export class AiController {
   }
 
   // ---------- Triage ticket ----------
+  // Scope tenant : on passe user.tenantId pour que le service filtre Prisma
+  // par tenantId — sinon un user pouvait declencher de l'IA sur les tickets
+  // d'autres tenants via UUID guessing.
   @Post('triage/ticket/:id')
   triageTicket(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.triage.triage(id, user.id);
+    return this.triage.triage(id, user.tenantId, user.id);
   }
 
   @Post('triage/ticket/:id/apply')
@@ -49,7 +52,7 @@ export class AiController {
     @Body() body: { category?: TicketCategory; priority?: TicketPriority },
     @CurrentUser() user: JwtUser,
   ) {
-    return this.triage.applyTriage(id, body, user.id);
+    return this.triage.applyTriage(id, body, user.tenantId, user.id);
   }
 
   // ---------- Draft reponse ticket ----------
@@ -61,13 +64,13 @@ export class AiController {
   // ---------- Resume thread ticket (avant de repondre sur un fil long) ----------
   @Post('summary/ticket/:id')
   summarizeTicket(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.ticketSummary.summarizeThread(id, user.id);
+    return this.ticketSummary.summarizeThread(id, user.tenantId, user.id);
   }
 
   // ---------- Extraction OCR / IA d'un document GED ----------
   @Post('extract/document/:id')
   extractDocument(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.documentExtract.extract(id, user.id);
+    return this.documentExtract.extract(id, user.tenantId, user.id);
   }
 
   // ---------- Resume client ----------
@@ -78,6 +81,6 @@ export class AiController {
     @CurrentUser() user: JwtUser,
   ) {
     const d = days ? Math.max(1, Math.min(180, parseInt(days, 10))) : 30;
-    return this.summary.summarize(id, d, user.id);
+    return this.summary.summarize(id, user.tenantId, d, user.id);
   }
 }

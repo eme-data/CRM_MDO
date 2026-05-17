@@ -25,9 +25,12 @@ export class ClientSummaryService {
     private readonly ai: AiService,
   ) {}
 
-  async summarize(companyId: string, days: number, userId: string) {
-    const company = await this.prisma.company.findUnique({
-      where: { id: companyId },
+  // Scope tenant : un user du tenant A pouvait demander un resume IA d'une
+  // company du tenant B (CA, tickets, contrats, interventions) en devinant
+  // l'UUID — IA exfiltrait des donnees business sensibles. Filtre par tenantId.
+  async summarize(companyId: string, tenantId: string | null, days: number, userId: string) {
+    const company = await this.prisma.company.findFirst({
+      where: { id: companyId, tenantId },
       select: { id: true, name: true, sector: true },
     });
     if (!company) throw new NotFoundException('Societe introuvable');

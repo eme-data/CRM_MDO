@@ -137,9 +137,13 @@ export class DocumentExtractService {
     private readonly documents: DocumentsService,
   ) {}
 
-  async extract(documentId: string, userId: string) {
-    const doc = await this.prisma.companyDocument.findUnique({
-      where: { id: documentId },
+  // Scope tenant : un user du tenant A pouvait declencher une extraction IA
+  // (vision Claude) sur un document du tenant B en devinant l'UUID — pire
+  // exfiltration via IA car les documents contiennent souvent KBIS, contrats,
+  // pieces d'identite. Filtre par tenantId obligatoire.
+  async extract(documentId: string, tenantId: string | null, userId: string) {
+    const doc = await this.prisma.companyDocument.findFirst({
+      where: { id: documentId, tenantId },
       select: {
         id: true, mimeType: true, sizeBytes: true, storageKey: true,
         category: true, filename: true, companyId: true,
