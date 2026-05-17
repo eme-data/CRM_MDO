@@ -17,6 +17,8 @@ import { MailService } from '../mail/mail.service';
 import { SettingsService } from '../settings/settings.service';
 import { CyberScoreService } from '../cyber-score/cyber-score.service';
 import { HealthScoreService } from '../health-score/health-score.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 // Repertoire physique ou sont stockes les PDF (un sous-dossier d'UPLOADS_DIR).
 const SUBDIR = 'client-reports';
@@ -35,6 +37,7 @@ export class ClientReportsService {
     private readonly config: ConfigService,
     private readonly cyber: CyberScoreService,
     private readonly health: HealthScoreService,
+    private readonly scope: TenantScope,
   ) {}
 
   private getUploadsDir(): string {
@@ -46,7 +49,22 @@ export class ClientReportsService {
    * meme periode existe deja, retourne l'existant (idempotent au mois pres) sauf
    * si `force = true`.
    */
+  /**
+   * Generation depuis l'API : assert que companyId appartient au tenant du
+   * caller avant d'agir. Le cron interne appelle generateForCompanyInternal
+   * directement (mode systeme, scope par tenant via la query company).
+   */
   async generateForCompany(
+    companyId: string,
+    periodStart: Date,
+    options: { force?: boolean; generatedById?: string | null },
+    me: JwtUser,
+  ) {
+    await this.scope.assertCompanyInTenant(companyId, me);
+    return this.generateForCompanyInternal(companyId, periodStart, options);
+  }
+
+  async generateForCompanyInternal(
     companyId: string,
     periodStart: Date,
     options: { force?: boolean; generatedById?: string | null } = {},
@@ -119,9 +137,9 @@ export class ClientReportsService {
    * Envoie le lien de telechargement au contact principal de la societe.
    * Renvoie le rapport mis a jour avec sentAt/sentTo/status=SENT.
    */
-  async sendByEmail(reportId: string, overrideTo?: string) {
-    const report = await this.prisma.clientReport.findUnique({
-      where: { id: reportId },
+  async sendByEmail(reportId: string, overrideTo: string | undefined, me: JwtUser | null) {
+    const report = await this.prisma.clientReport.findFirst({
+      where: me ? this.scope.scopedWhere(me, { id: reportId }) : { id: reportId },
       include: {
         company: {
           include: {
@@ -217,15 +235,18 @@ export class ClientReportsService {
     };
   }
 
-  async listForCompany(companyId: string) {
+  async listForCompany(companyId: string, me: JwtUser) {
+    await this.scope.assertCompanyInTenant(companyId, me);
     return this.prisma.clientReport.findMany({
-      where: { companyId },
+      where: this.scope.scopedWhere(me, { companyId }),
       orderBy: { periodStart: 'desc' },
     });
   }
 
-  async findById(id: string) {
-    const r = await this.prisma.clientReport.findUnique({ where: { id } });
+  async findById(id: string, me: JwtUser) {
+    const r = await this.prisma.clientReport.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
+    });
     if (!r) throw new NotFoundException('Rapport introuvable');
     return r;
   }
@@ -235,17 +256,20 @@ export class ClientReportsService {
     return path.join(this.getUploadsDir(), relPath);
   }
 
-  async listAll(params: { limit?: number; status?: ClientReportStatus } = {}) {
+  async listAll(params: { limit?: number; status?: ClientReportStatus }, me: JwtUser) {
+    const baseWhere = params.status ? { status: params.status } : {};
     return this.prisma.clientReport.findMany({
-      where: params.status ? { status: params.status } : undefined,
+      where: this.scope.scopedWhere(me, baseWhere),
       orderBy: { createdAt: 'desc' },
       take: params.limit ?? 100,
       include: { company: { select: { id: true, name: true } } },
     });
   }
 
-  async remove(id: string) {
-    const r = await this.prisma.clientReport.findUnique({ where: { id } });
+  async remove(id: string, me: JwtUser) {
+    const r = await this.prisma.clientReport.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
+    });
     if (!r) throw new NotFoundException();
     // On supprime aussi le fichier physique pour eviter l'accumulation sur disque.
     try {
@@ -286,8 +310,11 @@ export class ClientReportsService {
         });
         for (const c of customers) {
           try {
-            const report = await this.generateForCompany(c.id, lastMonth);
-            await this.sendByEmail(report.id);
+            // Mode systeme : appel direct des methodes internes (le cron n'a
+            // pas de JwtUser, on est deja scope par tenantId via la query
+            // tenant ci-dessus).
+            const report = await this.generateForCompanyInternal(c.id, lastMonth);
+            await this.sendByEmail(report.id, undefined, null);
             totalOk++;
           } catch (err: any) {
             totalFailed++;

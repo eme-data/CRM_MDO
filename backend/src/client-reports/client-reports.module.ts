@@ -5,6 +5,7 @@ import { PdfModule } from '../pdf/pdf.module';
 import { MailModule } from '../mail/mail.module';
 import { CyberScoreModule } from '../cyber-score/cyber-score.module';
 import { HealthScoreModule } from '../health-score/health-score.module';
+// TenantScopeModule est @Global(), TenantScope dispo sans import explicite.
 
 @Module({
   imports: [PdfModule, MailModule, CyberScoreModule, HealthScoreModule],

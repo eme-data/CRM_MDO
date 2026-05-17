@@ -35,18 +35,22 @@ export class ClientReportsController {
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('client-reports')
-  listAll(@Query('status') status?: ClientReportStatus, @Query('limit') limit?: string) {
+  listAll(
+    @CurrentUser() user: JwtUser,
+    @Query('status') status?: ClientReportStatus,
+    @Query('limit') limit?: string,
+  ) {
     return this.service.listAll({
       status,
       limit: limit ? parseInt(limit, 10) : undefined,
-    });
+    }, user);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Get('companies/:companyId/reports')
-  listForCompany(@Param('companyId') companyId: string) {
-    return this.service.listForCompany(companyId);
+  listForCompany(@Param('companyId') companyId: string, @CurrentUser() user: JwtUser) {
+    return this.service.listForCompany(companyId, user);
   }
 
   /**
@@ -66,23 +70,27 @@ export class ClientReportsController {
     return this.service.generateForCompany(companyId, period, {
       force: body.force === true,
       generatedById: user.id,
-    });
+    }, user);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('client-reports/:id/send')
-  send(@Param('id') id: string, @Body() body: { to?: string } = {}) {
-    return this.service.sendByEmail(id, body.to);
+  send(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtUser,
+    @Body() body: { to?: string } = {},
+  ) {
+    return this.service.sendByEmail(id, body.to, user);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.MANAGER)
   @Delete('client-reports/:id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.remove(id, user);
   }
 
   /**
@@ -93,8 +101,12 @@ export class ClientReportsController {
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('client-reports/:id/pdf')
-  async downloadAdmin(@Param('id') id: string, @Res() res: Response) {
-    const report = await this.service.findById(id);
+  async downloadAdmin(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtUser,
+    @Res() res: Response,
+  ) {
+    const report = await this.service.findById(id, user);
     const fullPath = this.service.getFullPath(report.pdfPath);
     return this.streamPdf(res, fullPath, this.filenameFor(report.periodStart));
   }
