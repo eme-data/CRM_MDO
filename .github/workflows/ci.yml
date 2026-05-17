@@ -8,6 +8,11 @@ on:
 
 permissions:
   contents: read
+  # Necessaire pour le job `release` qui push les images vers GHCR.
+  # Permissions lues uniquement par les jobs qui en ont besoin (job-level
+  # override possible si on voulait restreindre, mais ici inutile car les
+  # autres jobs n'utilisent pas ce token).
+  packages: write
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -112,6 +117,58 @@ jobs:
           push: false
           load: true
           tags: crm-mdo-frontend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://crm.mdoservices.fr/api
+
+  # ============================================================================
+  # CD : build + push images vers GHCR sur push main uniquement.
+  # Bloque par les jobs precedents (backend/frontend/docker-build) — si l'un
+  # echoue, pas d'image publiee. Les serveurs deployes via scripts/deploy.sh
+  # tirent ces images. Tags : `latest` + `sha-<short>` pour rollback facile.
+  # ============================================================================
+  release:
+    name: Release images to GHCR
+    runs-on: ubuntu-latest
+    needs: [backend, frontend, docker-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/crm-mdo-backend:latest
+            ghcr.io/${{ github.repository_owner }}/crm-mdo-backend:sha-${{ steps.sha.outputs.short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/crm-mdo-frontend:latest
+            ghcr.io/${{ github.repository_owner }}/crm-mdo-frontend:sha-${{ steps.sha.outputs.short }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |

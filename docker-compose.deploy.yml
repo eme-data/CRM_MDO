@@ -1,0 +1,23 @@
+# Override deploy : utilise les images preconstruites poussees par la CI
+# vers GHCR au lieu de builder localement sur le serveur. Reduit le temps
+# d'upgrade de ~3-5 min (build local) a ~30s (pull image).
+#
+# Usage :
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     -f docker-compose.deploy.yml pull
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     -f docker-compose.deploy.yml up -d
+#
+# Ou via le script wrapper : bash scripts/deploy.sh
+#
+# Pour rollback sur un SHA precis :
+#   CRM_IMAGE_TAG=sha-abc1234 bash scripts/deploy.sh
+services:
+  backend:
+    # `build` reste defini dans docker-compose.yml mais `image` prend le pas
+    # quand le tag existe localement (apres pull). Compose ne re-build pas
+    # si l'image est presente.
+    image: ghcr.io/eme-data/crm-mdo-backend:${CRM_IMAGE_TAG:-latest}
+
+  frontend:
+    image: ghcr.io/eme-data/crm-mdo-frontend:${CRM_IMAGE_TAG:-latest}
