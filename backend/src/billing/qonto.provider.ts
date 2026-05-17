@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { BillingProviderKind, BankSource, BankTransactionSide } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { SettingsService } from '../settings/settings.service';
+import { assertSafePublicUrl } from '../common/http/safe-fetch';
 import {
   BillingProvider,
   PushClientInput,
@@ -47,7 +48,14 @@ export class QontoProvider implements BillingProvider {
   }
 
   private async request<T = any>(method: 'GET' | 'POST', path: string, tenantId: string | null, body?: any): Promise<T> {
-    const url = (await this.base(tenantId)) + path;
+    const baseUrl = await this.base(tenantId);
+    // Anti-SSRF : si un tenant configure billing.qonto.apiBase pointant vers
+    // une IP privee/localhost (par erreur ou attaque), on bloque avant l'appel.
+    // Sinon, la cle Qonto et le payload (contenant des donnees client) fuit
+    // vers un service interne arbitraire. assertSafePublicUrl recheck aussi
+    // DNS rebinding.
+    await assertSafePublicUrl(baseUrl);
+    const url = baseUrl + path;
     const res = await fetch(url, {
       method,
       headers: {

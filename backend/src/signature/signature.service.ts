@@ -7,6 +7,7 @@ import { SettingsService } from '../settings/settings.service';
 import { PdfService } from '../pdf/pdf.service';
 import { DocuSealProvider } from './providers/docuseal.provider';
 import { YousignProvider } from './providers/yousign.provider';
+import { assertSafePublicUrl } from '../common/http/safe-fetch';
 import {
   NormalizedWebhookEvent,
   SignatureProviderApi,
@@ -40,6 +41,10 @@ export class SignatureService {
       if (!apiUrl || !apiKey) {
         throw new BadRequestException('DocuSeal selectionne mais apiUrl/apiKey non configures');
       }
+      // Anti-SSRF : refuse les apiUrl qui pointent vers IP privee/localhost.
+      // Empeche un tenant de configurer http://localhost:8080 (acces interne)
+      // ou http://10.0.0.1 (LAN) qui ferait fuiter la clé API + payload.
+      await assertSafePublicUrl(apiUrl);
       return new DocuSealProvider({ apiUrl, apiKey, webhookSecret: webhookSecret ?? undefined });
     }
     if (kind === 'YOUSIGN') {
@@ -49,6 +54,7 @@ export class SignatureService {
       if (!apiUrl || !apiKey) {
         throw new BadRequestException('Yousign selectionne mais apiUrl/apiKey non configures');
       }
+      await assertSafePublicUrl(apiUrl);
       return new YousignProvider({ apiUrl, apiKey, webhookSecret: webhookSecret ?? undefined });
     }
     throw new BadRequestException('Provider de signature inconnu : ' + kind);
@@ -65,6 +71,10 @@ export class SignatureService {
       const apiKey = await this.settings.get('signature.docuseal.apiKey', tenantId);
       const webhookSecret = await this.settings.get('signature.docuseal.webhookSecret', tenantId);
       if (!apiUrl || !apiKey) return null;
+      // Anti-SSRF (cf getActiveProvider). On retourne null silencieusement si
+      // l'URL est interdite — le caller (typiquement webhook) loggera juste
+      // "provider non configure" plutot que de surfacer l'erreur au public.
+      try { await assertSafePublicUrl(apiUrl); } catch { return null; }
       return new DocuSealProvider({ apiUrl, apiKey, webhookSecret: webhookSecret ?? undefined });
     }
     if (upper === 'YOUSIGN') {
@@ -72,6 +82,7 @@ export class SignatureService {
       const apiKey = await this.settings.get('signature.yousign.apiKey', tenantId);
       const webhookSecret = await this.settings.get('signature.yousign.webhookSecret', tenantId);
       if (!apiUrl || !apiKey) return null;
+      try { await assertSafePublicUrl(apiUrl); } catch { return null; }
       return new YousignProvider({ apiUrl, apiKey, webhookSecret: webhookSecret ?? undefined });
     }
     return null;

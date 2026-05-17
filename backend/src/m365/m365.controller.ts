@@ -104,6 +104,14 @@ export class M365Controller {
     @Query('error_description') errorDescription: string,
     @Res() res: Response,
   ) {
+    // Anti open-redirect : valide que state est un UUID (companyId attendu)
+    // avant de l'injecter dans l'URL de redirection. Sans ce check, un attaquant
+    // pourrait crafter un state malveillant qui escape le prefixe /companies/
+    // (ex. "../redirect-evil.com") et rediriger vers un site externe.
+    const isUuid = (s: string | undefined) =>
+      typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+    const safeState = isUuid(state) ? state : '';
+
     try {
       const result = await this.service.handleConsentCallback({
         tenant, admin_consent: adminConsent, state, error, error_description: errorDescription,
@@ -111,7 +119,7 @@ export class M365Controller {
       // Redirige vers la fiche societe avec un parametre de succes
       res.redirect(302, `/companies/${result.companyId}?m365=connected`);
     } catch (err: any) {
-      res.redirect(302, `/companies/${state ?? ''}?m365_error=${encodeURIComponent(err.message)}`);
+      res.redirect(302, `/companies/${safeState}?m365_error=${encodeURIComponent(err.message)}`);
     }
   }
 }
