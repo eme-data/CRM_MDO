@@ -90,18 +90,27 @@ export class NotificationsService {
       },
       select: { id: true, reference: true, endDate: true, ownerId: true, company: { select: { name: true } } },
     });
+    // Eviter N+1 : on charge en UNE query toutes les notifs CONTRACT_EXPIRING
+    // non-lues pour les contracts concernes, puis on filtre en memoire.
+    // Avant : 30 contrats = 31 queries (1 findMany + 30 findFirst).
+    // Apres : 30 contrats = 2 queries.
+    const expiringIds = expiring.map((c) => c.id);
+    const existingExpiring = expiringIds.length > 0
+      ? await this.prisma.notification.findMany({
+          where: {
+            type: 'CONTRACT_EXPIRING',
+            entityId: { in: expiringIds },
+            readAt: null,
+          },
+          select: { entityId: true, userId: true },
+        })
+      : [];
+    const alreadyNotifiedContracts = new Set(
+      existingExpiring.map((n) => n.entityId + '|' + n.userId),
+    );
     for (const c of expiring) {
       if (!c.ownerId) continue;
-      // Eviter doublon : ne pas pousser si une notif identique existe deja non-lue
-      const existing = await this.prisma.notification.findFirst({
-        where: {
-          userId: c.ownerId,
-          type: 'CONTRACT_EXPIRING',
-          entityId: c.id,
-          readAt: null,
-        },
-      });
-      if (existing) continue;
+      if (alreadyNotifiedContracts.has(c.id + '|' + c.ownerId)) continue;
       await this.push({
         userId: c.ownerId,
         type: 'CONTRACT_EXPIRING',
@@ -122,17 +131,24 @@ export class NotificationsService {
       },
       select: { id: true, reference: true, title: true, assigneeId: true, dueDate: true },
     });
+    // Meme deduplication groupee pour les tickets, sur la fenetre journee.
+    const overdueIds = overdueTickets.map((t) => t.id);
+    const existingOverdue = overdueIds.length > 0
+      ? await this.prisma.notification.findMany({
+          where: {
+            type: 'TICKET_OVERDUE',
+            entityId: { in: overdueIds },
+            createdAt: { gte: startOfDay(now), lte: endOfDay(now) },
+          },
+          select: { entityId: true, userId: true },
+        })
+      : [];
+    const alreadyNotifiedTickets = new Set(
+      existingOverdue.map((n) => n.entityId + '|' + n.userId),
+    );
     for (const t of overdueTickets) {
       if (!t.assigneeId) continue;
-      const existing = await this.prisma.notification.findFirst({
-        where: {
-          userId: t.assigneeId,
-          type: 'TICKET_OVERDUE',
-          entityId: t.id,
-          createdAt: { gte: startOfDay(now), lte: endOfDay(now) },
-        },
-      });
-      if (existing) continue;
+      if (alreadyNotifiedTickets.has(t.id + '|' + t.assigneeId)) continue;
       await this.push({
         userId: t.assigneeId,
         type: 'TICKET_OVERDUE',

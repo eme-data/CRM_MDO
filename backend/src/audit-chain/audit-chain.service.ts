@@ -112,13 +112,28 @@ export class AuditChainService {
   // Verification : reparcourt la chaine scellee et detecte les breaks
   // ============================================================
   async verify(): Promise<{ ok: boolean; verified: number; breaks: VerifyBreak[] }> {
-    const sealed = await this.prisma.activity.findMany({
-      where: { currentHash: { not: null }, sequence: { not: null } },
-      orderBy: { sequence: 'asc' },
-    });
+    // Pagination par batch pour eviter OOM quand la table Activity grossit
+    // (audit-chain accumule les sealed events indefiniment — a 1M+ rows ca
+    // saturait la heap Node). Cursor-based pagination via sequence (deja
+    // indexe et unique).
+    const BATCH_SIZE = 10_000;
     let prevHash: string | null = null;
     const breaks: VerifyBreak[] = [];
-    for (const e of sealed) {
+    let verified = 0;
+    let lastSequence: number | null = null;
+
+    while (true) {
+      const sealed = await this.prisma.activity.findMany({
+        where: {
+          currentHash: { not: null },
+          sequence: lastSequence === null ? { not: null } : { gt: lastSequence },
+        },
+        orderBy: { sequence: 'asc' },
+        take: BATCH_SIZE,
+      });
+      if (sealed.length === 0) break;
+
+      for (const e of sealed) {
       const canonical = this.canonicalize({
         id: e.id,
         userId: e.userId,
@@ -144,8 +159,13 @@ export class AuditChainService {
         });
       }
       prevHash = e.currentHash;
+      lastSequence = e.sequence;
+      verified++;
+      }
+      // Si on a recu moins que BATCH_SIZE, c'est la fin.
+      if (sealed.length < BATCH_SIZE) break;
     }
-    return { ok: breaks.length === 0, verified: sealed.length, breaks };
+    return { ok: breaks.length === 0, verified, breaks };
   }
 
   async stats() {

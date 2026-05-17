@@ -886,6 +886,9 @@ model EmailLog {
   // Permet de retrouver rapidement tous les emails lies a une entite donnee
   // (contrat, ticket, societe...) pour l'historique des relations.
   @@index([relatedEntity, relatedEntityId])
+  // Multi-tenant : queries filtrees par (tenantId, status) — dashboard admin
+  // "emails en echec", scan retry par tenant.
+  @@index([tenantId, status])
 }
 
 // =================== TICKETS (support client) ===================
@@ -3394,6 +3397,9 @@ model CallLog {
   @@index([userId])
   @@index([startedAt])
   @@index([direction, status])
+  // Rapports d'appels par tenant sur une periode : sans cet index, le tri
+  // chronologique scan toute la table CallLog cross-tenant.
+  @@index([tenantId, startedAt])
 }
 
 // =================== AI USAGE (suivi cout API Claude) ===================

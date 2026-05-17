@@ -146,9 +146,15 @@ export class CallTranscriptionService {
           take: 5, // batch pour limiter la facture
           select: { id: true },
         });
-        for (const c of calls) {
-          try { await this.transcribe(c.id); total++; }
-          catch (err: any) { this.logger.warn('Transcribe auto echec ' + c.id + ' : ' + err.message); }
+        // Parallelise les transcriptions Whisper (5 calls × ~10s sequentiels =
+        // 50s qui bloque le cron 15min ; en parallele = ~10s). Promise.all
+        // est OK car batch <= 5 (pas de risque de saturer l'API Whisper).
+        // allSettled : une transcription qui foire ne bloque pas les autres.
+        const results = await Promise.allSettled(calls.map((c) => this.transcribe(c.id)));
+        for (let i = 0; i < results.length; i++) {
+          const r = results[i];
+          if (r.status === 'fulfilled') total++;
+          else this.logger.warn('Transcribe auto echec ' + calls[i].id + ' : ' + (r.reason?.message ?? r.reason));
         }
       } catch (err: any) {
         this.logger.warn('Transcribe cron tenant ' + t.id + ' echec : ' + err.message);
