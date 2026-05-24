@@ -27,8 +27,12 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
-# shellcheck disable=SC1091
-set -a; . ./.env; set +a
+# NB : on NE source PAS le .env ici. Le .env contient parfois des valeurs avec
+# espaces non-quotees (ex: WEBAUTHN_RP_NAME=CRM crm.mdoservices.fr) qui font
+# planter le `source` bash (interprete le 2e token comme une commande). Le
+# script n'a de toute facon pas besoin des env vars : docker compose lit le
+# .env directement via interpolation, et le container backend a deja les vars
+# injectees via le `environment:` du docker-compose.yml.
 
 MIG_NAME="0001_baseline"
 MIG_DIR_REPO="backend/prisma/migrations/${MIG_NAME}"

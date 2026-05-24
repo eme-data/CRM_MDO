@@ -419,7 +419,8 @@ NEXT_PUBLIC_API_URL=https://${DOMAIN}/api
 # RP_ID = domaine racine du frontend. Si tu changes de domaine, les cles
 # enregistrees deviennent invalides (lien crypto liee a l'origin).
 WEBAUTHN_RP_ID=${DOMAIN}
-WEBAUTHN_RP_NAME=CRM ${DOMAIN}
+# RP_NAME quote : contient un espace, sinon `source .env` casse en bash.
+WEBAUTHN_RP_NAME="CRM ${DOMAIN}"
 WEBAUTHN_ORIGINS=https://${DOMAIN}
 
 # --- Caddy auto-provisioning (multi-tenant DSI) ---
@@ -519,7 +520,7 @@ elif [[ -f "${ENV_FILE}" ]]; then
   # Mise a jour incrementale : ajoute les nouvelles cles si manquantes
   for kv in \
     "WEBAUTHN_RP_ID=${DOMAIN}" \
-    "WEBAUTHN_RP_NAME=CRM ${DOMAIN}" \
+    "WEBAUTHN_RP_NAME=\"CRM ${DOMAIN}\"" \
     "WEBAUTHN_ORIGINS=https://${DOMAIN}" \
     "CADDY_PROVISIONING=enabled" \
     "CADDY_ADMIN_URL=http://caddy:2019" \
