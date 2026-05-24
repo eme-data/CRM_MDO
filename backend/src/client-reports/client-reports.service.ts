@@ -186,6 +186,7 @@ export class ClientReportsService {
       html,
       relatedEntity: 'ClientReport',
       relatedEntityId: report.id,
+      tenantId: report.tenantId,
     });
 
     if (result.status !== 'SENT') {

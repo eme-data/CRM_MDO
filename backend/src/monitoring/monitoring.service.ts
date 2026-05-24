@@ -120,6 +120,7 @@ export class MonitoringService {
           daysRemaining,
           asset: { id: asset.id, name: asset.name, identifier: asset.identifier },
           company: { name: asset.company.name },
+          tenantId: asset.tenantId,
         });
       } catch (err: any) {
         this.logger.warn('Email alerte ' + kind + ' echoue (' + asset.id + ') : ' + err.message);
@@ -278,7 +279,7 @@ export class MonitoringService {
     for (const [ownerId, list] of byOwner) {
       const user = await this.prisma.user.findUnique({
         where: { id: ownerId },
-        select: { email: true, isActive: true },
+        select: { email: true, isActive: true, tenantId: true },
       });
       if (!user?.email || !user.isActive) continue;
 
@@ -295,6 +296,7 @@ export class MonitoringService {
               companyName: a.company.name,
               expiresAt: a.expiresAt!,
             })),
+          tenantId: user.tenantId,
         });
         sent++;
       } catch (err: any) {

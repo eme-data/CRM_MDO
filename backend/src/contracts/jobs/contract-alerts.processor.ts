@@ -69,6 +69,7 @@ export class ContractAlertsProcessor {
           },
           company: { name: alert.contract.company.name },
           daysBefore: alert.daysBefore,
+          tenantId: alert.contract.tenantId,
         });
 
         await this.prisma.contractRenewalAlert.update({

@@ -32,7 +32,7 @@ export class PortalAuthService {
    * contient le domaine xyz.fr.
    * Retourne null si aucun match (on ne leak pas cette info au client).
    */
-  private async findCompanyByEmail(email: string): Promise<{ id: string; name: string } | null> {
+  private async findCompanyByEmail(email: string): Promise<{ id: string; name: string; tenantId: string | null } | null> {
     const at = email.lastIndexOf('@');
     if (at === -1) return null;
     const domain = email.slice(at + 1).toLowerCase().trim();
@@ -47,7 +47,7 @@ export class PortalAuthService {
           { email: { endsWith: '@' + domain, mode: 'insensitive' } },
         ],
       },
-      select: { id: true, name: true },
+      select: { id: true, name: true, tenantId: true },
       take: 5,
     });
     if (candidates.length === 0) return null;
@@ -156,6 +156,7 @@ export class PortalAuthService {
       html,
       relatedEntity: 'ClientPortalUser',
       relatedEntityId: user.id,
+      tenantId: company.tenantId,
     });
 
     return { ok: true };

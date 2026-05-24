@@ -17,6 +17,7 @@ interface ContractAlertParams {
   };
   company: { name: string };
   daysBefore: number;
+  tenantId?: string | null;
 }
 
 interface MailAttachment {
@@ -97,6 +98,7 @@ export class MailService {
   async send(params: SendOptions): Promise<SendResult> {
     const log = await this.prisma.emailLog.create({
       data: {
+        tenantId: params.tenantId ?? null,
         toEmail: params.to,
         subject: params.subject,
         bodyHtml: params.html,
@@ -342,6 +344,7 @@ export class MailService {
     daysRemaining: number;
     asset: { id: string; name: string; identifier: string | null };
     company: { name: string };
+    tenantId?: string | null;
   }) {
     const label = params.kind === 'SSL' ? 'Certificat SSL' : 'Domaine';
     const urgency =
@@ -391,6 +394,7 @@ export class MailService {
         ' jour(s).',
       relatedEntity: 'Asset',
       relatedEntityId: params.asset.id,
+      tenantId: params.tenantId,
     });
   }
 
@@ -404,6 +408,7 @@ export class MailService {
       companyName: string;
       expiresAt: Date;
     }>;
+    tenantId?: string | null;
   }) {
     if (params.items.length === 0) return;
     const subject =
@@ -471,6 +476,7 @@ export class MailService {
           )
           .join('\n'),
       relatedEntity: 'AssetDigest',
+      tenantId: params.tenantId,
     });
   }
 
@@ -526,6 +532,7 @@ export class MailService {
         endDateFr +
         ').',
       relatedEntity: 'Contract',
+      tenantId: params.tenantId,
     });
   }
 }

@@ -111,6 +111,7 @@ model Tenant {
   signatureRequests   SignatureRequest[]
   callLogs            CallLog[]
   pushSubscriptions   PushSubscription[]
+  emailLogs           EmailLog[]
 
   @@index([customDomain])
   @@index([slug])
@@ -871,6 +872,12 @@ model Setting {
 
 model EmailLog {
   id              String      @id @default(uuid())
+  // tenantId : nullable pour preserver l'historique pre-migration (rows envoyes
+  // avant l'ajout du champ). Tous les nouveaux EmailLog DOIVENT avoir un
+  // tenantId pour respecter l'isolation multi-tenant. Backfill optionnel via
+  // hydratation depuis Activity (relatedEntity + relatedEntityId -> tenantId).
+  tenantId        String?
+  tenant          Tenant?     @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   toEmail         String
   subject         String
   bodyHtml        String
@@ -886,10 +893,9 @@ model EmailLog {
   // Permet de retrouver rapidement tous les emails lies a une entite donnee
   // (contrat, ticket, societe...) pour l'historique des relations.
   @@index([relatedEntity, relatedEntityId])
-  // Note : EmailLog n'a pas de champ tenantId par design — le scope tenant
-  // est implicite via relatedEntity/relatedEntityId. Si on veut filtrer
-  // EmailLog par tenant, ajouter d'abord le champ + backfill via le tenantId
-  // de l'entite liee, puis l'index.
+  // Scope tenant : listes par statut et listes chronologiques tenant-scoped.
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
 }
 
 // =================== TICKETS (support client) ===================

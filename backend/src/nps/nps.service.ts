@@ -97,6 +97,7 @@ export class NpsService {
       html,
       relatedEntity: 'TicketSatisfaction',
       relatedEntityId: sat.id,
+      tenantId: ticket.tenantId,
     });
     if (result.status !== 'SENT') {
       // On garde le record cree mais on remonte l'erreur (l'admin peut relancer).
