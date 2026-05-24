@@ -40,9 +40,15 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD wget --quiet --spider http://127.0.0.1:4000/health || exit 1
 
 # dumb-init = reaper PID 1 propre (gere SIGTERM, evite les zombies).
-# Synchronise le schema (db push si pas de migrations, sinon migrate deploy) puis demarre.
+# Synchronisation schema :
+#   - Si des migrations existent : `prisma migrate deploy` (idempotent, trace).
+#   - Sinon : fallback `prisma db push` UNIQUEMENT si ALLOW_PRISMA_DB_PUSH_FALLBACK=true.
+#     Ce fallback masquait les ratés de schema et empechait toute tracabilite ;
+#     on le garde activable pour les bootstraps "from scratch" mais on emet un
+#     warn explicite pour ne plus l'oublier en prod multi-instance (cf
+#     docs/prisma-migrations.md).
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["sh", "-c", "(ls prisma/migrations/*/migration.sql >/dev/null 2>&1 && npx prisma migrate deploy || npx prisma db push --skip-generate --accept-data-loss) && node dist/main.js"]
+CMD ["sh", "-c", "if ls prisma/migrations/*/migration.sql >/dev/null 2>&1; then npx prisma migrate deploy; elif [ \"${ALLOW_PRISMA_DB_PUSH_FALLBACK:-false}\" = \"true\" ]; then echo '[WARN] Aucune migration trouvee, fallback prisma db push --accept-data-loss (cf docs/prisma-migrations.md pour passer en mode migrate)'; npx prisma db push --skip-generate --accept-data-loss; else echo '[ERROR] Aucune migration trouvee. Generez la baseline via scripts/migrate-baseline.sh ou positionnez ALLOW_PRISMA_DB_PUSH_FALLBACK=true (deconseille en prod).'; exit 1; fi && node dist/main.js"]
 
 # -------- development --------
 FROM deps AS development
