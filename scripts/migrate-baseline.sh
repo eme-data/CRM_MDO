@@ -27,8 +27,12 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
-# shellcheck disable=SC1091
-set -a; . ./.env; set +a
+# NB : on NE source PAS le .env ici. Le .env contient parfois des valeurs avec
+# espaces non-quotees (ex: WEBAUTHN_RP_NAME=CRM crm.mdoservices.fr) qui font
+# planter le `source` bash (interprete le 2e token comme une commande). Le
+# script n'a de toute facon pas besoin des env vars : docker compose lit le
+# .env directement via interpolation, et le container backend a deja les vars
+# injectees via le `environment:` du docker-compose.yml.
 
 MIG_NAME="0001_baseline"
 MIG_DIR_REPO="backend/prisma/migrations/${MIG_NAME}"
@@ -40,9 +44,8 @@ if [[ -f "${MIG_FILE_REPO}" ]]; then
 else
   echo "[baseline] Generation depuis le schema actuel..."
   mkdir -p "${MIG_DIR_REPO}"
-  # On genere dans le container (Prisma engine Linux fiable), puis on cat le
-  # contenu sur l'hote via le volume monte. Le repo est typiquement monte en
-  # `/app` dans l'image backend (cf Dockerfile COPY .).
+  # On genere dans le container (Prisma engine Linux fiable), redirection
+  # stdout vers le repo cote host.
   docker compose exec -T backend \
     npx prisma migrate diff \
       --from-empty \
@@ -59,7 +62,16 @@ else
   echo "[baseline] IMPORTANT : commit ce fichier dans git apres execution."
 fi
 
-# ----- 2. Marquer comme deja appliquee en BDD -----
+# ----- 2. Copier la baseline dans le container backend -----
+# Le container backend a son FS fige au build (COPY . .) et ne voit donc PAS
+# le 0001_baseline qu'on vient de creer sur l'host. `prisma migrate resolve`
+# cherche le dossier dans `prisma/migrations/` du container → on l'y copie
+# explicitement avant de resoudre. Le migration_lock.toml est deja dans
+# l'image (committe au repo).
+echo "[baseline] Copie de la baseline dans le container backend..."
+docker compose cp "${MIG_DIR_REPO}" backend:/app/prisma/migrations/
+
+# ----- 3. Marquer comme deja appliquee en BDD -----
 echo "[baseline] Marquage en BDD via prisma migrate resolve --applied..."
 docker compose exec -T backend \
   npx prisma migrate resolve --applied "${MIG_NAME}"
