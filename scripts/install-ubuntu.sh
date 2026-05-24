@@ -457,6 +457,63 @@ ENVFILE_EOF
   chmod 600 "${ENV_FILE}"
   chown "${TARGET_USER}:${TARGET_USER}" "${ENV_FILE}"
   ok ".env genere"
+
+  # =====================================================================
+  # Bootstrap secrets escrow
+  # =====================================================================
+  # Sans escrow externe de SECRETS_MASTER_KEY, la perte du serveur = perte
+  # irreversible des SecretEntry (coffre-fort), des TOTP, et impossibilite
+  # de restaurer un backup chiffre. On materialise les secrets critiques
+  # dans un fichier accessible uniquement par root pour que l'operateur les
+  # transfere en escrow externe (1Password, Vaultwarden, KeepassXC, papier
+  # dans un coffre physique) AVANT le 1er usage. Cf docs/secrets-escrow.md.
+  BOOTSTRAP_SECRETS_FILE="/root/CRM_MDO_BOOTSTRAP_SECRETS_${DOMAIN}.txt"
+  cat > "${BOOTSTRAP_SECRETS_FILE}" <<SECRETS_EOF
+================================================================================
+CRM MDO Services - SECRETS BOOTSTRAP
+Domaine : ${DOMAIN}
+Genere le : $(date -Iseconds)
+Hote : $(hostname -f 2>/dev/null || hostname)
+================================================================================
+
+ACTION REQUISE IMMEDIATEMENT
+============================
+1. Copier ces secrets dans un gestionnaire de mots de passe EXTERNE
+   (1Password, Vaultwarden, KeePassXC) ET dans un support hors-ligne
+   (papier dans coffre, cle USB chiffree dans un autre lieu).
+2. Verifier que la copie est lisible (test de relecture).
+3. Effacer ce fichier de maniere securisee :
+     sudo shred -u "${BOOTSTRAP_SECRETS_FILE}"
+
+CONSEQUENCES SI PERTE DE CES SECRETS
+====================================
+- SECRETS_MASTER_KEY perdue = tous les SecretEntry (coffre-fort client),
+  tous les secrets TOTP 2FA, et tous les credentials chiffres sont
+  IRRECUPERABLES (chiffrement AES-GCM avec cle non-derivable).
+- JWT_SECRET / JWT_REFRESH_SECRET perdus = tous les tokens emis deviennent
+  invalides (forcer une reconnexion globale). Pas critique en soi mais
+  necessaire pour une rotation propre.
+- POSTGRES_PASSWORD / REDIS_PASSWORD perdus = besoin de regenerer + redeploy.
+
+SECRETS A METTRE EN ESCROW
+==========================
+POSTGRES_PASSWORD=${PG_PASS}
+REDIS_PASSWORD=${REDIS_PASS}
+JWT_SECRET=${JWT_SECRET}
+JWT_REFRESH_SECRET=${JWT_REFRESH}
+SECRETS_MASTER_KEY=${SECRETS_KEY}
+
+PROCEDURE DE ROTATION
+=====================
+Cf docs/secrets-escrow.md pour la procedure detaillee de rotation
+non-destructive (JWT_SECRET / POSTGRES_PASSWORD).
+ATTENTION : SECRETS_MASTER_KEY NE DOIT JAMAIS ETRE TOURNEE apres mise
+en service sans re-chiffrement explicite de toutes les SecretEntry.
+SECRETS_EOF
+  chmod 600 "${BOOTSTRAP_SECRETS_FILE}"
+  warn "Secrets bootstrap ecrits : ${BOOTSTRAP_SECRETS_FILE}"
+  warn "ACTION REQUISE : mettre ces secrets en escrow externe AVANT mise en prod, puis shred -u ${BOOTSTRAP_SECRETS_FILE}"
+  warn "Cf docs/secrets-escrow.md"
 elif [[ -f "${ENV_FILE}" ]]; then
   ok ".env existant conserve"
   # Mise a jour incrementale : ajoute les nouvelles cles si manquantes
@@ -672,8 +729,11 @@ chown "${TARGET_USER}:${TARGET_USER}" "${BACKUP_DIR}"
 cat > /etc/cron.d/crm-mdo-backup <<CRON_EOF
 # Backup quotidien CRM MDO Services a 03h00
 0 3 * * * ${TARGET_USER} cd ${INSTALL_DIR} && ${BACKUP_SCRIPT} ${BACKUP_DIR} >> /var/log/crm-mdo-backup.log 2>&1
-# Backup off-site chiffre (restic) a 04h00 - actif uniquement si /etc/crm-mdo/backup.env existe
-0 4 * * * ${TARGET_USER} test -r /etc/crm-mdo/backup.env && ${INSTALL_DIR}/scripts/backup-offsite.sh >> /var/log/crm-mdo-backup-offsite.log 2>&1
+# Backup off-site chiffre (restic) a 04h00.
+# Si /etc/crm-mdo/backup.env est absent on logue explicitement plutot que de
+# skip silencieusement (le silence masquait l'absence d'offsite en prod, cf
+# audit infra 2026-05). Le backend expose la freshness via /health + /metrics.
+0 4 * * * ${TARGET_USER} cd ${INSTALL_DIR} && (test -r /etc/crm-mdo/backup.env && scripts/backup-offsite.sh || echo "[\$(date -Iseconds)] [SKIP] /etc/crm-mdo/backup.env absent - offsite non configure (cf docs/prisma-migrations.md & install-ubuntu.sh)") >> /var/log/crm-mdo-backup-offsite.log 2>&1
 CRON_EOF
 chmod 644 /etc/cron.d/crm-mdo-backup
 ok "Cron backup configure (3h00 local, 4h00 offsite si /etc/crm-mdo/backup.env present)"
@@ -812,5 +872,10 @@ echo
 if [[ "${MODE}" == "install" ]]; then
   warn "Pensez a completer les variables SMTP dans ${ENV_FILE} puis redemarrez le backend :"
   warn "  cd ${INSTALL_DIR} && docker compose restart backend"
+  echo
+  warn "==> SECURITE : avant ouverture au public, mettre les secrets bootstrap en"
+  warn "    escrow externe (1Password / coffre / papier) puis effacer le fichier :"
+  warn "      sudo shred -u ${BOOTSTRAP_SECRETS_FILE:-/root/CRM_MDO_BOOTSTRAP_SECRETS_${DOMAIN}.txt}"
+  warn "    Documentation : ${INSTALL_DIR}/docs/secrets-escrow.md"
 fi
 echo
