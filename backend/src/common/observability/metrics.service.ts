@@ -1,7 +1,13 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { collectDefaultMetrics, Gauge, register } from 'prom-client';
+import { stat, readFile } from 'fs/promises';
 import { PrismaService } from '../../database/prisma.service';
+
+// Fichier ecrit par scripts/backup-offsite.sh apres un run reussi. Le path est
+// dans le volume Docker `system-backups` (monte a /app/backups dans le backend),
+// que le script alimente via `docker compose exec`. -1 = jamais ecrit.
+const BACKUP_OFFSITE_HEARTBEAT_FILE = '/app/backups/.offsite-lastrun';
 
 // Refresh des gauges metier en tache de fond plutot qu'a chaque scrape Prometheus.
 // Pourquoi : sans cache, chaque appel `/metrics` declenche un count() + groupBy()
@@ -39,6 +45,9 @@ export class MetricsService implements OnModuleInit {
   // Operationnel
   readonly uptimeMonitorsDown: Gauge<string>;    // lastStatus = "DOWN"
   readonly timeEntriesUnbilledMinutes: Gauge<string>; // somme durationMin non facture
+  // Backup off-site (restic) : age en secondes depuis le dernier run reussi.
+  // -1 = jamais execute (= offsite non configure ou cron jamais passe).
+  readonly backupOffsiteAge: Gauge<string>;
 
   constructor(private readonly prisma: PrismaService) {
     if (!defaultsCollected) {
@@ -84,6 +93,10 @@ export class MetricsService implements OnModuleInit {
     this.timeEntriesUnbilledMinutes = this.gauge(
       'crm_time_entries_unbilled_minutes',
       'Minutes facturables non encore facturees (billable=true, invoicedAt=null, endedAt!=null)',
+    );
+    this.backupOffsiteAge = this.gauge(
+      'crm_backup_offsite_seconds_since_last_run',
+      'Age en secondes du dernier run backup-offsite.sh reussi. -1 si jamais execute.',
     );
   }
 
@@ -191,6 +204,30 @@ export class MetricsService implements OnModuleInit {
       // Log warn (pas error) car la BDD peut etre brievement indisponible ;
       // on garde les anciennes valeurs.
       this.logger.warn('Refresh metriques echoue : ' + err.message);
+    }
+
+    // Backup offsite : indep des metriques BDD, refresh meme si la BDD est KO
+    // (utile pour alerter qu'on tourne sans backup pendant un incident DB).
+    await this.refreshBackupOffsite();
+  }
+
+  private async refreshBackupOffsite() {
+    try {
+      const content = await readFile(BACKUP_OFFSITE_HEARTBEAT_FILE, 'utf8');
+      const ts = parseInt(content.trim(), 10);
+      if (Number.isFinite(ts) && ts > 0) {
+        const ageSec = Math.max(0, Math.floor(Date.now() / 1000) - ts);
+        this.backupOffsiteAge.set(ageSec);
+        return;
+      }
+      // Fallback : si le contenu n'est pas parsable, on utilise le mtime.
+      const st = await stat(BACKUP_OFFSITE_HEARTBEAT_FILE);
+      const ageSec = Math.max(0, Math.floor((Date.now() - st.mtimeMs) / 1000));
+      this.backupOffsiteAge.set(ageSec);
+    } catch {
+      // Fichier absent = backup offsite jamais execute (ou non configure).
+      // -1 plutot que 0 pour distinguer "tres frais" de "inconnu" cote Grafana.
+      this.backupOffsiteAge.set(-1);
     }
   }
 }

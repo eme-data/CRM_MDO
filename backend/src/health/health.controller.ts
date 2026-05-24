@@ -1,8 +1,15 @@
 import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { statfs } from 'fs/promises';
+import { statfs, readFile, stat } from 'fs/promises';
 import { Public } from '../common/decorators/public.decorator';
 import { PrismaService } from '../database/prisma.service';
+
+// Cf MetricsService : alimentee par scripts/backup-offsite.sh apres run reussi.
+const BACKUP_OFFSITE_HEARTBEAT_FILE = '/app/backups/.offsite-lastrun';
+// Warn si > 26h (cron tourne a 4h, donc < 26h = au moins 1 run sur 24h).
+const BACKUP_OFFSITE_WARN_AGE_SEC = 26 * 3600;
+// KO si > 7j : a ce stade le offsite est clairement casse ou non configure.
+const BACKUP_OFFSITE_KO_AGE_SEC = 7 * 24 * 3600;
 
 // Endpoint /health pour monitoring externe (Caddy, UptimeRobot, etc.).
 //
@@ -30,13 +37,17 @@ export class HealthController {
       this.checkDb(),
       this.checkRedis(),
       this.checkDisk(),
+      this.checkBackupOffsite(),
     ]);
-    const [db, redis, disk] = results.map((r) =>
+    const [db, redis, disk, backupOffsite] = results.map((r) =>
       r.status === 'fulfilled' ? r.value : { status: 'ko', error: String(r.reason?.message ?? r.reason) },
     );
 
     // Status overall : 'down' si DB KO (rien ne marche), 'degraded' si Redis
     // ou disk KO (l'app sert encore mais avec capacite reduite), sinon 'ok'.
+    // backupOffsite n'impacte pas le status global (un offsite manquant
+    // n'empeche pas l'app de servir) — il sert d'alerte JSON pour le
+    // monitoring externe (UptimeRobot, Grafana scrapent ce payload).
     const status =
       db.status === 'ko' ? 'down'
       : (redis.status === 'ko' || disk.status === 'warn' || disk.status === 'ko') ? 'degraded'
@@ -45,7 +56,7 @@ export class HealthController {
     const mem = process.memoryUsage();
     return {
       status,
-      checks: { db, redis, disk },
+      checks: { db, redis, disk, backupOffsite },
       uptime: Math.round(process.uptime()),
       memory: {
         rssMb: Math.round(mem.rss / 1024 / 1024),
@@ -53,6 +64,42 @@ export class HealthController {
       },
       timestamp: new Date().toISOString(),
     };
+  }
+
+  // Backup offsite : freshness du heartbeat ecrit par scripts/backup-offsite.sh.
+  // 'disabled' si le fichier n'existe pas (= offsite non configure, attendu sur
+  // les nouvelles installs avant la mise en place de restic).
+  private async checkBackupOffsite(): Promise<{
+    status: 'ok' | 'warn' | 'ko' | 'disabled';
+    ageSeconds?: number;
+    lastRunAt?: string;
+  }> {
+    try {
+      let ts: number | null = null;
+      try {
+        const content = await readFile(BACKUP_OFFSITE_HEARTBEAT_FILE, 'utf8');
+        const parsed = parseInt(content.trim(), 10);
+        if (Number.isFinite(parsed) && parsed > 0) ts = parsed;
+      } catch {
+        // fallback mtime si le fichier existe mais vide / non parsable
+      }
+      if (ts === null) {
+        const st = await stat(BACKUP_OFFSITE_HEARTBEAT_FILE);
+        ts = Math.floor(st.mtimeMs / 1000);
+      }
+      const ageSec = Math.max(0, Math.floor(Date.now() / 1000) - ts);
+      const status: 'ok' | 'warn' | 'ko' =
+        ageSec > BACKUP_OFFSITE_KO_AGE_SEC ? 'ko'
+        : ageSec > BACKUP_OFFSITE_WARN_AGE_SEC ? 'warn'
+        : 'ok';
+      return {
+        status,
+        ageSeconds: ageSec,
+        lastRunAt: new Date(ts * 1000).toISOString(),
+      };
+    } catch {
+      return { status: 'disabled' };
+    }
   }
 
   private async checkDb(): Promise<{ status: 'ok' | 'ko'; latencyMs?: number; error?: string }> {

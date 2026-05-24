@@ -108,6 +108,19 @@ restic backup \
 echo "[$(date -Iseconds)] Verification du dernier snapshot..."
 restic snapshots --latest 1 --compact
 
+# ---- Heartbeat pour /health + /metrics --------------------------------------
+# Ecrit le timestamp Unix du dernier run reussi dans le volume Docker
+# system-backups (monte dans le backend a /app/backups). Le HealthController
+# + MetricsService lisent ce fichier pour exposer la freshness du backup
+# offsite (alerte si > 26h, KO si > 7j). Si docker indispo : on n'echoue pas
+# le backup pour autant.
+NOW_UNIX=$(date +%s)
+if docker compose exec -T backend sh -c "echo ${NOW_UNIX} > /app/backups/.offsite-lastrun" 2>/dev/null; then
+  echo "[$(date -Iseconds)] Heartbeat ecrit (timestamp ${NOW_UNIX})"
+else
+  echo "[$(date -Iseconds)] [WARN] Heartbeat non ecrit (container backend inaccessible)" >&2
+fi
+
 echo "[$(date -Iseconds)] Backup off-site OK"
 
 # ---- Notice retention ------------------------------------------------------
