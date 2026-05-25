@@ -143,37 +143,28 @@ export class SystemBackupService implements OnModuleInit {
         };
         await fs.writeFile(path.join(workDir, 'metadata.json'), JSON.stringify(meta, null, 2));
 
-        // 3. Symlink uploads/ dans workspace si include (tar suit pas les liens
-        // par defaut, mais -h suit les liens — ou on copie en hard link)
-        let tarArgs = ['-czf', fullPath, '-C', workDir, 'db.dump', 'metadata.json'];
-        if (includeUploads) {
-          // tar avec -C uploadsDir et nom 'uploads' pour que le tar contienne
-          // le bon prefix — on tar 2 sources en chaine via append
-          await this.runShell('tar', tarArgs, { timeoutMs: PG_DUMP_TIMEOUT_MS });
-          // Append uploads (tar -A ne marche pas bien avec gzip — on retar tout)
-          // Plus simple : creer un sous-dir uploads/ via lien hardlink est risque
-          // (cross-fs), donc on copie. Trop lourd pour gros volumes.
-          // Solution finale : on fait un seul tar qui inclut workspace + uploads
-          // sous un prefix transform.
-          await fs.unlink(fullPath); // re-tar tout
-          tarArgs = [
-            '-czf', fullPath,
-            '-C', workDir, 'db.dump', 'metadata.json',
-            '-C', this.getUploadsDir(), '.',
-          ];
-          // tar avec multiple -C : le 2eme -C s'applique aux args suivants. Pour
-          // que les uploads soient sous "uploads/" dans l'archive, on utilise
-          // --transform 's,^./,uploads/,' (gnu tar) ou on tar le parent.
-          // Sur Alpine, busybox tar ne supporte pas --transform — on utilise
-          // donc le tar gnu installe via apk. Verifions plus tard, pour l'instant
-          // on accepte que les uploads soient au root du tar (pas grave car
-          // on re-tarera proprement au restore).
-          await this.runShell('tar', tarArgs, { timeoutMs: PG_DUMP_TIMEOUT_MS });
-        } else {
-          await this.runShell('tar', tarArgs, { timeoutMs: PG_DUMP_TIMEOUT_MS });
-        }
+        // 3. Un seul tar atomique : workspace (db.dump + metadata.json) +
+        // contenu de uploads/ (concatenes a la racine de l'archive, le
+        // restore reconnait db.dump/metadata.json et copie le reste vers
+        // /app/uploads). Pas de double-tar + unlink intermediaire (qui
+        // pouvait laisser un .tar.gz tronque si l'unlink rate ou si le 2eme
+        // tar plante en cours -> backup non-restorable detecte trop tard).
+        const tarArgs = includeUploads
+          ? [
+              '-czf', fullPath,
+              '-C', workDir, 'db.dump', 'metadata.json',
+              '-C', this.getUploadsDir(), '.',
+            ]
+          : ['-czf', fullPath, '-C', workDir, 'db.dump', 'metadata.json'];
+        await this.runShell('tar', tarArgs, { timeoutMs: PG_DUMP_TIMEOUT_MS });
 
-        // 4. Stat fichier
+        // 4. Verification d'integrite : tar -tzf reussit ssi l'archive est
+        // listable bout en bout (catch les ecritures partielles cas FS plein,
+        // process kille en cours, etc.). Sans ca, un backup corrompu n'etait
+        // detecte qu'au moment du restore — trop tard.
+        await this.runShell('tar', ['-tzf', fullPath], { timeoutMs: 60_000 });
+
+        // 5. Stat fichier
         const stat = await fs.stat(fullPath);
 
         // 5. Update record COMPLETED

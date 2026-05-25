@@ -60,13 +60,28 @@ export default function SystemBackupPage() {
   const confirm = useConfirm();
 
   async function load() {
-    const [list, st] = await Promise.all([
+    // allSettled : si /stats echoue (DB lente, BigInt KO), on conserve la
+    // liste deja recue au lieu d'afficher une page vide sans toast.
+    const [listR, statsR] = await Promise.allSettled([
       api.get('/system-backup'),
       api.get('/system-backup/stats'),
     ]);
-    setItems(list); setStats(st);
+    if (listR.status === 'fulfilled') setItems(listR.value);
+    else toast.error('Liste backups indisponible : ' + (listR.reason?.message ?? 'erreur'));
+    if (statsR.status === 'fulfilled') setStats(statsR.value);
   }
   useEffect(() => { load(); }, []);
+
+  // Polling tant qu'un backup est en cours (RUNNING). Cron interne (02:30) ou
+  // creation manuelle : le record passe par RUNNING avant COMPLETED/FAILED.
+  // Sans polling, l'UI restait figee sur "RUNNING" jusqu'a reload manuel. On
+  // sort de la boucle des qu'aucun RUNNING n'est present (clear immediat).
+  useEffect(() => {
+    const hasRunning = items.some((b) => b.status === 'RUNNING');
+    if (!hasRunning) return;
+    const id = setInterval(() => { load(); }, 3000);
+    return () => clearInterval(id);
+  }, [items]);
 
   async function createNow(includeUploads: boolean) {
     setCreating(true);
@@ -125,8 +140,9 @@ export default function SystemBackupPage() {
       setRestoring(null);
       setRestorePassword('');
       setRestorePhrase('');
-      // Recharge pour afficher le nouveau snapshot pre-restore + l'horodatage
-      setTimeout(load, 1000);
+      // Recharge immediate (le polling useEffect prendra le relais si un
+      // PRE_RESTORE backup est encore en RUNNING au moment du retour).
+      load();
     } catch (err: any) { toast.error('Restauration echouee : ' + err.message); }
     finally { setRestoreInProgress(false); }
   }
@@ -192,7 +208,7 @@ export default function SystemBackupPage() {
                 <td className="p-3">{formatBytes(b.sizeBytes)}</td>
                 <td className="p-3 text-xs">{b.createdBy ? b.createdBy.firstName + ' ' + b.createdBy.lastName : '-'}</td>
                 <td className="p-3">
-                  <span className={'badge ' + STATUS_COLOR[b.status]}>{b.status}</span>
+                  <span className={'badge ' + STATUS_COLOR[b.status] + (b.status === 'RUNNING' ? ' animate-pulse' : '')}>{b.status}</span>
                   {b.errorMessage && <div className="text-[10px] text-red-600 mt-1" title={b.errorMessage}>{b.errorMessage.slice(0, 40)}...</div>}
                 </td>
                 <td className="p-3 text-xs">
@@ -221,7 +237,7 @@ export default function SystemBackupPage() {
       {/* Modal restore */}
       {restoring && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 space-y-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center gap-2 text-red-600">
               <AlertTriangle size={24} />
               <h2 className="text-xl font-bold">Restaurer depuis ce backup ?</h2>
