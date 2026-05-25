@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ContractOffer, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 interface TemplateLineInput {
   description: string;
@@ -11,13 +13,20 @@ interface TemplateLineInput {
   position?: number;
 }
 
+// Multi-tenant : les templates de devis sont specifiques au catalogue
+// commercial de chaque tenant. Toute query passe par scope.scopedWhere(me)
+// + tout create copie le tenantId du caller. Cf migration 0003.
+
 @Injectable()
 export class QuoteTemplatesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
+  ) {}
 
-  list(includeInactive = false) {
+  list(me: JwtUser, includeInactive = false) {
     return this.prisma.quoteTemplate.findMany({
-      where: includeInactive ? {} : { isActive: true },
+      where: this.scope.scopedWhere(me, includeInactive ? {} : { isActive: true }),
       include: {
         lines: {
           orderBy: { position: 'asc' },
@@ -29,9 +38,9 @@ export class QuoteTemplatesService {
     });
   }
 
-  async findOne(id: string) {
-    const t = await this.prisma.quoteTemplate.findUnique({
-      where: { id },
+  async findOne(id: string, me: JwtUser) {
+    const t = await this.prisma.quoteTemplate.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: {
         lines: {
           orderBy: { position: 'asc' },
@@ -50,10 +59,11 @@ export class QuoteTemplatesService {
     offer?: ContractOffer | null;
     defaultTerms?: string;
     lines: TemplateLineInput[];
-  }) {
+  }, me: JwtUser) {
     if (input.lines.length === 0) throw new BadRequestException('Au moins une ligne requise');
     return this.prisma.quoteTemplate.create({
       data: {
+        tenantId: me.tenantId,
         name: input.name,
         description: input.description,
         category: input.category,
@@ -82,8 +92,8 @@ export class QuoteTemplatesService {
     defaultTerms?: string | null;
     isActive?: boolean;
     lines?: TemplateLineInput[];
-  }) {
-    await this.findOne(id);
+  }, me: JwtUser) {
+    await this.findOne(id, me); // assert tenant ownership
     const data: Prisma.QuoteTemplateUpdateInput = {};
     if (input.name !== undefined) data.name = input.name;
     if (input.description !== undefined) data.description = input.description;
@@ -111,16 +121,16 @@ export class QuoteTemplatesService {
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, me: JwtUser) {
+    await this.findOne(id, me); // assert tenant ownership
     await this.prisma.quoteTemplate.delete({ where: { id } });
     return { ok: true };
   }
 
   // Renvoie les lignes pretes a etre injectees dans le formulaire de nouveau
   // devis (memes champs que QuoteLineDto cote API).
-  async expand(id: string) {
-    const t = await this.findOne(id);
+  async expand(id: string, me: JwtUser) {
+    const t = await this.findOne(id, me);
     return {
       template: { id: t.id, name: t.name, defaultTerms: t.defaultTerms },
       lines: t.lines.map((l) => ({
