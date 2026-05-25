@@ -83,6 +83,7 @@ import { CustomerSuccessModule } from './customer-success/customer-success.modul
 import { DripModule } from './drip/drip.module';
 import { PatchManagementModule } from './patch-management/patch-management.module';
 import { BackupModule } from './backup/backup.module';
+import { ProxmoxModule } from './proxmox/proxmox.module';
 import { SkillsModule } from './skills/skills.module';
 import { CallTranscriptionModule } from './call-transcription/call-transcription.module';
 import { SystemBackupModule } from './system-backup/system-backup.module';
@@ -204,6 +205,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     DripModule,
     PatchManagementModule,
     BackupModule,
+    ProxmoxModule,
     SkillsModule,
     CallTranscriptionModule,
     SystemBackupModule,

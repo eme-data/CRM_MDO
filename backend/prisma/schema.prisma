@@ -117,6 +117,7 @@ model Tenant {
   quoteTemplates         QuoteTemplate[]
   runbooks               Runbook[]
   flexibleAssetTypes     FlexibleAssetType[]
+  proxmoxClusters        ProxmoxCluster[]
 
   @@index([customDomain])
   @@index([slug])
@@ -355,6 +356,7 @@ model Company {
   backupJobs             BackupJob[]
   webhookEndpoints       WebhookEndpoint[]
   documents              CompanyDocument[]
+  proxmoxClusters        ProxmoxCluster[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2675,6 +2677,83 @@ model BackupRun {
   @@unique([jobId, externalRunId])
   @@index([jobId, startedAt])
   @@index([status])
+}
+
+// =================== PROXMOX MONITORING ===================
+//
+// Push-based monitoring de clusters Proxmox VE chez les clients. L'agent
+// installe sur le noeud Proxmox manager appelle `pvesh get /cluster/resources`
+// localement et POST le JSON vers /proxmox/ingest/:clusterId toutes les 5 min.
+//
+// Pas de pull depuis le CRM : evite d'ouvrir le firewall client cote Proxmox.
+// Auth par secret ingest (genere a la creation, hashe en BDD comme BackupJob).
+//
+// Snapshot timeline : on conserve N jours (cf systemSettings.proxmox.retentionDays)
+// pour les graphs historiques. Les agregats (cpuPctAvg, memPctAvg, vmRunning...)
+// sont denormalises pour les queries dashboard rapides.
+
+model ProxmoxCluster {
+  id                      String    @id @default(uuid())
+  // Multi-tenant : nullable transitoire (cf seed retro-compat).
+  tenantId                String?
+  tenant                  Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  // Le cluster Proxmox est rattache a UNE company (celle du client qui l'heberge).
+  companyId               String
+  company                 Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Libelle UI ("Datacenter Limoges", "Cluster R+1 Mairie")
+  name                    String
+  // URL d'admin Proxmox (pour le lien direct depuis le CRM, juste informatif —
+  // l'ingest est push, on ne se connecte pas a cette URL).
+  apiUrl                  String?
+  // Fenetre d'attendu : si pas de push dans cet intervalle, on alerte.
+  // Defaut 15 min (laisse 10 min de marge sur un push toutes les 5 min).
+  expectedPushIntervalMin Int       @default(15)
+  // Secret pour authentifier l'agent push. Genere a la creation, affiche
+  // UNE FOIS dans l'UI puis masque (hash sha256 stocke).
+  ingestSecret            String?
+  isActive                Boolean   @default(true)
+  // Compteurs miroirs (recalcules a chaque ingestion)
+  lastPushAt              DateTime?
+  // Derniers agregats (snapshot le plus recent denormalise ici pour eviter
+  // un join+order coute sur ProxmoxSnapshot a chaque affichage liste).
+  lastNodeCount           Int?
+  lastVmRunning           Int?
+  lastVmTotal             Int?
+  lastCpuPctAvg           Float?
+  lastMemPctAvg           Float?
+  lastDiskPctAvg          Float?
+
+  snapshots ProxmoxSnapshot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([companyId])
+  @@index([isActive, lastPushAt])
+}
+
+model ProxmoxSnapshot {
+  id         String         @id @default(uuid())
+  clusterId  String
+  cluster    ProxmoxCluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  // Timestamp cote agent (eviter les decalages d'horloge si l'agent push en
+  // batch ou si le reseau a lag). Defaut = now() cote backend si absent.
+  capturedAt DateTime
+  // Agregats denormalises pour graphs et list rapides
+  nodeCount  Int
+  vmRunning  Int
+  vmTotal    Int
+  // Pourcentages moyens (0-100) tous noeuds confondus
+  cpuPctAvg  Float
+  memPctAvg  Float
+  diskPctAvg Float
+  // Payload brut /cluster/resources (audit + drill-down). JSONB en Postgres.
+  rawPayload Json
+
+  createdAt DateTime @default(now())
+
+  @@index([clusterId, capturedAt])
 }
 
 // =================== SKILLS MATRIX ===================
