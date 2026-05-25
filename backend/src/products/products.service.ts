@@ -7,11 +7,10 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
 // NOTE multi-tenant : le catalogue produit est SCOPE par tenant.
-// Le champ Product.code reste @unique global cote schema (vague 8 ne l'a pas
-// migre). Conséquence : un meme code ne peut etre utilise que par un seul
-// tenant. A migrer vers @@unique([tenantId, code]) au prochain refactor de
-// schema. Pour l'instant : les noms de code peuvent etre prefixes par tenant
-// (ex: "MDO-O365-E3" vs "SEYSSES-O365-E3") en attendant.
+// Depuis la migration 0003_multi_tenant_root_models, Product.code passe en
+// @@unique([tenantId, code]) — chaque tenant a son propre espace de codes.
+// Plus besoin de prefixer (ex: "MDO-O365-E3" devient "O365-E3" cote MDO et
+// "O365-E3" cote Seysses peuvent coexister sans collision).
 
 @Injectable()
 export class ProductsService {

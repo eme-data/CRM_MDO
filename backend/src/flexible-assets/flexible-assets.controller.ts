@@ -19,27 +19,33 @@ export class FlexibleAssetsController {
     private readonly assets: FlexibleAssetsService,
   ) {}
 
-  // ---- Types (templates) - admin only ----
+  // ---- Types (templates) - admin only, par tenant ----
 
   @Get('flexible-asset-types')
-  listTypes() { return this.types.list(); }
+  listTypes(@CurrentUser() user: JwtUser) { return this.types.list(user); }
 
   @Get('flexible-asset-types/:id')
-  oneType(@Param('id') id: string) { return this.types.findOne(id); }
+  oneType(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.types.findOne(id, user);
+  }
 
   @Roles('ADMIN', 'MANAGER')
   @Post('flexible-asset-types')
-  createType(@Body() dto: UpsertTypeDto) { return this.types.create(dto); }
+  createType(@Body() dto: UpsertTypeDto, @CurrentUser() user: JwtUser) {
+    return this.types.create(dto, user);
+  }
 
   @Roles('ADMIN', 'MANAGER')
   @Patch('flexible-asset-types/:id')
-  updateType(@Param('id') id: string, @Body() dto: UpsertTypeDto) {
-    return this.types.update(id, dto);
+  updateType(@Param('id') id: string, @Body() dto: UpsertTypeDto, @CurrentUser() user: JwtUser) {
+    return this.types.update(id, dto, user);
   }
 
   @Roles('ADMIN')
   @Delete('flexible-asset-types/:id')
-  removeType(@Param('id') id: string) { return this.types.remove(id); }
+  removeType(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.types.remove(id, user);
+  }
 
   // ---- Assets (instances) ----
 

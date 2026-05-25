@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { FlexibleFieldType } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 export interface UpsertFieldDto {
   id?: string;
@@ -22,12 +24,19 @@ export interface UpsertTypeDto {
   fields: UpsertFieldDto[];
 }
 
+// Multi-tenant FULL (cf migration 0003) : chaque tenant a ses propres types
+// d'assets flexibles. Le name passe d'unique global a unique par tenant.
+
 @Injectable()
 export class FlexibleAssetTypesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
+  ) {}
 
-  list() {
+  list(me: JwtUser) {
     return this.prisma.flexibleAssetType.findMany({
+      where: this.scope.scopedWhere(me),
       orderBy: { name: 'asc' },
       include: {
         fields: { orderBy: { position: 'asc' } },
@@ -36,9 +45,9 @@ export class FlexibleAssetTypesService {
     });
   }
 
-  async findOne(id: string) {
-    const t = await this.prisma.flexibleAssetType.findUnique({
-      where: { id },
+  async findOne(id: string, me: JwtUser) {
+    const t = await this.prisma.flexibleAssetType.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: { fields: { orderBy: { position: 'asc' } } },
     });
     if (!t) throw new NotFoundException('Type introuvable');
@@ -63,10 +72,11 @@ export class FlexibleAssetTypesService {
     }
   }
 
-  async create(dto: UpsertTypeDto) {
+  async create(dto: UpsertTypeDto, me: JwtUser) {
     this.validateFields(dto.fields);
     return this.prisma.flexibleAssetType.create({
       data: {
+        tenantId: me.tenantId,
         name: dto.name,
         icon: dto.icon,
         color: dto.color,
@@ -88,8 +98,8 @@ export class FlexibleAssetTypesService {
     });
   }
 
-  async update(id: string, dto: UpsertTypeDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpsertTypeDto, me: JwtUser) {
+    await this.findOne(id, me); // assert tenant ownership
     this.validateFields(dto.fields);
 
     // Strategie : on diff les champs (cle = position dans le schema).
@@ -156,7 +166,8 @@ export class FlexibleAssetTypesService {
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, me: JwtUser) {
+    await this.findOne(id, me); // assert tenant ownership
     const usage = await this.prisma.flexibleAsset.count({ where: { typeId: id } });
     if (usage > 0) {
       throw new BadRequestException(
