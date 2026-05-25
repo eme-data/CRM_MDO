@@ -430,12 +430,20 @@ export class QuotesService {
   // ============================================================
   @Cron('15 6 * * *', { name: 'quotes-expire', timeZone: 'Europe/Paris' })
   async expirePending() {
-    const r = await this.prisma.quote.updateMany({
-      where: { status: 'SENT', validUntil: { lt: new Date() } },
-      data: { status: 'EXPIRED' },
-    });
-    if (r.count > 0) this.logger.log('Quotes expires : ' + r.count);
-    return { expired: r.count };
+    // Try/catch racine obligatoire : une exception non geree (DB lock,
+    // contention) crash le scheduler @nestjs/schedule et stoppe TOUS les
+    // autres crons du process. Cf audit 2026-05.
+    try {
+      const r = await this.prisma.quote.updateMany({
+        where: { status: 'SENT', validUntil: { lt: new Date() } },
+        data: { status: 'EXPIRED' },
+      });
+      if (r.count > 0) this.logger.log('Quotes expires : ' + r.count);
+      return { expired: r.count };
+    } catch (err: any) {
+      this.logger.error('Quotes expire cron a echoue : ' + (err?.message ?? err));
+      return { expired: 0, error: err?.message };
+    }
   }
 
   // ============================================================

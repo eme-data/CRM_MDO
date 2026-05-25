@@ -221,42 +221,49 @@ export class DocumentsService implements OnModuleInit {
   // Evite les KBIS perimes le jour J en regardant l'audit RGPD.
   @Cron('0 7 * * *', { name: 'documents-expiration-alert', timeZone: 'Europe/Paris' })
   async runExpirationAlert() {
-    const horizon = addDays(new Date(), 30);
-    const expiring = await this.prisma.companyDocument.findMany({
-      where: {
-        expiresAt: { gte: new Date(), lte: horizon },
-      },
-      include: {
-        company: { select: { id: true, name: true, ownerId: true } },
-      },
-    });
-    if (expiring.length === 0) return { notified: 0 };
+    // Try/catch racine : une exception non geree (DB, notif) crash le
+    // scheduler @nestjs/schedule et stoppe TOUS les autres crons. Audit 2026-05.
+    try {
+      const horizon = addDays(new Date(), 30);
+      const expiring = await this.prisma.companyDocument.findMany({
+        where: {
+          expiresAt: { gte: new Date(), lte: horizon },
+        },
+        include: {
+          company: { select: { id: true, name: true, ownerId: true } },
+        },
+      });
+      if (expiring.length === 0) return { notified: 0 };
 
-    // Fallback : si pas d'owner, on prend le 1er ADMIN actif.
-    const fallbackAdmin = await this.prisma.user.findFirst({
-      where: { role: 'ADMIN', isActive: true },
-      select: { id: true },
-    });
+      // Fallback : si pas d'owner, on prend le 1er ADMIN actif.
+      const fallbackAdmin = await this.prisma.user.findFirst({
+        where: { role: 'ADMIN', isActive: true },
+        select: { id: true },
+      });
 
-    let notified = 0;
-    for (const d of expiring) {
-      const userId = d.company.ownerId ?? fallbackAdmin?.id;
-      if (!userId) continue;
-      const days = differenceInDays(d.expiresAt!, new Date());
-      await this.notifications.push({
-        userId,
-        type: 'GENERIC',
-        title: 'Document expire dans ' + days + 'j : ' + (d.title ?? d.filename),
-        body: 'Societe ' + d.company.name + ' — categorie ' + d.category
-          + (days <= 7 ? ' (URGENT)' : ''),
-        entity: 'CompanyDocument',
-        entityId: d.id,
-        url: '/companies/' + d.company.id + '#documents',
-      }).catch((err) => this.logger.warn('Notif expiration doc echouee : ' + err.message));
-      notified++;
+      let notified = 0;
+      for (const d of expiring) {
+        const userId = d.company.ownerId ?? fallbackAdmin?.id;
+        if (!userId) continue;
+        const days = differenceInDays(d.expiresAt!, new Date());
+        await this.notifications.push({
+          userId,
+          type: 'GENERIC',
+          title: 'Document expire dans ' + days + 'j : ' + (d.title ?? d.filename),
+          body: 'Societe ' + d.company.name + ' — categorie ' + d.category
+            + (days <= 7 ? ' (URGENT)' : ''),
+          entity: 'CompanyDocument',
+          entityId: d.id,
+          url: '/companies/' + d.company.id + '#documents',
+        }).catch((err) => this.logger.warn('Notif expiration doc echouee : ' + err.message));
+        notified++;
+      }
+      this.logger.log('Documents expirent <=30j : ' + notified + ' notifications envoyees');
+      return { notified };
+    } catch (err: any) {
+      this.logger.error('Documents expiration cron a echoue : ' + (err?.message ?? err));
+      return { notified: 0, error: err?.message };
     }
-    this.logger.log('Documents expirent <=30j : ' + notified + ' notifications envoyees');
-    return { notified };
   }
 
   private sanitizeFilename(name: string): string {

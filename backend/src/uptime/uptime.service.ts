@@ -277,32 +277,43 @@ export class UptimeService {
   // du monitor via owner.tenantId.
   @Cron('*/5 * * * *')
   async tick() {
-    const now = Date.now();
-    const monitors = await this.prisma.uptimeMonitor.findMany({
-      where: { enabled: true },
-      include: { company: { select: { id: true, name: true, ownerId: true } } },
-    });
-    let checked = 0;
-    for (const m of monitors) {
-      const minMs = m.intervalMinutes * 60 * 1000;
-      if (m.lastCheckedAt && now - m.lastCheckedAt.getTime() < minMs - 30_000) continue;
-      try {
-        await this.runCheck(m);
-        checked++;
-      } catch (err: any) {
-        this.logger.warn('Uptime check ' + m.id + ' echec : ' + err.message);
+    // Try/catch racine : si findMany throw (DB indispo, lock), on log et on
+    // ne tue pas le scheduler @nestjs/schedule (qui arreterait TOUS les crons).
+    try {
+      const now = Date.now();
+      const monitors = await this.prisma.uptimeMonitor.findMany({
+        where: { enabled: true },
+        include: { company: { select: { id: true, name: true, ownerId: true } } },
+      });
+      let checked = 0;
+      for (const m of monitors) {
+        const minMs = m.intervalMinutes * 60 * 1000;
+        if (m.lastCheckedAt && now - m.lastCheckedAt.getTime() < minMs - 30_000) continue;
+        try {
+          await this.runCheck(m);
+          checked++;
+        } catch (err: any) {
+          this.logger.warn('Uptime check ' + m.id + ' echec : ' + err.message);
+        }
       }
+      if (checked > 0) this.logger.log('Uptime tick : ' + checked + ' check(s) effectue(s)');
+    } catch (err: any) {
+      this.logger.error('Uptime tick cron a echoue : ' + (err?.message ?? err));
     }
-    if (checked > 0) this.logger.log('Uptime tick : ' + checked + ' check(s) effectue(s)');
   }
 
   // Purge quotidienne des checks vieux de plus de 30j (a 4h, avant le monitoring SSL).
   @Cron('0 4 * * *', { name: 'uptime-purge-old-checks', timeZone: 'Europe/Paris' })
   async purgeOldChecks() {
-    const cutoff = new Date(Date.now() - CHECK_RETENTION_DAYS * 86_400_000);
-    const r = await this.prisma.uptimeCheck.deleteMany({ where: { checkedAt: { lt: cutoff } } });
-    if (r.count > 0) this.logger.log('Purge uptime : ' + r.count + ' check(s) supprime(s)');
-    return r;
+    try {
+      const cutoff = new Date(Date.now() - CHECK_RETENTION_DAYS * 86_400_000);
+      const r = await this.prisma.uptimeCheck.deleteMany({ where: { checkedAt: { lt: cutoff } } });
+      if (r.count > 0) this.logger.log('Purge uptime : ' + r.count + ' check(s) supprime(s)');
+      return r;
+    } catch (err: any) {
+      this.logger.error('Uptime purge cron a echoue : ' + (err?.message ?? err));
+      return { count: 0 };
+    }
   }
 
   // ----------- Vue dashboard - scope par tenant -----------

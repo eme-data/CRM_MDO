@@ -194,6 +194,17 @@ export class DripService {
   // ============================================================
   @Cron('0 10 * * *', { name: 'drip-daily-send', timeZone: 'Europe/Paris' })
   async runDaily() {
+    // Try/catch racine obligatoire : une exception Prisma (DB indispo) non
+    // catchee crash le scheduler @nestjs/schedule et stoppe TOUS les autres
+    // crons du process. Cf audit 2026-05.
+    try {
+      return await this.runDailyInner();
+    } catch (err: any) {
+      this.logger.error('Drip daily cron a echoue : ' + (err?.message ?? err));
+    }
+  }
+
+  private async runDailyInner() {
     const now = new Date();
     const enrollments = await this.prisma.dripEnrollment.findMany({
       where: { status: 'RUNNING' },
