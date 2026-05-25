@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InvoiceStatus } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { TenantScope } from '../common/tenant/tenant-scope.helper';
+import { JwtUser } from '../common/decorators/current-user.decorator';
 
 // Vue cash flow consolidee : encaissements attendus (factures non payees groupees
 // par horizon de dueDate) + flux historiques bancaires Qonto (30j) + solde net.
@@ -8,12 +10,19 @@ import { PrismaService } from '../database/prisma.service';
 // Pas de "MRR projeté" theorique pour rester sur du factuel : on n'extrapole
 // pas les contrats recurrents (cela serait double-comptabilise quand les factures
 // auront ete generees + poussees vers Qonto).
+//
+// Multi-tenant : toutes les agregations sont scopees par tenantId via
+// TenantScope.scopedWhere(). Sans ca, un ADMIN d'un tenant verrait le cash
+// flow consolide de tous les autres tenants (leak audit 2026-05).
 
 @Injectable()
 export class CashFlowService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scope: TenantScope,
+  ) {}
 
-  async overview(): Promise<{
+  async overview(me: JwtUser): Promise<{
     asOf: string;
     expectedIn: {
       next30Days: { count: number; totalTtc: number };
@@ -45,6 +54,11 @@ export class CashFlowService {
     const in90 = new Date(now.getTime() + 90 * dayMs);
     const ago30 = new Date(now.getTime() - 30 * dayMs);
 
+    const invoiceBase = {
+      paidAt: null,
+      status: { in: [InvoiceStatus.ISSUED, InvoiceStatus.OVERDUE] },
+    };
+
     const [
       upcoming30Agg,
       upcoming60Agg,
@@ -55,51 +69,47 @@ export class CashFlowService {
     ] = await Promise.all([
       // Factures dues dans les 30 prochains jours (cumulees pour 60/90 par sous-requete)
       this.prisma.invoice.aggregate({
-        where: {
-          paidAt: null,
-          status: { in: [InvoiceStatus.ISSUED, InvoiceStatus.OVERDUE] },
+        where: this.scope.scopedWhere(me, {
+          ...invoiceBase,
           dueDate: { gte: now, lte: in30 },
-        },
+        }),
         _count: { _all: true },
         _sum: { totalTtc: true },
       }),
       this.prisma.invoice.aggregate({
-        where: {
-          paidAt: null,
-          status: { in: [InvoiceStatus.ISSUED, InvoiceStatus.OVERDUE] },
+        where: this.scope.scopedWhere(me, {
+          ...invoiceBase,
           dueDate: { gte: now, lte: in60 },
-        },
+        }),
         _count: { _all: true },
         _sum: { totalTtc: true },
       }),
       this.prisma.invoice.aggregate({
-        where: {
-          paidAt: null,
-          status: { in: [InvoiceStatus.ISSUED, InvoiceStatus.OVERDUE] },
+        where: this.scope.scopedWhere(me, {
+          ...invoiceBase,
           dueDate: { gte: now, lte: in90 },
-        },
+        }),
         _count: { _all: true },
         _sum: { totalTtc: true },
       }),
       // Credits Qonto 30 derniers jours
       this.prisma.bankTransaction.aggregate({
-        where: { side: 'CREDIT', bookedAt: { gte: ago30 } },
+        where: this.scope.scopedWhere(me, { side: 'CREDIT', bookedAt: { gte: ago30 } }),
         _count: { _all: true },
         _sum: { amount: true },
       }),
       // Debits Qonto 30 derniers jours
       this.prisma.bankTransaction.aggregate({
-        where: { side: 'DEBIT', bookedAt: { gte: ago30 } },
+        where: this.scope.scopedWhere(me, { side: 'DEBIT', bookedAt: { gte: ago30 } }),
         _count: { _all: true },
         _sum: { amount: true },
       }),
       // Top 10 prochaines echeances pour visualisation immediate
       this.prisma.invoice.findMany({
-        where: {
-          paidAt: null,
-          status: { in: [InvoiceStatus.ISSUED, InvoiceStatus.OVERDUE] },
+        where: this.scope.scopedWhere(me, {
+          ...invoiceBase,
           dueDate: { gte: now, lte: in90 },
-        },
+        }),
         include: { company: { select: { name: true } } },
         orderBy: { dueDate: 'asc' },
         take: 10,

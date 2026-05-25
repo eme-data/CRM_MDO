@@ -36,8 +36,8 @@ export class BillingController {
 
   @Roles('ADMIN', 'MANAGER')
   @Get('cashflow')
-  getCashflow() {
-    return this.cashflow.overview();
+  getCashflow(@CurrentUser() user: JwtUser) {
+    return this.cashflow.overview(user);
   }
 
   @Roles('ADMIN')
