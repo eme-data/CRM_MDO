@@ -66,12 +66,20 @@ export class SystemBackupService implements OnModuleInit {
   private async runShell(cmd: string, args: string[], opts: { env?: Record<string, string>; timeoutMs: number; stdoutFile?: string }): Promise<void> {
     return new Promise((resolve, reject) => {
       const env = { ...process.env, ...(opts.env ?? {}) };
-      const child = spawn(cmd, args, { env, stdio: ['ignore', opts.stdoutFile ? 'pipe' : 'inherit', 'pipe'] });
+      // stdio par defaut : on PIPE stdout au lieu de l'inheriter pour eviter de
+      // polluer les logs du backend avec la sortie de `tar -tzf` (listing
+      // potentiellement enorme). On le draine sans le stocker pour eviter de
+      // remplir la memoire. Si stdoutFile est passe, on l'ecrit sur disque.
+      const child = spawn(cmd, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
       let stderr = '';
       child.stderr?.on('data', (d) => { stderr += d.toString(); });
       if (opts.stdoutFile && child.stdout) {
         const ws = createWriteStream(opts.stdoutFile);
         child.stdout.pipe(ws);
+      } else if (child.stdout) {
+        // Drain sans stocker (pour eviter back-pressure si tar -tzf liste des
+        // milliers de fichiers).
+        child.stdout.on('data', () => {});
       }
       const t = setTimeout(() => {
         child.kill('SIGKILL');
@@ -80,9 +88,13 @@ export class SystemBackupService implements OnModuleInit {
       child.on('exit', (code) => {
         clearTimeout(t);
         if (code === 0) resolve();
-        else reject(new Error(cmd + ' exit ' + code + ' : ' + stderr.slice(0, 500)));
+        else reject(new Error(cmd + ' (args: ' + args.slice(0, 4).join(' ') + ') exit ' + code + ' : ' + stderr.slice(0, 800)));
       });
-      child.on('error', (err) => { clearTimeout(t); reject(err); });
+      child.on('error', (err) => {
+        clearTimeout(t);
+        // ENOENT typique : binaire absent du PATH (pg_dump pas installe).
+        reject(new Error(cmd + ' spawn error : ' + err.message));
+      });
     });
   }
 

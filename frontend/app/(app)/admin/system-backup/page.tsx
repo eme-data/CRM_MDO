@@ -89,8 +89,13 @@ export default function SystemBackupPage() {
       const r = await api.post('/system-backup', { includeUploads });
       toast.success('Backup ' + r.filename + ' cree');
       load();
-    } catch (err: any) { toast.error('Backup echoue : ' + err.message); }
-    finally { setCreating(false); }
+    } catch (err: any) {
+      toast.error('Backup echoue : ' + err.message);
+      // Recharge meme en cas d'echec : le backend cree un record RUNNING puis
+      // le passe en FAILED avec errorMessage. Sans ce load, l'utilisateur ne
+      // voit aucun feedback du backend (juste "Internal server error" du toast).
+      load();
+    } finally { setCreating(false); }
   }
 
   function downloadBackup(b: Backup) {
