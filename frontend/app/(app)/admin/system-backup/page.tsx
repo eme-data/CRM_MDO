@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Database, Download, Trash2, AlertTriangle, RefreshCw, ShieldAlert, Plus } from 'lucide-react';
 import { toast } from 'sonner';
-import { api } from '@/lib/api';
+import { api, authedFetch } from '@/lib/api';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { formatDateTime } from '@/lib/utils';
 
@@ -94,11 +94,9 @@ export default function SystemBackupPage() {
   }
 
   function downloadBackup(b: Backup) {
-    const token = localStorage.getItem('crm_mdo_access_token');
-    const link = document.createElement('a');
-    link.href = '/api/system-backup/' + b.id + '/download';
-    // Bearer impossible sur un <a> classique ; on utilise fetch + blob
-    fetch(link.href, { headers: token ? { Authorization: 'Bearer ' + token } : {} })
+    // Bearer impossible sur un <a> classique ; authedFetch envoie le cookie
+    // httpOnly + le Bearer fallback automatiquement.
+    authedFetch('/api/system-backup/' + b.id + '/download')
       .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
       .then((blob) => {
         const url = URL.createObjectURL(blob);

@@ -4,6 +4,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Request } from 'express';
 import { PrismaService } from '../../database/prisma.service';
+import { ACCESS_COOKIE } from '../auth-cookie.helper';
 
 export interface JwtPayload {
   sub: string;
@@ -14,6 +15,15 @@ export interface JwtPayload {
   mfaPending?: boolean;
 }
 
+// Extract le JWT en priorite depuis le cookie httpOnly mdo_access (immune
+// XSS) ; fallback sur le header Authorization Bearer pour la retro-compat
+// avec les clients qui stockent encore le token en localStorage.
+function jwtFromCookieOrHeader(req: Request): string | null {
+  const fromCookie = (req?.cookies as Record<string, string> | undefined)?.[ACCESS_COOKIE];
+  if (fromCookie) return fromCookie;
+  return ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
@@ -21,7 +31,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly prisma: PrismaService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: jwtFromCookieOrHeader,
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('jwt.secret'),
       // passReqToCallback : on a besoin du Request pour acceder a req.tenant

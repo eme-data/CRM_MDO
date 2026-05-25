@@ -47,29 +47,45 @@ async function doFetch(path: string, init: RequestInit = {}, retry = true): Prom
     'Content-Type': 'application/json',
     ...(init.headers as Record<string, string> | undefined),
   };
+  // Migration cookies httpOnly : le backend set mdo_access et mdo_refresh
+  // (immune XSS). Le header Bearer reste en fallback tant que des sessions
+  // localStorage existent (les tokens sont rotates au prochain login/refresh).
   const token = getToken();
   if (token) headers.Authorization = 'Bearer ' + token;
 
-  const res = await fetch(API_URL + path, { ...init, headers });
+  const res = await fetch(API_URL + path, {
+    ...init,
+    headers,
+    credentials: 'include',
+  });
 
   const isAuthEndpoint = AUTH_ENDPOINTS.some((p) => path.startsWith(p));
 
   if (res.status === 401 && retry && !isAuthEndpoint) {
+    // Le refresh peut venir soit du cookie httpOnly mdo_refresh (envoye
+    // automatiquement par credentials:'include'), soit du localStorage en
+    // mode legacy. On tente meme sans token explicite : le backend acceptera
+    // le cookie s'il est present.
     const refresh = getRefreshToken();
-    if (refresh) {
-      try {
-        const r = await fetch(API_URL + '/auth/refresh', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: refresh }),
-        });
-        if (r.ok) {
-          const data = await r.json();
+    try {
+      const r = await fetch(API_URL + '/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(refresh ? { refreshToken: refresh } : {}),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        // Backward compat : si le backend renvoie encore les tokens en body,
+        // on les met en localStorage. A terme (apres rollout cookies), le
+        // body n'inclura plus les tokens et localStorage sera vide -> auth
+        // 100% via cookie.
+        if (data?.accessToken && data?.refreshToken) {
           setTokens(data.accessToken, data.refreshToken);
-          return doFetch(path, init, false);
         }
-      } catch {}
-    }
+        return doFetch(path, init, false);
+      }
+    } catch {}
     clearTokens();
     if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
       window.location.href = '/login';
@@ -124,6 +140,7 @@ export const apiUpload = {
     const res = await fetch('/api' + path, {
       method: 'POST',
       headers: token ? { Authorization: 'Bearer ' + token } : {},
+      credentials: 'include',
       body: fd,
     });
     if (!res.ok) {
@@ -135,6 +152,20 @@ export const apiUpload = {
   },
 };
 
+// Helper a utiliser dans les fetch direct (downloads binaires, uploads
+// multipart) : ajoute credentials:'include' pour envoyer les cookies httpOnly
+// + le Bearer header de fallback. Les pages qui faisaient leur propre fetch
+// avec localStorage doivent migrer vers ca pour fonctionner cote nouveaux
+// users (qui n'auront que le cookie, pas le localStorage).
+export function authedFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const token = getToken();
+  const headers = new Headers(init.headers ?? {});
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', 'Bearer ' + token);
+  }
+  return fetch(url, { ...init, headers, credentials: 'include' });
+}
+
 export function attachmentDownloadUrl(id: string): string {
   // L'attachment endpoint exige un Bearer token via fetch ; on utilise donc un click handler.
   return '/api/attachments/' + id;
@@ -145,6 +176,7 @@ export async function downloadAttachment(id: string, filename: string) {
     typeof window !== 'undefined' ? localStorage.getItem('crm_mdo_access_token') : null;
   const res = await fetch('/api/attachments/' + id, {
     headers: token ? { Authorization: 'Bearer ' + token } : {},
+    credentials: 'include',
   });
   if (!res.ok) throw new ApiError(res.status, 'Erreur telechargement');
   const blob = await res.blob();
