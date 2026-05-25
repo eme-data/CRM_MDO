@@ -15,16 +15,18 @@ import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorato
 export class RunbooksController {
   constructor(private readonly service: RunbooksService) {}
 
-  // ----- Catalogue (partage entre tenants — modif super-admin uniquement) -----
+  // ----- Catalogue (par tenant) -----
 
   @Get('runbooks')
-  list() { return this.service.list(); }
+  list(@CurrentUser() user: JwtUser) { return this.service.list(user); }
 
   @Get('runbooks/suggestions')
   suggestions() { return this.service.suggestions(); }
 
   @Get('runbooks/:id')
-  one(@Param('id') id: string) { return this.service.findOne(id); }
+  one(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findOne(id, user);
+  }
 
   @Roles('ADMIN', 'MANAGER')
   @Post('runbooks')

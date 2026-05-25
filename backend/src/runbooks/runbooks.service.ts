@@ -1,17 +1,13 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { RunbookCategory } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { TenantScope } from '../common/tenant/tenant-scope.helper';
 import { JwtUser } from '../common/decorators/current-user.decorator';
 
-// NOTE multi-tenant : Runbook (le template) reste un catalogue PARTAGE entre
-// tous les tenants — c'est volontaire (procedures cyber/IT communes a tous
-// les MSP/DSI). Pour eviter qu'un user d'un tenant client modifie le catalogue
-// utilise par les autres, le CRUD du catalogue est restreint au super-admin
-// (cf garde explicite ci-dessous, en plus du @Roles ADMIN).
-//
-// RunbookRun (l'instance executee chez un client) est SCOPE par tenant via
-// son companyId.
+// Multi-tenant FULL (cf migration 0003) : chaque tenant a son PROPRE catalogue
+// de runbooks. Une DSI publique a des PCA/PRA differents de MDO MSP. Ancien
+// pattern "catalogue partage + assertCatalogAdmin" supprime. RunbookRun
+// (l'instance executee chez un client) reste scope par tenant via companyId.
 
 export interface UpsertStepDto {
   id?: string;
@@ -40,18 +36,11 @@ export class RunbooksService {
     private readonly scope: TenantScope,
   ) {}
 
-  private assertCatalogAdmin(me: JwtUser) {
-    if (!me.isSuperAdmin) {
-      throw new ForbiddenException(
-        'Le catalogue runbooks est partage : seul le super-admin peut le modifier.',
-      );
-    }
-  }
+  // ============= Runbook templates (par tenant) =============
 
-  // ============= Runbook templates (catalogue partage) =============
-
-  list() {
+  list(me: JwtUser) {
     return this.prisma.runbook.findMany({
+      where: this.scope.scopedWhere(me),
       orderBy: [{ category: 'asc' }, { name: 'asc' }],
       include: {
         steps: { orderBy: { position: 'asc' } },
@@ -60,9 +49,9 @@ export class RunbooksService {
     });
   }
 
-  async findOne(id: string) {
-    const r = await this.prisma.runbook.findUnique({
-      where: { id },
+  async findOne(id: string, me: JwtUser) {
+    const r = await this.prisma.runbook.findFirst({
+      where: this.scope.scopedWhere(me, { id }),
       include: { steps: { orderBy: { position: 'asc' } } },
     });
     if (!r) throw new NotFoundException('Runbook introuvable');
@@ -70,12 +59,12 @@ export class RunbooksService {
   }
 
   async create(dto: UpsertRunbookDto, me: JwtUser) {
-    this.assertCatalogAdmin(me);
     if (!dto.steps || dto.steps.length === 0) {
       throw new BadRequestException('Au moins une etape est requise');
     }
     return this.prisma.runbook.create({
       data: {
+        tenantId: me.tenantId,
         name: dto.name,
         category: dto.category ?? 'AUTRE',
         description: dto.description,
@@ -94,8 +83,7 @@ export class RunbooksService {
   }
 
   async update(id: string, dto: UpsertRunbookDto, me: JwtUser) {
-    this.assertCatalogAdmin(me);
-    await this.findOne(id);
+    await this.findOne(id, me); // assert tenant ownership
     return this.prisma.$transaction(async (tx) => {
       await tx.runbook.update({
         where: { id },
@@ -127,7 +115,7 @@ export class RunbooksService {
   }
 
   async remove(id: string, me: JwtUser) {
-    this.assertCatalogAdmin(me);
+    await this.findOne(id, me); // assert tenant ownership
     const usage = await this.prisma.runbookRun.count({ where: { runbookId: id } });
     if (usage > 0) {
       throw new BadRequestException(
@@ -168,7 +156,7 @@ export class RunbooksService {
 
   async start(runbookId: string, companyId: string, me: JwtUser) {
     await this.scope.assertCompanyInTenant(companyId, me);
-    const rb = await this.findOne(runbookId);
+    const rb = await this.findOne(runbookId, me);
     return this.prisma.runbookRun.create({
       data: {
         tenantId: me.tenantId,
