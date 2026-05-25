@@ -119,6 +119,7 @@ const adminItems: NavItem[] = [
   { href: '/admin/api-keys', label: 'Cles API publique', icon: KeyRound },
   { href: '/admin/webhooks', label: 'Webhooks sortants', icon: Workflow },
   { href: '/admin/system-backup', label: 'Backup / Restore CRM', icon: Database },
+  { href: '/admin/tenants', label: 'Tenants (super-admin)', icon: Building2 },
   { href: '/admin/cron-jobs', label: 'Cron jobs / planificateur', icon: Clock },
   { href: '/admin/health', label: 'Health check systeme', icon: Activity },
   { href: '/admin/subprocessors', label: 'Sous-traitants RGPD (DPA)', icon: ShieldCheck },
