@@ -28,110 +28,115 @@ enum Role {
 // Branding par tenant : nom, logo, couleurs configurables ici plutot que
 // via env (qui restent comme fallback dans le module Branding).
 model Tenant {
-  id                  String    @id @default(uuid())
+  id           String  @id @default(uuid())
   // Slug court : utilise dans les seeds + logs. Stable, jamais renommer.
-  slug                String    @unique
+  slug         String  @unique
   // Domaine custom (FQDN). Doit pointer vers le serveur via DNS A record
   // + etre route par Caddy. Unique : 1 tenant par domaine.
-  customDomain        String    @unique
+  customDomain String  @unique
   // Statut : si false, toutes les requetes sur ce tenant retournent 503.
   // Permet de geler un tenant (impaye, maintenance, etc.) sans le supprimer.
-  isActive            Boolean   @default(true)
+  isActive     Boolean @default(true)
 
   // ----- Branding (fallback ENV BRAND_* si non rempli ici) -----
-  brandName           String
-  brandShortName      String
-  brandTagline        String?
-  brandLogoUrl        String?
-  brandPrimaryColor   String?    // HEX, ex: "#0066CC"
-  brandSupportEmail   String?
-  brandDpoEmail       String?
-  brandWebsiteUrl     String?
-  brandFooterText     String?
+  brandName         String
+  brandShortName    String
+  brandTagline      String?
+  brandLogoUrl      String?
+  brandPrimaryColor String? // HEX, ex: "#0066CC"
+  brandSupportEmail String?
+  brandDpoEmail     String?
+  brandWebsiteUrl   String?
+  brandFooterText   String?
 
   // ----- Modules optionnels (a desactiver pour DSI publique sans facturation) -----
   // Defaut true partout pour ne pas casser l'instance MDO existante.
-  enableContracts     Boolean   @default(true)
-  enableInvoices      Boolean   @default(true)
-  enableOpportunities Boolean   @default(true)
-  enableQuotes        Boolean   @default(true)
+  enableContracts     Boolean @default(true)
+  enableInvoices      Boolean @default(true)
+  enableOpportunities Boolean @default(true)
+  enableQuotes        Boolean @default(true)
 
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  users               User[]
-  portalUsers         ClientPortalUser[]
-  companies           Company[]
-  contacts            Contact[]
-  tickets             Ticket[]
-  ticketMessages      TicketMessage[]
-  interventions       Intervention[]
-  timeEntries         TimeEntry[]
-  attachments         Attachment[]
-  documents           CompanyDocument[]
-  opportunities       Opportunity[]
-  contracts           Contract[]
-  invoices            Invoice[]
-  invoiceLines        InvoiceLine[]
-  quotes              Quote[]
-  quoteLines          QuoteLine[]
-  settings            Setting[]
-  activities          Activity[]
-  notes               Note[]
-  tasks               Task[]
-  recurringTemplates  RecurringTaskTemplate[]
-  workflowRules       WorkflowRule[]
-  assets              Asset[]
-  locations           Location[]
-  networks            Network[]
-  flexibleAssets      FlexibleAsset[]
-  quickNotes          QuickNote[]
-  docPages            DocPage[]
-  runbookRuns         RunbookRun[]
-  secretEntries       SecretEntry[]
-  emailTemplates      EmailTemplate[]
-  responseTemplates   ResponseTemplate[]
-  subprocessors       Subprocessor[]
-  kbArticles          KbArticle[]
-  aiUsage             AiUsage[]
-  apiKeys             ApiKey[]
-  onboardingTemplates OnboardingTemplate[]
-  uptimeMonitors      UptimeMonitor[]
-  backupJobs          BackupJob[]
-  dripCampaigns       DripCampaign[]
-  onboardingRuns      OnboardingRun[]
-  phishingCampaigns   PhishingCampaign[]
-  complianceAssessments ComplianceAssessment[]
-  notifications       Notification[]
-  bankTransactions    BankTransaction[]
-  clientReports       ClientReport[]
+  users                  User[]
+  portalUsers            ClientPortalUser[]
+  companies              Company[]
+  contacts               Contact[]
+  tickets                Ticket[]
+  ticketMessages         TicketMessage[]
+  interventions          Intervention[]
+  timeEntries            TimeEntry[]
+  attachments            Attachment[]
+  documents              CompanyDocument[]
+  opportunities          Opportunity[]
+  contracts              Contract[]
+  invoices               Invoice[]
+  invoiceLines           InvoiceLine[]
+  quotes                 Quote[]
+  quoteLines             QuoteLine[]
+  settings               Setting[]
+  activities             Activity[]
+  notes                  Note[]
+  tasks                  Task[]
+  recurringTemplates     RecurringTaskTemplate[]
+  workflowRules          WorkflowRule[]
+  assets                 Asset[]
+  locations              Location[]
+  networks               Network[]
+  flexibleAssets         FlexibleAsset[]
+  quickNotes             QuickNote[]
+  docPages               DocPage[]
+  runbookRuns            RunbookRun[]
+  secretEntries          SecretEntry[]
+  emailTemplates         EmailTemplate[]
+  responseTemplates      ResponseTemplate[]
+  subprocessors          Subprocessor[]
+  kbArticles             KbArticle[]
+  aiUsage                AiUsage[]
+  apiKeys                ApiKey[]
+  onboardingTemplates    OnboardingTemplate[]
+  uptimeMonitors         UptimeMonitor[]
+  backupJobs             BackupJob[]
+  dripCampaigns          DripCampaign[]
+  onboardingRuns         OnboardingRun[]
+  phishingCampaigns      PhishingCampaign[]
+  complianceAssessments  ComplianceAssessment[]
+  notifications          Notification[]
+  bankTransactions       BankTransaction[]
+  clientReports          ClientReport[]
   customerSuccessReviews CustomerSuccessReview[]
-  webhookEndpoints    WebhookEndpoint[]
-  emailSecurityChecks EmailSecurityCheck[]
-  signatureRequests   SignatureRequest[]
-  callLogs            CallLog[]
-  pushSubscriptions   PushSubscription[]
-  emailLogs           EmailLog[]
+  webhookEndpoints       WebhookEndpoint[]
+  emailSecurityChecks    EmailSecurityCheck[]
+  signatureRequests      SignatureRequest[]
+  callLogs               CallLog[]
+  pushSubscriptions      PushSubscription[]
+  emailLogs              EmailLog[]
+  teams                  Team[]
+  products               Product[]
+  quoteTemplates         QuoteTemplate[]
+  runbooks               Runbook[]
+  flexibleAssetTypes     FlexibleAssetType[]
 
   @@index([customDomain])
   @@index([slug])
 }
 
 model User {
-  id              String    @id @default(uuid())
-  email           String
-  passwordHash    String
-  firstName       String
-  lastName        String
-  role            Role      @default(SALES)
-  isActive        Boolean   @default(true)
-  lastLoginAt     DateTime?
+  id           String    @id @default(uuid())
+  email        String
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         Role      @default(SALES)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
   // Signature email pour les replies tickets sortants (texte brut, format libre)
-  signature       String?
+  signature    String?
   // Token opaque pour l'export iCal authentifie (les clients calendrier ne
   // supportent pas Bearer). NULL tant que l'utilisateur n'a pas active la
   // fonctionnalite ; revoquable via /users/me/ical/regenerate.
-  icalToken       String?   @unique
+  icalToken    String?   @unique
   // ----- SSO (OIDC) -----
   // Lien vers une identite SSO externe. Si renseigne, le user s'authentifie
   // via le provider OIDC de son tenant (Entra ID, Keycloak, etc.) et n'a
@@ -143,72 +148,72 @@ model User {
   //                  changer)
   // Unique compose (tenantId, ssoIssuer, ssoSubject) : meme identite SSO peut
   // exister dans plusieurs tenants si IdP partage (ex: Entra commune).
-  ssoIssuer       String?
-  ssoSubject      String?
+  ssoIssuer    String?
+  ssoSubject   String?
   // Taux horaire interne (cout du technicien pour MDO). Sert au calcul de
   // marge / rentabilite (cf module profitability). Si null, on utilise la
   // valeur par defaut Settings('profitability.defaultHourlyRate').
   // Ne PAS confondre avec un eventuel taux horaire de facturation client —
   // celui-ci est porte par le contrat / time entry.
-  hourlyRate      Decimal?  @db.Decimal(8, 2)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  hourlyRate   Decimal?  @db.Decimal(8, 2)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   // ----- Multi-tenant -----
   // tenantId : nullable transitoire (rempli au seed retro-compat). Une fois
   // tous les users migres, on pourra le passer NOT NULL via une migration.
-  tenantId        String?
-  tenant          Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenantId     String?
+  tenant       Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   // Super-admin : voit tous les tenants, peut creer/desactiver/switcher de
   // contexte. Reserve a Mathieu pour le pilotage du SaaS.
-  isSuperAdmin    Boolean   @default(false)
+  isSuperAdmin Boolean @default(false)
 
-  teamId          String?
-  team            Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  teamId String?
+  team   Team?   @relation(fields: [teamId], references: [id], onDelete: SetNull)
 
-  ownedCompanies     Company[]      @relation("CompanyOwner")
-  ownedContacts      Contact[]      @relation("ContactOwner")
-  ownedOpportunities Opportunity[]  @relation("OpportunityOwner")
-  ownedContracts     Contract[]     @relation("ContractOwner")
-  assignedTasks      Task[]         @relation("TaskAssignee")
-  createdTasks       Task[]         @relation("TaskCreator")
-  assignedTickets    Ticket[]       @relation("TicketAssignee")
-  createdTickets     Ticket[]       @relation("TicketCreator")
-  ticketMessages     TicketMessage[]
-  uploadedAttachments Attachment[]  @relation("AttachmentUploader")
-  uploadedDocuments   CompanyDocument[] @relation("DocumentUploader")
-  timeEntries        TimeEntry[]
-  invoicedTimeEntries TimeEntry[]   @relation("TimeEntryInvoicer")
-  notifications      Notification[]
-  responseTemplates  ResponseTemplate[]
-  authoredDocPages   DocPage[]      @relation("DocPageAuthor")
-  createdSecrets     SecretEntry[]  @relation("SecretEntryCreator")
-  mfa                UserMfa?
-  webauthnCredentials WebAuthnCredential[]
-  notes              Note[]
-  activities         Activity[]
-  refreshTokens      RefreshToken[]
-  interventions      Intervention[] @relation("InterventionTechnician")
-  recurringTemplatesCreated  RecurringTaskTemplate[] @relation("RecurringTemplateCreator")
-  recurringTemplatesAssigned RecurringTaskTemplate[] @relation("RecurringTemplateAssignee")
-  workflowRulesCreated   WorkflowRule[]  @relation("WorkflowRuleCreator")
-  workflowRulesAssigned  WorkflowRule[]  @relation("WorkflowRuleAssignee")
-  ownedQuotes            Quote[]         @relation("QuoteOwner")
-  signatureRequests      SignatureRequest[] @relation("SignatureRequestCreator")
-  callLogs               CallLog[]
-  aiUsage                AiUsage[]
-  pushSubscriptions      PushSubscription[]
-  createdApiKeys         ApiKey[]                          @relation("ApiKeyCreator")
-  onboardingStepsAssigned OnboardingRunStep[]              @relation("OnboardingStepAssignee")
-  onboardingStepsClosed   OnboardingRunStep[]              @relation("OnboardingStepCloser")
-  kbArticles              KbArticle[]                      @relation("KbArticleAuthor")
-  customerSuccessReviews  CustomerSuccessReview[]          @relation("CustomerSuccessReviewOwner")
-  skills                  UserSkill[]
-  systemBackupsCreated    SystemBackup[]                   @relation("SystemBackupCreator")
-  systemBackupsRestored   SystemBackup[]                   @relation("SystemBackupRestorer")
-  webhookEndpointsCreated WebhookEndpoint[]                @relation("WebhookEndpointCreator")
-  complianceAssessments  ComplianceAssessment[]            @relation("ComplianceOwner")
-  controlReviews         ComplianceControlAssessment[]     @relation("ControlReviewer")
+  ownedCompanies             Company[]                     @relation("CompanyOwner")
+  ownedContacts              Contact[]                     @relation("ContactOwner")
+  ownedOpportunities         Opportunity[]                 @relation("OpportunityOwner")
+  ownedContracts             Contract[]                    @relation("ContractOwner")
+  assignedTasks              Task[]                        @relation("TaskAssignee")
+  createdTasks               Task[]                        @relation("TaskCreator")
+  assignedTickets            Ticket[]                      @relation("TicketAssignee")
+  createdTickets             Ticket[]                      @relation("TicketCreator")
+  ticketMessages             TicketMessage[]
+  uploadedAttachments        Attachment[]                  @relation("AttachmentUploader")
+  uploadedDocuments          CompanyDocument[]             @relation("DocumentUploader")
+  timeEntries                TimeEntry[]
+  invoicedTimeEntries        TimeEntry[]                   @relation("TimeEntryInvoicer")
+  notifications              Notification[]
+  responseTemplates          ResponseTemplate[]
+  authoredDocPages           DocPage[]                     @relation("DocPageAuthor")
+  createdSecrets             SecretEntry[]                 @relation("SecretEntryCreator")
+  mfa                        UserMfa?
+  webauthnCredentials        WebAuthnCredential[]
+  notes                      Note[]
+  activities                 Activity[]
+  refreshTokens              RefreshToken[]
+  interventions              Intervention[]                @relation("InterventionTechnician")
+  recurringTemplatesCreated  RecurringTaskTemplate[]       @relation("RecurringTemplateCreator")
+  recurringTemplatesAssigned RecurringTaskTemplate[]       @relation("RecurringTemplateAssignee")
+  workflowRulesCreated       WorkflowRule[]                @relation("WorkflowRuleCreator")
+  workflowRulesAssigned      WorkflowRule[]                @relation("WorkflowRuleAssignee")
+  ownedQuotes                Quote[]                       @relation("QuoteOwner")
+  signatureRequests          SignatureRequest[]            @relation("SignatureRequestCreator")
+  callLogs                   CallLog[]
+  aiUsage                    AiUsage[]
+  pushSubscriptions          PushSubscription[]
+  createdApiKeys             ApiKey[]                      @relation("ApiKeyCreator")
+  onboardingStepsAssigned    OnboardingRunStep[]           @relation("OnboardingStepAssignee")
+  onboardingStepsClosed      OnboardingRunStep[]           @relation("OnboardingStepCloser")
+  kbArticles                 KbArticle[]                   @relation("KbArticleAuthor")
+  customerSuccessReviews     CustomerSuccessReview[]       @relation("CustomerSuccessReviewOwner")
+  skills                     UserSkill[]
+  systemBackupsCreated       SystemBackup[]                @relation("SystemBackupCreator")
+  systemBackupsRestored      SystemBackup[]                @relation("SystemBackupRestorer")
+  webhookEndpointsCreated    WebhookEndpoint[]             @relation("WebhookEndpointCreator")
+  complianceAssessments      ComplianceAssessment[]        @relation("ComplianceOwner")
+  controlReviews             ComplianceControlAssessment[] @relation("ControlReviewer")
 
   // Email unique PAR tenant : permet d'avoir le meme email dans 2 tenants
   // differents (ex: mathieu@mdoservices.fr peut exister dans tenant 'mdo'
@@ -224,25 +229,31 @@ model User {
 
 model Team {
   id        String   @id @default(uuid())
+  // Multi-tenant : nullable transitoire (rows pre-migration heritent du seed
+  // 'mdo' lors du backfill). Chaque tenant gere ses propres equipes.
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   users     User[]
+
+  @@index([tenantId])
 }
 
 model RefreshToken {
-  id          String    @id @default(uuid())
-  token       String    @unique
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String    @id @default(uuid())
+  token      String    @unique
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   // Metadata utilisee par l'UI sessions/devices (pas de fingerprinting fort,
   // juste une etiquette informelle pour aider l'utilisateur a reconnaitre la session).
-  userAgent   String?
-  ip          String?
-  lastUsedAt  DateTime?
-  expiresAt   DateTime
-  revokedAt   DateTime?
-  createdAt   DateTime  @default(now())
+  userAgent  String?
+  ip         String?
+  lastUsedAt DateTime?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
 
   @@index([userId])
 }
@@ -268,85 +279,85 @@ enum CompanySector {
 }
 
 model Company {
-  id          String        @id @default(uuid())
+  id            String        @id @default(uuid())
   // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
-  tenantId    String?
-  tenant      Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  name        String
+  tenantId      String?
+  tenant        Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name          String
   // Identifiants legaux (sources : Pappers / INSEE Sirene)
   // Unicite par tenant : 2 tenants differents peuvent referencer la meme
   // entreprise comme client (ex: SIRET 123 = client de mdo ET de seysses).
-  siret       String?
-  siren       String?
-  apeCode     String?       // ex: "62.02A"
-  apeLabel    String?       // ex: "Conseil en systemes et logiciels informatiques"
-  legalForm   String?       // ex: "SARL", "SAS", "SASU"
-  creationDate DateTime?    // date de creation entreprise
-  capitalSocial Decimal?    @db.Decimal(14, 2)
-  lastSyncedAt DateTime?    // derniere synchro avec annuaire externe
+  siret         String?
+  siren         String?
+  apeCode       String? // ex: "62.02A"
+  apeLabel      String? // ex: "Conseil en systemes et logiciels informatiques"
+  legalForm     String? // ex: "SARL", "SAS", "SASU"
+  creationDate  DateTime? // date de creation entreprise
+  capitalSocial Decimal?      @db.Decimal(14, 2)
+  lastSyncedAt  DateTime? // derniere synchro avec annuaire externe
   // Donnees CRM
-  sector      CompanySector @default(PME)
-  status      CompanyStatus @default(LEAD)
-  employees   Int?
-  website     String?
-  phone       String?
-  email       String?
-  address     String?
-  postalCode  String?
-  city        String?
-  country     String?       @default("France")
-  notes       String?
+  sector        CompanySector @default(PME)
+  status        CompanyStatus @default(LEAD)
+  employees     Int?
+  website       String?
+  phone         String?
+  email         String?
+  address       String?
+  postalCode    String?
+  city          String?
+  country       String?       @default("France")
+  notes         String?
 
-  ownerId     String?
-  owner       User?         @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId String?
+  owner   User?   @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
 
   // Identifiants externes (outils de facturation tiers)
   // @deprecated 2026-05 : Sellsy retire du stack MDO. Champ conserve pour ne
   // pas perdre les references historiques des companies deja synchronisees
   // dans Sellsy. Plus aucune ecriture cote code.
-  sellsyId    String?       @unique
-  qontoClientId String?     @unique  // ID du client dans Qonto Factures
+  sellsyId      String? @unique
+  qontoClientId String? @unique // ID du client dans Qonto Factures
 
-  contacts       Contact[]
-  opportunities  Opportunity[]
-  contracts      Contract[]
-  tasks          Task[]
-  notesRel       Note[]
-  interventions  Intervention[]
-  tickets        Ticket[]
-  assets         Asset[]
-  docPages       DocPage[]
-  secrets        SecretEntry[]
-  invoices       Invoice[]
-  bankTransactions BankTransaction[]
-  locations      Location[]
-  networks       Network[]
-  flexibleAssets FlexibleAsset[]
-  quickNotes     QuickNote[]
-  runbookRuns    RunbookRun[]
-  uptimeMonitors UptimeMonitor[]
-  clientReports  ClientReport[]
-  timeEntries    TimeEntry[]
-  portalUsers    ClientPortalUser[]
-  m365Tenant     M365Tenant?
-  recurringTemplates RecurringTaskTemplate[]
-  quotes         Quote[]
-  signatureRequests SignatureRequest[]
-  callLogs       CallLog[]
-  complianceAssessments ComplianceAssessment[]
-  apiKeys        ApiKey[]
-  onboardingRuns OnboardingRun[]
-  kbArticles     KbArticle[]
-  emailSecurityChecks EmailSecurityCheck[]
-  phishingCampaigns PhishingCampaign[]
+  contacts               Contact[]
+  opportunities          Opportunity[]
+  contracts              Contract[]
+  tasks                  Task[]
+  notesRel               Note[]
+  interventions          Intervention[]
+  tickets                Ticket[]
+  assets                 Asset[]
+  docPages               DocPage[]
+  secrets                SecretEntry[]
+  invoices               Invoice[]
+  bankTransactions       BankTransaction[]
+  locations              Location[]
+  networks               Network[]
+  flexibleAssets         FlexibleAsset[]
+  quickNotes             QuickNote[]
+  runbookRuns            RunbookRun[]
+  uptimeMonitors         UptimeMonitor[]
+  clientReports          ClientReport[]
+  timeEntries            TimeEntry[]
+  portalUsers            ClientPortalUser[]
+  m365Tenant             M365Tenant?
+  recurringTemplates     RecurringTaskTemplate[]
+  quotes                 Quote[]
+  signatureRequests      SignatureRequest[]
+  callLogs               CallLog[]
+  complianceAssessments  ComplianceAssessment[]
+  apiKeys                ApiKey[]
+  onboardingRuns         OnboardingRun[]
+  kbArticles             KbArticle[]
+  emailSecurityChecks    EmailSecurityCheck[]
+  phishingCampaigns      PhishingCampaign[]
   customerSuccessReviews CustomerSuccessReview[]
   dripEnrollments        DripEnrollment[]
   backupJobs             BackupJob[]
   webhookEndpoints       WebhookEndpoint[]
   documents              CompanyDocument[]
 
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, siret])
   @@unique([tenantId, siren])
@@ -358,35 +369,35 @@ model Company {
 }
 
 model Contact {
-  id          String   @id @default(uuid())
+  id        String  @id @default(uuid())
   // Multi-tenant : nullable transitoire (cf Company).
-  tenantId    String?
-  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  firstName   String
-  lastName    String
-  email       String?
-  phone       String?
-  mobile      String?
-  position    String?
-  isPrimary   Boolean  @default(false)
-  notes       String?
+  tenantId  String?
+  tenant    Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+  mobile    String?
+  position  String?
+  isPrimary Boolean @default(false)
+  notes     String?
 
-  companyId   String?
-  company     Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
-  ownerId     String?
-  owner       User?    @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId String?
+  owner   User?   @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
 
-  tasks       Task[]
-  notesRel    Note[]
-  tickets     Ticket[]
-  portalUsers ClientPortalUser[] @relation("ContactPortalUser")
-  quotes      Quote[]
-  callLogs    CallLog[]
+  tasks           Task[]
+  notesRel        Note[]
+  tickets         Ticket[]
+  portalUsers     ClientPortalUser[] @relation("ContactPortalUser")
+  quotes          Quote[]
+  callLogs        CallLog[]
   dripEnrollments DripEnrollment[]
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([tenantId, email])
@@ -408,35 +419,35 @@ enum OpportunityStage {
 // statistique pour le module win/loss analysis. Le champ lostReason texte
 // libre existe deja en plus pour les details.
 enum OpportunityLossReason {
-  PRICE              // trop cher / hors budget
-  COMPETITOR         // concurrent retenu (cf competitorName)
-  TIMING             // pas le bon moment cote client
-  FEATURE            // manque une fonctionnalite
-  NO_RESPONSE        // ghost / pas de retour
-  BUDGET             // pas de budget
-  PROJECT_CANCELLED  // projet client annule
+  PRICE // trop cher / hors budget
+  COMPETITOR // concurrent retenu (cf competitorName)
+  TIMING // pas le bon moment cote client
+  FEATURE // manque une fonctionnalite
+  NO_RESPONSE // ghost / pas de retour
+  BUDGET // pas de budget
+  PROJECT_CANCELLED // projet client annule
   OTHER
 }
 
 enum OpportunityWinReason {
-  PRICE_LOWEST       // proposition la moins chere
-  REPUTATION         // notoriete MDO / recommandation
-  RELATIONSHIP       // relation existante / confiance
-  FEATURE            // fonctionnalite distinctive
-  PROXIMITY          // proximite geo / disponibilite
-  REFERRAL           // recommande par client existant
+  PRICE_LOWEST // proposition la moins chere
+  REPUTATION // notoriete MDO / recommandation
+  RELATIONSHIP // relation existante / confiance
+  FEATURE // fonctionnalite distinctive
+  PROXIMITY // proximite geo / disponibilite
+  REFERRAL // recommande par client existant
   OTHER
 }
 
 model Opportunity {
-  id                String           @id @default(uuid())
+  id                String                 @id @default(uuid())
   // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
   tenantId          String?
-  tenant            Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant            Tenant?                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   title             String
-  stage             OpportunityStage @default(QUALIFICATION)
-  amountHt          Decimal          @default(0) @db.Decimal(12, 2)
-  probability       Int              @default(50)
+  stage             OpportunityStage       @default(QUALIFICATION)
+  amountHt          Decimal                @default(0) @db.Decimal(12, 2)
+  probability       Int                    @default(50)
   expectedCloseDate DateTime?
   closedAt          DateTime?
   // Champ historique texte libre — conserve pour ne pas perdre les motifs
@@ -447,22 +458,22 @@ model Opportunity {
   // l'agregation statistique (cf module win/loss + dashboard exec).
   lossReasonCode    OpportunityLossReason?
   winReasonCode     OpportunityWinReason?
-  competitorName    String?          // utile si lossReasonCode=COMPETITOR
+  competitorName    String? // utile si lossReasonCode=COMPETITOR
   description       String?
 
-  companyId         String
-  company           Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  ownerId           String?
-  owner             User?            @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId String?
+  owner   User?   @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: SetNull)
 
-  contracts         Contract[]
-  tasks             Task[]
-  notesRel          Note[]
-  quotes            Quote[]
+  contracts Contract[]
+  tasks     Task[]
+  notesRel  Note[]
+  quotes    Quote[]
 
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([tenantId, stage])
@@ -497,53 +508,53 @@ enum BillingPeriod {
 }
 
 model Contract {
-  id                 String         @id @default(uuid())
+  id        String         @id @default(uuid())
   // Multi-tenant : nullable transitoire. reference passe a unique par tenant
   // (chaque tenant a sa sequence MDO-2026-XXXX independante).
-  tenantId           String?
-  tenant             Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  reference          String
-  title              String
-  offer              ContractOffer  @default(MDO_ESSENTIEL)
-  status             ContractStatus @default(DRAFT)
+  tenantId  String?
+  tenant    Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  reference String
+  title     String
+  offer     ContractOffer  @default(MDO_ESSENTIEL)
+  status    ContractStatus @default(DRAFT)
 
-  startDate          DateTime
-  endDate            DateTime
-  signedAt           DateTime?
+  startDate DateTime
+  endDate   DateTime
+  signedAt  DateTime?
 
-  engagementMonths   Int            @default(12)
-  billingPeriod      BillingPeriod  @default(MONTHLY)
-  unitPriceHt        Decimal        @db.Decimal(10, 2)
-  quantity           Int            @default(1)
-  monthlyAmountHt    Decimal        @db.Decimal(12, 2)
-  setupFeeHt         Decimal?       @db.Decimal(10, 2)
-  vatRate            Decimal        @default(20) @db.Decimal(5, 2)
+  engagementMonths Int           @default(12)
+  billingPeriod    BillingPeriod @default(MONTHLY)
+  unitPriceHt      Decimal       @db.Decimal(10, 2)
+  quantity         Int           @default(1)
+  monthlyAmountHt  Decimal       @db.Decimal(12, 2)
+  setupFeeHt       Decimal?      @db.Decimal(10, 2)
+  vatRate          Decimal       @default(20) @db.Decimal(5, 2)
 
-  autoRenew          Boolean        @default(true)
-  noticePeriodMonths Int            @default(3)
+  autoRenew          Boolean   @default(true)
+  noticePeriodMonths Int       @default(3)
   terminatedAt       DateTime?
   terminationReason  String?
 
-  companyId          String
-  company            Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
-  opportunityId      String?
-  opportunity        Opportunity?   @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
 
-  ownerId            String?
-  owner              User?          @relation("ContractOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId String?
+  owner   User?   @relation("ContractOwner", fields: [ownerId], references: [id], onDelete: SetNull)
 
-  previousContractId String?        @unique
-  previousContract   Contract?      @relation("ContractRenewal", fields: [previousContractId], references: [id], onDelete: SetNull)
-  nextContract       Contract?      @relation("ContractRenewal")
+  previousContractId String?   @unique
+  previousContract   Contract? @relation("ContractRenewal", fields: [previousContractId], references: [id], onDelete: SetNull)
+  nextContract       Contract? @relation("ContractRenewal")
 
   // Synchronisation outil de facturation externe
   // @deprecated 2026-05 : Sellsy retire du stack MDO. Champ conserve pour
   // ne pas perdre les references historiques d'abonnements deja synchronises.
-  sellsySubscriptionId String?      @unique
-  externalSyncedAt   DateTime?
+  sellsySubscriptionId String?   @unique
+  externalSyncedAt     DateTime?
 
-  description        String?
+  description String?
 
   alerts             ContractRenewalAlert[]
   tasks              Task[]
@@ -557,11 +568,11 @@ model Contract {
   // Quote dont la conversion a cree ce contrat (1-1, optional). Nomme via la
   // relation "ContractFromQuote" pour eviter le conflit avec d'autres relations
   // potentielles avec Quote a l'avenir.
-  fromQuote          Quote?         @relation("ContractFromQuote")
+  fromQuote          Quote?                  @relation("ContractFromQuote")
   onboardingRun      OnboardingRun?
 
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, reference])
   @@index([tenantId])
@@ -572,14 +583,14 @@ model Contract {
 }
 
 model ContractRenewalAlert {
-  id          String    @id @default(uuid())
-  contractId  String
-  contract    Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  daysBefore  Int
-  alertDate   DateTime
-  sentAt      DateTime?
-  resolved    Boolean   @default(false)
-  createdAt   DateTime  @default(now())
+  id         String    @id @default(uuid())
+  contractId String
+  contract   Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  daysBefore Int
+  alertDate  DateTime
+  sentAt     DateTime?
+  resolved   Boolean   @default(false)
+  createdAt  DateTime  @default(now())
 
   @@index([contractId])
   @@index([alertDate, sentAt])
@@ -601,36 +612,36 @@ enum InterventionStatus {
 }
 
 model Intervention {
-  id           String             @id @default(uuid())
+  id          String             @id @default(uuid())
   // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
-  tenantId     String?
-  tenant       Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  title        String
-  type         InterventionType   @default(REMOTE)
-  status       InterventionStatus @default(PLANNED)
-  scheduledAt  DateTime
-  startedAt    DateTime?
-  endedAt      DateTime?
-  durationMin  Int?
-  description  String?
-  report       String?
+  tenantId    String?
+  tenant      Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  title       String
+  type        InterventionType   @default(REMOTE)
+  status      InterventionStatus @default(PLANNED)
+  scheduledAt DateTime
+  startedAt   DateTime?
+  endedAt     DateTime?
+  durationMin Int?
+  description String?
+  report      String?
 
-  companyId    String
-  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  contractId   String?
-  contract     Contract?          @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  contractId String?
+  contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
 
-  ticketId     String?
-  ticket       Ticket?            @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  ticketId String?
+  ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
 
   technicianId String?
-  technician   User?              @relation("InterventionTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+  technician   User?   @relation("InterventionTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
 
-  timeEntries  TimeEntry[]
+  timeEntries TimeEntry[]
 
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([tenantId, scheduledAt])
@@ -656,21 +667,21 @@ enum TaskStatus {
 }
 
 model Task {
-  id            String       @id @default(uuid())
+  id          String       @id @default(uuid())
   // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
-  tenantId      String?
-  tenant        Tenant?      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  title         String
-  description   String?
-  priority      TaskPriority @default(NORMAL)
-  status        TaskStatus   @default(TODO)
-  dueDate       DateTime?
-  completedAt   DateTime?
+  tenantId    String?
+  tenant      Tenant?      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  title       String
+  description String?
+  priority    TaskPriority @default(NORMAL)
+  status      TaskStatus   @default(TODO)
+  dueDate     DateTime?
+  completedAt DateTime?
 
-  createdById   String
-  createdBy     User         @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  assigneeId    String?
-  assignee      User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdById String
+  createdBy   User    @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  assigneeId  String?
+  assignee    User?   @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
 
   companyId     String?
   company       Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -688,8 +699,8 @@ model Task {
   recurringTemplateId String?
   recurringTemplate   RecurringTaskTemplate? @relation(fields: [recurringTemplateId], references: [id], onDelete: SetNull)
 
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([tenantId, status, dueDate])
@@ -711,53 +722,53 @@ model Task {
 // visible dans /tasks pour l'assignee.
 
 enum RecurringFrequency {
-  WEEKLY      // tous les 7 jours
-  MONTHLY     // tous les mois (au dayOfMonth si defini, sinon meme date que startsOn)
-  QUARTERLY   // tous les 3 mois
-  YEARLY      // tous les ans
+  WEEKLY // tous les 7 jours
+  MONTHLY // tous les mois (au dayOfMonth si defini, sinon meme date que startsOn)
+  QUARTERLY // tous les 3 mois
+  YEARLY // tous les ans
 }
 
 model RecurringTaskTemplate {
-  id              String              @id @default(uuid())
+  id                String             @id @default(uuid())
   // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
-  tenantId        String?
-  tenant          Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  name            String              // libelle modele ("Check backup mensuel")
+  tenantId          String?
+  tenant            Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name              String // libelle modele ("Check backup mensuel")
   // Champs reproduits sur chaque Task generee :
-  title           String              // titre de la Task (peut contenir le mois pour mensuel)
-  description     String?
-  priority        TaskPriority        @default(NORMAL)
+  title             String // titre de la Task (peut contenir le mois pour mensuel)
+  description       String?
+  priority          TaskPriority       @default(NORMAL)
   // Generation : on cree la Task a la prochaine date prevue (nextRunAt), avec
   // dueDate = generatedAt + dueDateOffsetDays. Permet "Generee le 1er du mois,
   // a faire pour le 15".
-  dueDateOffsetDays Int               @default(7)
-  frequency       RecurringFrequency  @default(MONTHLY)
+  dueDateOffsetDays Int                @default(7)
+  frequency         RecurringFrequency @default(MONTHLY)
   // Jour du mois pour MONTHLY/QUARTERLY/YEARLY (1-28 pour eviter les soucis de
   // fevrier). Null = on prend le jour du startsOn comme reference.
-  dayOfMonth      Int?
+  dayOfMonth        Int?
   // Date de demarrage et arret optionnel
-  startsOn        DateTime            @default(now())
-  endsOn          DateTime?
+  startsOn          DateTime           @default(now())
+  endsOn            DateTime?
   // Prochain horodatage attendu de generation (recalcule apres chaque run).
-  nextRunAt       DateTime
-  lastRunAt       DateTime?
+  nextRunAt         DateTime
+  lastRunAt         DateTime?
   // Compteur d'instances generees (info admin, pas critique)
-  generatedCount  Int                 @default(0)
-  isActive        Boolean             @default(true)
+  generatedCount    Int                @default(0)
+  isActive          Boolean            @default(true)
   // Rattachements optionnels appliques aux Tasks generees
-  companyId       String?
-  company         Company?            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  assigneeId      String?
-  assignee        User?               @relation("RecurringTemplateAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  contractId      String?
-  contract        Contract?           @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  companyId         String?
+  company           Company?           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assigneeId        String?
+  assignee          User?              @relation("RecurringTemplateAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  contractId        String?
+  contract          Contract?          @relation(fields: [contractId], references: [id], onDelete: SetNull)
   // Audit
-  createdById     String
-  createdBy       User                @relation("RecurringTemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  createdById       String
+  createdBy         User               @relation("RecurringTemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
-  tasks           Task[]
+  tasks Task[]
 
   @@index([tenantId])
   @@index([nextRunAt, isActive])
@@ -765,13 +776,13 @@ model RecurringTaskTemplate {
 }
 
 model Note {
-  id            String       @id @default(uuid())
+  id       String  @id @default(uuid())
   // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
-  tenantId      String?
-  tenant        Tenant?      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  content       String
-  authorId      String
-  author        User         @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  content  String
+  authorId String
+  author   User    @relation(fields: [authorId], references: [id], onDelete: Restrict)
 
   companyId     String?
   company       Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -782,8 +793,8 @@ model Note {
   contractId    String?
   contract      Contract?    @relation(fields: [contractId], references: [id], onDelete: Cascade)
 
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([authorId])
@@ -791,18 +802,18 @@ model Note {
 }
 
 model Activity {
-  id         String   @id @default(uuid())
+  id        String   @id @default(uuid())
   // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
   // Pour les actions super-admin cross-tenant, on peut laisser null.
-  tenantId   String?
-  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  action     String
-  entity     String
-  entityId   String?
-  metadata   Json?
-  createdAt  DateTime @default(now())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
 
   // ===== Hash chaine (preuve d'integrite NIS2 / RGPD) =====
   // currentHash = SHA256( prevHash || canonicalSerialize(entry) )
@@ -811,11 +822,11 @@ model Activity {
   // Une alteration retroactive sur entry N casse currentHash de N et
   // toutes les entries N+1, N+2... car prevHash[N+1] != calc(N).
   // Verifiable via POST /audit/verify.
-  prevHash   String?
+  prevHash    String?
   currentHash String?
   // Sequence numerique pour ordre stable (createdAt n'est pas garanti unique
   // sur un meme tick). Auto-attribue lors du sealing.
-  sequence   Int?     @unique
+  sequence    Int?    @unique
 
   @@index([tenantId])
   @@index([tenantId, createdAt])
@@ -827,17 +838,17 @@ model Activity {
 // =================== EMAILS ===================
 
 model EmailTemplate {
-  id         String   @id @default(uuid())
+  id        String   @id @default(uuid())
   // Multi-tenant : key passe d'unique global a unique par tenant.
-  tenantId   String?
-  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  key        String
-  name       String
-  subject    String
-  bodyHtml   String
-  bodyText   String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  key       String
+  name      String
+  subject   String
+  bodyHtml  String
+  bodyText  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, key])
   @@index([tenantId])
@@ -933,48 +944,48 @@ enum TicketChannel {
 }
 
 model Ticket {
-  id              String         @id @default(uuid())
+  id          String         @id @default(uuid())
   // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
   // reference passe de @unique global a unique par tenant : permet TKT-2026-0001
   // dans 2 tenants differents sans collision.
-  tenantId        String?
-  tenant          Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  reference       String
-  title           String
-  description     String
-  status          TicketStatus   @default(OPEN)
-  priority        TicketPriority @default(NORMAL)
-  category        TicketCategory @default(INCIDENT)
-  channel         TicketChannel  @default(INTERNAL)
+  tenantId    String?
+  tenant      Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  reference   String
+  title       String
+  description String
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(NORMAL)
+  category    TicketCategory @default(INCIDENT)
+  channel     TicketChannel  @default(INTERNAL)
 
   firstResponseAt DateTime?
   resolvedAt      DateTime?
   closedAt        DateTime?
   dueDate         DateTime?
 
-  companyId       String
-  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  contactId       String?
-  contact         Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
 
-  contractId      String?
-  contract        Contract?      @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  contractId String?
+  contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
 
-  assigneeId      String?
-  assignee        User?          @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assigneeId String?
+  assignee   User?   @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
 
-  createdById     String
-  createdBy       User           @relation("TicketCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdById String
+  createdBy   User   @relation("TicketCreator", fields: [createdById], references: [id], onDelete: Restrict)
 
-  messages        TicketMessage[]
-  interventions   Intervention[]
-  attachments     Attachment[]
-  timeEntries     TimeEntry[]
-  satisfaction    TicketSatisfaction?
+  messages      TicketMessage[]
+  interventions Intervention[]
+  attachments   Attachment[]
+  timeEntries   TimeEntry[]
+  satisfaction  TicketSatisfaction?
 
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, reference])
   @@index([tenantId])
@@ -986,28 +997,28 @@ model Ticket {
 }
 
 model TicketMessage {
-  id          String   @id @default(uuid())
+  id          String       @id @default(uuid())
   // Multi-tenant : nullable transitoire. Hérité du Ticket parent — present
   // pour scoper sans jointure les requetes globales (statistiques, etc.).
   tenantId    String?
-  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant      Tenant?      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   ticketId    String
-  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   authorId    String?
-  author      User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  author      User?        @relation(fields: [authorId], references: [id], onDelete: SetNull)
   authorName  String?
   authorEmail String?
   content     String
-  isInternal  Boolean  @default(false)
+  isInternal  Boolean      @default(false)
   // Email threading
-  messageId   String?  @unique  // Message-ID pour les emails (entrants ou sortants)
-  inReplyTo   String?  // In-Reply-To header (chaining)
-  viaEmail    Boolean  @default(false)  // true si message issu d'un email
+  messageId   String?      @unique // Message-ID pour les emails (entrants ou sortants)
+  inReplyTo   String? // In-Reply-To header (chaining)
+  viaEmail    Boolean      @default(false) // true si message issu d'un email
   // CC / BCC (texte simple separe par virgules)
   cc          String?
   bcc         String?
   attachments Attachment[]
-  createdAt   DateTime @default(now())
+  createdAt   DateTime     @default(now())
 
   @@index([tenantId])
   @@index([ticketId])
@@ -1017,28 +1028,28 @@ model TicketMessage {
 // =================== ATTACHMENTS ===================
 
 model Attachment {
-  id           String         @id @default(uuid())
+  id         String  @id @default(uuid())
   // Multi-tenant : nullable transitoire. Herite du Ticket parent quand attache
   // a un ticket. Present pour scope strict sans jointure.
-  tenantId     String?
-  tenant       Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  filename     String         // nom de fichier original cote client
-  storageKey   String         @unique // chemin / UUID de stockage sur disque
-  mimeType     String
-  sizeBytes    Int
+  tenantId   String?
+  tenant     Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  filename   String // nom de fichier original cote client
+  storageKey String  @unique // chemin / UUID de stockage sur disque
+  mimeType   String
+  sizeBytes  Int
 
   uploadedById String?
-  uploadedBy   User?          @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedBy   User?   @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
 
   // Liens polymorphes : un attachment peut etre attache a un ticket directement
   // ou a un message specifique du ticket
-  ticketId     String?
-  ticket       Ticket?        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId String?
+  ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   ticketMessageId String?
   ticketMessage   TicketMessage? @relation(fields: [ticketMessageId], references: [id], onDelete: Cascade)
 
-  createdAt    DateTime       @default(now())
+  createdAt DateTime @default(now())
 
   @@index([tenantId])
   @@index([ticketId])
@@ -1048,20 +1059,20 @@ model Attachment {
 // =================== TIME TRACKING ===================
 
 model TimeEntry {
-  id            String        @id @default(uuid())
+  id           String    @id @default(uuid())
   // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
-  tenantId      String?
-  tenant        Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  userId        String
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  startedAt     DateTime
-  endedAt       DateTime?
-  durationMin   Int?
-  description   String?
-  billable      Boolean       @default(true)
+  tenantId     String?
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startedAt    DateTime
+  endedAt      DateTime?
+  durationMin  Int?
+  description  String?
+  billable     Boolean   @default(true)
   // Taux horaire applique (HT). Optionnel : si null au moment de la facturation,
   // on retombe sur le taux defini au niveau du contrat ou un defaut global.
-  hourlyRateHt  Decimal?      @db.Decimal(10, 2)
+  hourlyRateHt Decimal?  @db.Decimal(10, 2)
 
   // Rattachement client : direct (saisie libre depuis /time) ou implicite via
   // ticket/intervention/contract. Le service de facturation agregera en
@@ -1079,13 +1090,13 @@ model TimeEntry {
   // Qonto ? `invoiceReference` peut etre l'ID Sellsy de la facture brouillon,
   // un n. de facture, ou un libre texte. Permet le filtre "non facturees" pour
   // la page admin de billing.
-  invoicedAt        DateTime?
-  invoiceReference  String?
-  invoicedById      String?
-  invoicedBy        User?     @relation("TimeEntryInvoicer", fields: [invoicedById], references: [id], onDelete: SetNull)
+  invoicedAt       DateTime?
+  invoiceReference String?
+  invoicedById     String?
+  invoicedBy       User?     @relation("TimeEntryInvoicer", fields: [invoicedById], references: [id], onDelete: SetNull)
 
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([tenantId, userId, startedAt])
@@ -1110,20 +1121,20 @@ enum NotificationType {
 }
 
 model Notification {
-  id         String           @id @default(uuid())
+  id        String           @id @default(uuid())
   // Multi-tenant : nullable transitoire (herite User.tenantId).
-  tenantId   String?
-  tenant     Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  userId     String
-  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type       NotificationType @default(GENERIC)
-  title      String
-  body       String?
-  entity     String?
-  entityId   String?
-  url        String?
-  readAt     DateTime?
-  createdAt  DateTime         @default(now())
+  tenantId  String?
+  tenant    Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType @default(GENERIC)
+  title     String
+  body      String?
+  entity    String?
+  entityId  String?
+  url       String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
 
   @@index([tenantId])
   @@index([userId, readAt])
@@ -1170,44 +1181,44 @@ enum AssetStatus {
 }
 
 model Asset {
-  id             String        @id @default(uuid())
+  id                  String      @id @default(uuid())
   // Multi-tenant : nullable transitoire.
-  tenantId       String?
-  tenant         Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  name           String
-  type           AssetType     @default(HARDWARE)
-  status         AssetStatus   @default(ACTIVE)
-  identifier     String?       // numero de serie, cle de licence, FQDN, etc.
-  vendor         String?       // Microsoft, HP, Lenovo, etc.
-  model          String?
-  acquiredAt     DateTime?
-  warrantyUntil  DateTime?
-  expiresAt      DateTime?     // pour licences/domains/certs
+  tenantId            String?
+  tenant              Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name                String
+  type                AssetType   @default(HARDWARE)
+  status              AssetStatus @default(ACTIVE)
+  identifier          String? // numero de serie, cle de licence, FQDN, etc.
+  vendor              String? // Microsoft, HP, Lenovo, etc.
+  model               String?
+  acquiredAt          DateTime?
+  warrantyUntil       DateTime?
+  expiresAt           DateTime? // pour licences/domains/certs
   // EOSL : date de fin de support du vendor (HP/Cisco/Microsoft annonce
   // formellement la fin de support — apres, plus de patches secu, NIS2 NOK).
   // Different de warrantyUntil (qui est la fin de garantie commerciale).
-  supportEndDate DateTime?
-  costHt         Decimal?      @db.Decimal(10, 2)
+  supportEndDate      DateTime?
+  costHt              Decimal?    @db.Decimal(10, 2)
   // Budget estime pour le remplacement (devis vendor, RDV technique, etc.).
   // Utilise pour planifier le CAPEX client annuel.
-  replacementBudgetHt Decimal? @db.Decimal(10, 2)
+  replacementBudgetHt Decimal?    @db.Decimal(10, 2)
   // Contact SAV / revendeur (numero / email / portail). Texte libre.
-  vendorContact  String?
-  notes          String?
+  vendorContact       String?
+  notes               String?
   // Auto-monitoring SSL / WHOIS (DOMAIN, CERTIFICATE)
   // expiresAt est rempli automatiquement, lastMonitoredAt = horodatage du dernier check.
   // monitoringEnabled = false desactive le cron pour cet asset.
-  lastMonitoredAt DateTime?
-  monitoringEnabled Boolean   @default(true)
-  monitoringError String?    // dernier message d'erreur si check echoue
+  lastMonitoredAt     DateTime?
+  monitoringEnabled   Boolean     @default(true)
+  monitoringError     String? // dernier message d'erreur si check echoue
 
-  companyId      String
-  company        Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  contractId     String?
-  contract       Contract?     @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  companyId  String
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contractId String?
+  contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
 
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([tenantId, expiresAt])
@@ -1223,38 +1234,38 @@ model Asset {
 // dans UptimeCheck. Apres N echecs consecutifs, un UptimeIncident est
 // ouvert + notification (in-app + email) au proprietaire.
 model UptimeMonitor {
-  id              String           @id @default(uuid())
+  id              String  @id @default(uuid())
   // Multi-tenant : nullable transitoire.
   tenantId        String?
-  tenant          Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  name            String           // libelle ("Site vitrine ACME")
-  url             String           // ex: https://www.acme.fr/
-  method          String           @default("GET")
-  expectedStatus  Int              @default(200)
-  intervalMinutes Int              @default(5)
-  enabled         Boolean          @default(true)
+  tenant          Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name            String // libelle ("Site vitrine ACME")
+  url             String // ex: https://www.acme.fr/
+  method          String  @default("GET")
+  expectedStatus  Int     @default(200)
+  intervalMinutes Int     @default(5)
+  enabled         Boolean @default(true)
   // Expose ce monitor sur la page /status publique (anonymisee, sans URL ni nom client).
   // Defaut false : tous les monitors clients sont prives. A activer manuellement pour
   // les services internes MDO (CRM, site vitrine, etc.) qu'on veut montrer publiquement.
-  isPublic        Boolean          @default(false)
+  isPublic        Boolean @default(false)
 
-  companyId       String?
-  company         Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   // Cache du dernier etat pour les listings rapides
-  lastCheckedAt   DateTime?
-  lastStatus      String?          // "UP" | "DOWN" | null
-  lastHttpCode    Int?
-  lastResponseMs  Int?
-  lastError       String?
-  consecutiveFailures Int          @default(0)
-  alertSentAt     DateTime?        // pour eviter spam
+  lastCheckedAt       DateTime?
+  lastStatus          String? // "UP" | "DOWN" | null
+  lastHttpCode        Int?
+  lastResponseMs      Int?
+  lastError           String?
+  consecutiveFailures Int       @default(0)
+  alertSentAt         DateTime? // pour eviter spam
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  checks          UptimeCheck[]
-  incidents       UptimeIncident[]
+  checks    UptimeCheck[]
+  incidents UptimeIncident[]
 
   @@index([tenantId])
   @@index([companyId])
@@ -1262,26 +1273,26 @@ model UptimeMonitor {
 }
 
 model UptimeCheck {
-  id          String         @id @default(uuid())
-  monitorId   String
-  monitor     UptimeMonitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
-  checkedAt   DateTime       @default(now())
-  isUp        Boolean
-  httpCode    Int?
-  responseMs  Int?
-  error       String?
+  id         String        @id @default(uuid())
+  monitorId  String
+  monitor    UptimeMonitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  checkedAt  DateTime      @default(now())
+  isUp       Boolean
+  httpCode   Int?
+  responseMs Int?
+  error      String?
 
   @@index([monitorId, checkedAt])
 }
 
 model UptimeIncident {
-  id              String         @id @default(uuid())
+  id              String        @id @default(uuid())
   monitorId       String
-  monitor         UptimeMonitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  monitor         UptimeMonitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
   startedAt       DateTime
   endedAt         DateTime?
   durationSeconds Int?
-  reason          String?        // dernier message d'erreur observe
+  reason          String? // dernier message d'erreur observe
 
   @@index([monitorId, startedAt])
 }
@@ -1289,20 +1300,20 @@ model UptimeIncident {
 // =================== DOCUMENTATION CLIENT (KB) ===================
 
 model DocPage {
-  id          String   @id @default(uuid())
+  id        String           @id @default(uuid())
   // Multi-tenant : nullable transitoire.
-  tenantId    String?
-  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  title       String
-  category    String?  // ex: Reseau, Acces, Procedures, Onboarding
-  body        String   // markdown
-  authorId    String?
-  author      User?    @relation("DocPageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
-  versions    DocPageVersion[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  tenantId  String?
+  tenant    Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  companyId String
+  company   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title     String
+  category  String? // ex: Reseau, Acces, Procedures, Onboarding
+  body      String // markdown
+  authorId  String?
+  author    User?            @relation("DocPageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  versions  DocPageVersion[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
 
   @@index([tenantId])
   @@index([companyId])
@@ -1312,15 +1323,15 @@ model DocPage {
 // Snapshot d'une page de doc avant chaque modification.
 // Cree automatiquement au moment du PATCH pour permettre rollback.
 model DocPageVersion {
-  id          String   @id @default(uuid())
-  pageId      String
-  page        DocPage  @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  title       String
-  category    String?
-  body        String
-  authorId    String?  // qui a fait la modif qui a cree cette version (= valeur AVANT modif)
-  reason      String?  // commentaire optionnel ("avant refonte reseau")
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  pageId    String
+  page      DocPage  @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  title     String
+  category  String?
+  body      String
+  authorId  String? // qui a fait la modif qui a cree cette version (= valeur AVANT modif)
+  reason    String? // commentaire optionnel ("avant refonte reseau")
+  createdAt DateTime @default(now())
 
   @@index([pageId, createdAt])
 }
@@ -1328,27 +1339,27 @@ model DocPageVersion {
 // Coffre-fort de secrets cote client (mots de passe, cles d'acces).
 // La valeur est stockee chiffree avec une cle maitre derive de SECRETS_MASTER_KEY.
 model SecretEntry {
-  id          String   @id @default(uuid())
+  id             String    @id @default(uuid())
   // Multi-tenant : nullable transitoire (donnees ULTRA-sensibles, scope strict).
-  tenantId    String?
-  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  label       String   // "Acces admin firewall", "Compte M365 admin", etc.
-  username    String?
+  tenantId       String?
+  tenant         Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  companyId      String
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  label          String // "Acces admin firewall", "Compte M365 admin", etc.
+  username       String?
   // Les champs ciphered* contiennent { iv, authTag, data } encodes en base64
-  cipheredValue String  // mot de passe / cle chiffre
+  cipheredValue  String // mot de passe / cle chiffre
   // Secret TOTP (base32) chiffre, pour generer les codes 2FA partages
   // (compte admin firewall, M365 break-glass, etc.). Optionnel.
-  cipheredTotp  String?
-  url         String?
-  category    String?
-  notes       String?
-  createdById String?
-  createdBy   User?    @relation("SecretEntryCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  cipheredTotp   String?
+  url            String?
+  category       String?
+  notes          String?
+  createdById    String?
+  createdBy      User?     @relation("SecretEntryCreator", fields: [createdById], references: [id], onDelete: SetNull)
   lastAccessedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([tenantId])
   @@index([companyId])
@@ -1366,45 +1377,45 @@ enum InvoiceStatus {
 
 // Origine de la facture : interne au CRM, ou miroir d'un outil externe (PDP)
 enum BillingProviderKind {
-  INTERNAL  // Facture generee dans le CRM (mode legacy / compatibilite)
+  INTERNAL // Facture generee dans le CRM (mode legacy / compatibilite)
   // @deprecated 2026-05 : Sellsy retire du stack MDO. Valeur conservee pour
   // preserver l'integrite des Invoice historiques deja crees avec ce provider.
   SELLSY
-  QONTO     // Source de verite : Qonto Factures (PDP)
+  QONTO // Source de verite : Qonto Factures (PDP)
 }
 
 model Invoice {
-  id             String        @id @default(uuid())
+  id        String        @id @default(uuid())
   // Multi-tenant : nullable transitoire. number passe a unique par tenant.
-  tenantId       String?
-  tenant         Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  number         String        // ex : 2026-04-0001 (unique par tenant)
-  status         InvoiceStatus @default(DRAFT)
-  issueDate      DateTime      @default(now())
-  dueDate        DateTime
-  paidAt         DateTime?
-  totalHt        Decimal       @db.Decimal(12, 2)
-  totalTtc       Decimal       @db.Decimal(12, 2)
-  vatRate        Decimal       @default(20) @db.Decimal(5, 2)
-  notes          String?
+  tenantId  String?
+  tenant    Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  number    String // ex : 2026-04-0001 (unique par tenant)
+  status    InvoiceStatus @default(DRAFT)
+  issueDate DateTime      @default(now())
+  dueDate   DateTime
+  paidAt    DateTime?
+  totalHt   Decimal       @db.Decimal(12, 2)
+  totalTtc  Decimal       @db.Decimal(12, 2)
+  vatRate   Decimal       @default(20) @db.Decimal(5, 2)
+  notes     String?
 
   // Source / synchronisation avec un outil de facturation externe
   provider         BillingProviderKind @default(INTERNAL)
-  externalId       String?      // ID dans Sellsy / Qonto
-  externalUrl      String?      // URL profonde vers la facture dans l'outil source
-  externalPdfUrl   String?      // URL PDF directe (si disponible)
+  externalId       String? // ID dans Sellsy / Qonto
+  externalUrl      String? // URL profonde vers la facture dans l'outil source
+  externalPdfUrl   String? // URL PDF directe (si disponible)
   externalSyncedAt DateTime?
 
-  companyId      String
-  company        Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  contractId     String?
-  contract       Contract?     @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  companyId  String
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  contractId String?
+  contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
 
-  lines          InvoiceLine[]
+  lines            InvoiceLine[]
   bankTransactions BankTransaction[]
 
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([provider, externalId])
   @@unique([tenantId, number])
@@ -1418,16 +1429,16 @@ model Invoice {
 }
 
 model InvoiceLine {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   // Multi-tenant : nullable transitoire (herite Invoice).
   tenantId    String?
-  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant      Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   invoiceId   String
-  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   description String
-  quantity    Decimal  @db.Decimal(10, 2)
-  unitPriceHt Decimal  @db.Decimal(10, 2)
-  totalHt     Decimal  @db.Decimal(12, 2)
+  quantity    Decimal @db.Decimal(10, 2)
+  unitPriceHt Decimal @db.Decimal(10, 2)
+  totalHt     Decimal @db.Decimal(12, 2)
 
   @@index([invoiceId])
 }
@@ -1448,28 +1459,28 @@ enum BankTransactionSide {
 // Mouvements bancaires importes depuis Qonto, conserves en cache pour
 // rapprochement avec les factures (par client) et vue tresorerie.
 model BankTransaction {
-  id             String              @id @default(uuid())
+  id           String              @id @default(uuid())
   // Multi-tenant : nullable transitoire (Qonto = un compte par tenant).
-  tenantId       String?
-  tenant         Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  source         BankSource          @default(QONTO)
-  externalId     String              @unique  // qonto transaction id
-  bookedAt       DateTime
-  side           BankTransactionSide
-  amount         Decimal             @db.Decimal(14, 2)  // montant absolu
-  currency       String              @default("EUR")
-  label          String              // libelle nettoye
-  rawLabel       String?             // libelle brut (debug)
-  counterparty   String?             // nom IBAN/contrepartie
-  reference      String?             // reference virement
-  status         String?             // completed / pending (Qonto)
+  tenantId     String?
+  tenant       Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  source       BankSource          @default(QONTO)
+  externalId   String              @unique // qonto transaction id
+  bookedAt     DateTime
+  side         BankTransactionSide
+  amount       Decimal             @db.Decimal(14, 2) // montant absolu
+  currency     String              @default("EUR")
+  label        String // libelle nettoye
+  rawLabel     String? // libelle brut (debug)
+  counterparty String? // nom IBAN/contrepartie
+  reference    String? // reference virement
+  status       String? // completed / pending (Qonto)
 
-  companyId      String?             // rapproche a un client
-  company        Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  invoiceId      String?             // rapproche a une facture
-  invoice        Invoice?            @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  companyId String? // rapproche a un client
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  invoiceId String? // rapproche a une facture
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
-  importedAt     DateTime            @default(now())
+  importedAt DateTime @default(now())
 
   @@index([tenantId])
   @@index([bookedAt])
@@ -1483,29 +1494,29 @@ model BankTransaction {
 // Sites physiques d'un client (multi-site).
 // Permet de localiser materiel, contacts, interventions par site.
 model Location {
-  id          String   @id @default(uuid())
+  id         String  @id @default(uuid())
   // Multi-tenant : nullable transitoire.
-  tenantId    String?
-  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name        String   // ex : "Siege Toulouse", "Agence Montpellier"
-  isPrimary   Boolean  @default(false)
-  address     String?
-  postalCode  String?
-  city        String?
-  country     String?  @default("France")
-  phone       String?
-  notes       String?
+  tenantId   String?
+  tenant     Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  companyId  String
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name       String // ex : "Siege Toulouse", "Agence Montpellier"
+  isPrimary  Boolean @default(false)
+  address    String?
+  postalCode String?
+  city       String?
+  country    String? @default("France")
+  phone      String?
+  notes      String?
   // Coordonnees GPS pour cartographie / planning intervention
-  latitude    Float?
-  longitude   Float?
+  latitude   Float?
+  longitude  Float?
 
-  networks    Network[]
+  networks       Network[]
   flexibleAssets FlexibleAsset[]
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([companyId])
@@ -1524,27 +1535,27 @@ enum NetworkKind {
 // Reseaux d'un client : plages IP, VLANs, sous-reseaux, gateway, DNS.
 // Sert de doc reseau structuree (au lieu de markdown a la main).
 model Network {
-  id          String      @id @default(uuid())
+  id         String    @id @default(uuid())
   // Multi-tenant : nullable transitoire.
-  tenantId    String?
-  tenant      Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  companyId   String
-  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  locationId  String?
-  location    Location?   @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  tenantId   String?
+  tenant     Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  companyId  String
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  locationId String?
+  location   Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
-  name        String      // "LAN bureaux", "WIFI guest", "VPN site to site"
+  name        String // "LAN bureaux", "WIFI guest", "VPN site to site"
   kind        NetworkKind @default(LAN)
-  cidr        String?     // ex : "10.0.0.0/24"
+  cidr        String? // ex : "10.0.0.0/24"
   vlanId      Int?
   gateway     String?
-  dnsServers  String?     // separes par virgule
+  dnsServers  String? // separes par virgule
   dhcpStart   String?
   dhcpEnd     String?
   description String?
 
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([companyId])
@@ -1564,7 +1575,7 @@ enum FlexibleFieldType {
   DATE
   URL
   EMAIL
-  PASSWORD       // valeur stockee chiffree dans FlexibleAsset.secretValues
+  PASSWORD // valeur stockee chiffree dans FlexibleAsset.secretValues
   IP_ADDRESS
   SELECT
   MULTISELECT
@@ -1576,33 +1587,42 @@ enum FlexibleFieldType {
 // Definition d'un type d'asset flexible (template).
 // Cree par l'admin, reutilise sur tous les clients.
 model FlexibleAssetType {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  icon        String?  // nom Lucide icon (ex: "Server", "Cloud", "Shield")
-  color       String?  // couleur hex pour affichage
+  id          String               @id @default(uuid())
+  // Multi-tenant : nullable transitoire. Chaque tenant a ses propres types
+  // d'assets flexibles (un MSP n'a pas les memes que une DSI publique).
+  tenantId    String?
+  tenant      Tenant?              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  // name : unicite passe d'unique global a unique par tenant (2 tenants
+  // peuvent avoir un type "Serveur" chacun avec leurs propres champs).
+  name        String
+  icon        String? // nom Lucide icon (ex: "Server", "Cloud", "Shield")
+  color       String? // couleur hex pour affichage
   description String?
   fields      FlexibleAssetField[]
   assets      FlexibleAsset[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
 }
 
 // Definition d'un champ d'un type flexible.
 model FlexibleAssetField {
-  id           String              @id @default(uuid())
-  typeId       String
-  type         FlexibleAssetType   @relation(fields: [typeId], references: [id], onDelete: Cascade)
-  key          String              // ex : "tenant_id", "contract_end"
-  label        String              // ex : "Identifiant tenant"
-  fieldType    FlexibleFieldType   @default(TEXT)
-  required     Boolean             @default(false)
-  position     Int                 @default(0)
+  id        String            @id @default(uuid())
+  typeId    String
+  type      FlexibleAssetType @relation(fields: [typeId], references: [id], onDelete: Cascade)
+  key       String // ex : "tenant_id", "contract_end"
+  label     String // ex : "Identifiant tenant"
+  fieldType FlexibleFieldType @default(TEXT)
+  required  Boolean           @default(false)
+  position  Int               @default(0)
   // Pour SELECT / MULTISELECT : options separees par "|"
-  options      String?
+  options   String?
   // Pour les references : on stocke "Company" / "Contact" / "Asset" ici si besoin
-  refEntity    String?
+  refEntity String?
   // Aide affichee dans le formulaire
-  helpText     String?
+  helpText  String?
 
   @@unique([typeId, key])
   @@index([typeId])
@@ -1612,25 +1632,25 @@ model FlexibleAssetField {
 // Les valeurs des champs sont stockees en JSON ; les champs PASSWORD
 // dans secretValues (cipheredValues separes par cle).
 model FlexibleAsset {
-  id          String              @id @default(uuid())
+  id         String            @id @default(uuid())
   // Multi-tenant : nullable transitoire.
-  tenantId    String?
-  tenant      Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  typeId      String
-  type        FlexibleAssetType   @relation(fields: [typeId], references: [id], onDelete: Restrict)
-  companyId   String
-  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  locationId  String?
-  location    Location?           @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  tenantId   String?
+  tenant     Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  typeId     String
+  type       FlexibleAssetType @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  companyId  String
+  company    Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  locationId String?
+  location   Location?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
-  name        String              // libelle de l'instance, ex : "Tenant M365 prod"
+  name         String // libelle de l'instance, ex : "Tenant M365 prod"
   // Valeurs en clair (texte/nombre/date/bool/etc.) ; key = field.key
-  values      Json                @default("{}")
+  values       Json   @default("{}")
   // Valeurs chiffrees (champs PASSWORD) ; key = field.key, value = base64 cipher
-  secretValues Json               @default("{}")
+  secretValues Json   @default("{}")
 
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([companyId])
@@ -1641,18 +1661,18 @@ model FlexibleAsset {
 // Quick Notes : post-it epingles par societe pour les infos critiques rapides.
 // "Acces VPN -> exception sur l'IP X.X.X.X", "Contact urgence : 06...", etc.
 model QuickNote {
-  id          String   @id @default(uuid())
+  id        String   @id @default(uuid())
   // Multi-tenant : nullable transitoire.
-  tenantId    String?
-  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  content     String
-  color       String?  // jaune, rouge, vert (couleur post-it)
-  pinned      Boolean  @default(true)
-  authorId    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  content   String
+  color     String? // jaune, rouge, vert (couleur post-it)
+  pinned    Boolean  @default(true)
+  authorId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([companyId])
@@ -1672,26 +1692,33 @@ enum RunbookCategory {
 // Modele de procedure reutilisable (catalogue partage entre tous les clients).
 // Ex : "Onboarding nouveau client", "Audit trimestriel", "Patch management mensuel".
 model Runbook {
-  id          String           @id @default(uuid())
+  id          String          @id @default(uuid())
+  // Multi-tenant : nullable transitoire. Les runbooks (procedures internes)
+  // sont specifiques au business de chaque tenant : MDO MSP a des runbooks
+  // techniques Veeam/M365, une DSI publique a des runbooks PCA/PRA differents.
+  tenantId    String?
+  tenant      Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name        String
-  category    RunbookCategory  @default(AUTRE)
+  category    RunbookCategory @default(AUTRE)
   description String?
   steps       RunbookStep[]
   runs        RunbookRun[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([tenantId])
 }
 
 // Etape d'un runbook template.
 model RunbookStep {
-  id           String   @id @default(uuid())
+  id           String  @id @default(uuid())
   runbookId    String
-  runbook      Runbook  @relation(fields: [runbookId], references: [id], onDelete: Cascade)
-  position     Int      @default(0)
+  runbook      Runbook @relation(fields: [runbookId], references: [id], onDelete: Cascade)
+  position     Int     @default(0)
   title        String
-  details      String?  // markdown : explication, lien, snippet, etc.
-  estimatedMin Int?     // duree estimee en minutes
-  required     Boolean  @default(true)
+  details      String? // markdown : explication, lien, snippet, etc.
+  estimatedMin Int? // duree estimee en minutes
+  required     Boolean @default(true)
 
   @@index([runbookId, position])
 }
@@ -1699,20 +1726,20 @@ model RunbookStep {
 // Instance executee d'un runbook pour un client donne.
 // Conserve la check-list cochee + qui a fait quoi quand.
 model RunbookRun {
-  id           String   @id @default(uuid())
+  id          String    @id @default(uuid())
   // Multi-tenant : nullable transitoire (Runbook lui-meme est partage, mais
   // une instance executee appartient au tenant qui l'execute pour son client).
-  tenantId     String?
-  tenant       Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  runbookId    String
-  runbook      Runbook  @relation(fields: [runbookId], references: [id], onDelete: Restrict)
-  companyId    String
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  startedById  String?
-  startedAt    DateTime @default(now())
-  completedAt  DateTime?
+  tenantId    String?
+  tenant      Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  runbookId   String
+  runbook     Runbook   @relation(fields: [runbookId], references: [id], onDelete: Restrict)
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  startedById String?
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
   // Etat des cases : { stepId: { done: bool, doneById: string, doneAt: iso, note: string } }
-  state        Json     @default("{}")
+  state       Json      @default("{}")
 
   @@index([tenantId])
   @@index([companyId])
@@ -1723,14 +1750,14 @@ model RunbookRun {
 // SecretEntry, Network, Location, Contract, Contact, Ticket, ...).
 // Stockes par paire ordonnee (sourceEntity/sourceId, targetEntity/targetId).
 model ItemLink {
-  id            String   @id @default(uuid())
-  sourceEntity  String   // ex : "FlexibleAsset"
-  sourceId      String
-  targetEntity  String   // ex : "SecretEntry"
-  targetId      String
-  label         String?  // libelle libre, ex : "credentials admin"
-  createdById   String?
-  createdAt     DateTime @default(now())
+  id           String   @id @default(uuid())
+  sourceEntity String // ex : "FlexibleAsset"
+  sourceId     String
+  targetEntity String // ex : "SecretEntry"
+  targetId     String
+  label        String? // libelle libre, ex : "credentials admin"
+  createdById  String?
+  createdAt    DateTime @default(now())
 
   @@unique([sourceEntity, sourceId, targetEntity, targetId])
   @@index([sourceEntity, sourceId])
@@ -1740,13 +1767,13 @@ model ItemLink {
 // =================== 2FA ===================
 
 model UserMfa {
-  userId       String   @id
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  secret       String   // base32 TOTP secret (chiffre avec SECRETS_MASTER_KEY)
-  enabled      Boolean  @default(false)
-  recoveryCodes String  // JSON liste de codes hashes
-  enabledAt    DateTime?
-  createdAt    DateTime @default(now())
+  userId        String    @id
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secret        String // base32 TOTP secret (chiffre avec SECRETS_MASTER_KEY)
+  enabled       Boolean   @default(false)
+  recoveryCodes String // JSON liste de codes hashes
+  enabledAt     DateTime?
+  createdAt     DateTime  @default(now())
 }
 
 // Credentials WebAuthn / Passkeys d'un utilisateur. Un user peut avoir
@@ -1758,35 +1785,35 @@ model UserMfa {
 // WebAuthn EN PLUS du password (ou EN REMPLACEMENT du TOTP).
 // L'enrollement initial se fait depuis /settings/security.
 model WebAuthnCredential {
-  id              String   @id @default(uuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String    @id @default(uuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   // credentialID renvoye par l'authenticator (base64url). Unique global
   // car les credential IDs sont generes cote authenticator et sont
   // statistiquement uniques (collisions improbables sur 16-32 bytes).
-  credentialId    String   @unique
+  credentialId     String    @unique
   // Cle publique COSE (Buffer encode base64url). Utilisee pour verifier
   // les signatures lors de l'authentification.
-  publicKey       String
+  publicKey        String
   // Counter anti-rejeu : l'authenticator incremente a chaque usage. Si
   // on recoit une assertion avec counter <= last counter, c'est un rejeu
   // (cle clonee, vol de credential).
-  counter         BigInt   @default(0)
+  counter          BigInt    @default(0)
   // Transports supportes par l'authenticator : usb, nfc, ble, internal,
   // hybrid (cross-device QR). Permet au navigateur de filtrer les UI.
-  transports      String[]
+  transports       String[]
   // AAGUID = identifiant du modele d'authenticator (ex: YubiKey 5C, Touch ID).
   // Optionnel ; null si attestation = "none".
-  aaguid          String?
+  aaguid           String?
   // Nom libre pour l'utilisateur : "YubiKey perso", "Macbook Touch ID", etc.
-  name            String?
+  name             String?
   // Tracabilite usage
-  lastUsedAt      DateTime?
+  lastUsedAt       DateTime?
   // Backup credential : indique si la cle est synchronisee (passkey iCloud,
   // Google Password Manager). Aide a comprendre la posture securite.
-  isBackupEligible Boolean @default(false)
-  isBackedUp      Boolean  @default(false)
-  createdAt       DateTime @default(now())
+  isBackupEligible Boolean   @default(false)
+  isBackedUp       Boolean   @default(false)
+  createdAt        DateTime  @default(now())
 
   @@index([userId])
 }
@@ -1799,27 +1826,27 @@ model WebAuthnCredential {
 // Acces strictement scope a `companyId` (impossible de voir une autre societe).
 
 model ClientPortalUser {
-  id            String   @id @default(uuid())
-  email         String
+  id          String    @id @default(uuid())
+  email       String
   // Multi-tenant : un portal user appartient au tenant de sa Company.
   // Email unique PAR tenant (cf User : meme adresse possible dans 2 tenants).
-  tenantId      String?
-  tenant        Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  companyId     String
-  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tenantId    String?
+  tenant      Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Lien optionnel vers le Contact CRM correspondant (rempli automatiquement si
   // un Contact existe deja avec cet email pour cette societe).
-  contactId     String?
-  contact       Contact? @relation("ContactPortalUser", fields: [contactId], references: [id], onDelete: SetNull)
-  firstName     String?
-  lastName      String?
-  isActive      Boolean  @default(true)
-  lastLoginAt   DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  contactId   String?
+  contact     Contact?  @relation("ContactPortalUser", fields: [contactId], references: [id], onDelete: SetNull)
+  firstName   String?
+  lastName    String?
+  isActive    Boolean   @default(true)
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  magicLinks    ClientPortalMagicLink[]
-  sessions      ClientPortalSession[]
+  magicLinks ClientPortalMagicLink[]
+  sessions   ClientPortalSession[]
 
   @@unique([tenantId, email])
   @@index([companyId])
@@ -1827,32 +1854,32 @@ model ClientPortalUser {
 }
 
 model ClientPortalMagicLink {
-  id            String   @id @default(uuid())
-  userId        String
-  user          ClientPortalUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String           @id @default(uuid())
+  userId    String
+  user      ClientPortalUser @relation(fields: [userId], references: [id], onDelete: Cascade)
   // On stocke un hash SHA256 du token clair. Le token clair n'apparait que dans
   // l'email envoye au client — une fuite de la BDD ne donne pas acces aux liens.
-  tokenHash     String   @unique
-  expiresAt     DateTime
-  usedAt        DateTime?
-  ip            String?
-  userAgent     String?
-  createdAt     DateTime @default(now())
+  tokenHash String           @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  ip        String?
+  userAgent String?
+  createdAt DateTime         @default(now())
 
   @@index([expiresAt])
 }
 
 model ClientPortalSession {
-  id            String   @id @default(uuid())
-  userId        String
-  user          ClientPortalUser @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token         String   @unique  // opaque, 32 bytes hex
-  expiresAt     DateTime
-  revokedAt     DateTime?
-  ip            String?
-  userAgent     String?
-  lastUsedAt    DateTime @default(now())
-  createdAt     DateTime @default(now())
+  id         String           @id @default(uuid())
+  userId     String
+  user       ClientPortalUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String           @unique // opaque, 32 bytes hex
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  ip         String?
+  userAgent  String?
+  lastUsedAt DateTime         @default(now())
+  createdAt  DateTime         @default(now())
 
   @@index([userId])
   @@index([expiresAt])
@@ -1867,55 +1894,55 @@ model ClientPortalSession {
 // de securite.
 
 model M365Tenant {
-  id              String   @id @default(uuid())
-  companyId       String   @unique
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id                  String    @id @default(uuid())
+  companyId           String    @unique
+  company             Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // GUID Entra ID du tenant client (immuable)
-  tenantId        String   @unique
-  tenantDomain    String?  // ex: acme.onmicrosoft.com
-  consentedAt     DateTime?
-  consentedBy     String?  // email/nom de l'admin client qui a fait le consent
-  lastSyncAt      DateTime?
-  lastSyncStatus  String?  // 'OK' | 'FAILED' | 'PARTIAL'
-  lastSyncError   String?
-  isActive        Boolean  @default(true)
+  tenantId            String    @unique
+  tenantDomain        String? // ex: acme.onmicrosoft.com
+  consentedAt         DateTime?
+  consentedBy         String? // email/nom de l'admin client qui a fait le consent
+  lastSyncAt          DateTime?
+  lastSyncStatus      String? // 'OK' | 'FAILED' | 'PARTIAL'
+  lastSyncError       String?
+  isActive            Boolean   @default(true)
   // Microsoft Secure Score (https://learn.microsoft.com/en-us/graph/api/securescore-get).
   // Indicateur Microsoft officiel de la posture securite du tenant : couvre MFA,
   // conditional access, Defender, partage externe, etc. — beaucoup plus complet
   // que la seule couverture MFA. Necessite la permission SecurityEvents.Read.All
   // ET un tenant avec les licences appropriees (E3/E5/Business Premium). Si non
   // disponible, ces champs restent null et le CRM retombe sur le MFA pur.
-  secureScore         Float?    // currentScore brut (echelle Microsoft, generalement 0-1000+)
-  secureScoreMax      Float?    // maxScore atteignable pour ce tenant (varie selon licences)
-  secureScorePercent  Float?    // currentScore / maxScore * 100 (cache pour filtrer/agreger sans recalculer)
+  secureScore         Float? // currentScore brut (echelle Microsoft, generalement 0-1000+)
+  secureScoreMax      Float? // maxScore atteignable pour ce tenant (varie selon licences)
+  secureScorePercent  Float? // currentScore / maxScore * 100 (cache pour filtrer/agreger sans recalculer)
   secureScoreSyncedAt DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  users           M365User[]
-  licenses        M365License[]
-  alerts          M365SecurityAlert[]
-  managedDevices  PatchManagedDevice[]
+  users          M365User[]
+  licenses       M365License[]
+  alerts         M365SecurityAlert[]
+  managedDevices PatchManagedDevice[]
 
   @@index([companyId])
 }
 
 model M365User {
-  id             String      @id @default(uuid())
+  id             String     @id @default(uuid())
   m365TenantId   String
-  m365Tenant     M365Tenant  @relation(fields: [m365TenantId], references: [id], onDelete: Cascade)
-  graphId        String      // ID Graph immuable
-  upn            String      // user principal name (ex: john@acme.onmicrosoft.com)
+  m365Tenant     M365Tenant @relation(fields: [m365TenantId], references: [id], onDelete: Cascade)
+  graphId        String // ID Graph immuable
+  upn            String // user principal name (ex: john@acme.onmicrosoft.com)
   displayName    String?
   jobTitle       String?
   department     String?
-  accountEnabled Boolean     @default(true)
+  accountEnabled Boolean    @default(true)
   // null = inconnu (API premium non disponible ou pas encore syncho). True/false sinon.
   mfaEnabled     Boolean?
   lastSignInAt   DateTime?
   // skuPartNumbers attribues (ex: ["ENTERPRISEPACK","EMS"])
   licenseSkus    Json
-  syncedAt       DateTime    @default(now())
+  syncedAt       DateTime   @default(now())
 
   @@unique([m365TenantId, graphId])
   @@index([m365TenantId])
@@ -1924,32 +1951,32 @@ model M365User {
 }
 
 model M365License {
-  id              String      @id @default(uuid())
-  m365TenantId    String
-  m365Tenant      M365Tenant  @relation(fields: [m365TenantId], references: [id], onDelete: Cascade)
-  skuId           String      // GUID
-  skuPartNumber   String      // ex: ENTERPRISEPACK
-  name            String?     // libelle humain (mapping local : ENTERPRISEPACK -> Office 365 E3)
-  totalUnits      Int
-  consumedUnits   Int
-  syncedAt        DateTime    @default(now())
+  id            String     @id @default(uuid())
+  m365TenantId  String
+  m365Tenant    M365Tenant @relation(fields: [m365TenantId], references: [id], onDelete: Cascade)
+  skuId         String // GUID
+  skuPartNumber String // ex: ENTERPRISEPACK
+  name          String? // libelle humain (mapping local : ENTERPRISEPACK -> Office 365 E3)
+  totalUnits    Int
+  consumedUnits Int
+  syncedAt      DateTime   @default(now())
 
   @@unique([m365TenantId, skuId])
   @@index([m365TenantId])
 }
 
 model M365SecurityAlert {
-  id              String      @id @default(uuid())
+  id              String     @id @default(uuid())
   m365TenantId    String
-  m365Tenant      M365Tenant  @relation(fields: [m365TenantId], references: [id], onDelete: Cascade)
-  alertId         String      // ID Graph de l'alerte
-  severity        String      // low / medium / high / informational
-  status          String      // newAlert / inProgress / resolved
+  m365Tenant      M365Tenant @relation(fields: [m365TenantId], references: [id], onDelete: Cascade)
+  alertId         String // ID Graph de l'alerte
+  severity        String // low / medium / high / informational
+  status          String // newAlert / inProgress / resolved
   title           String
   description     String?
   category        String?
   createdDateTime DateTime
-  syncedAt        DateTime    @default(now())
+  syncedAt        DateTime   @default(now())
 
   @@unique([m365TenantId, alertId])
   @@index([m365TenantId, severity])
@@ -1963,22 +1990,22 @@ model M365SecurityAlert {
 // optionnel. Stockage dans TicketSatisfaction, agrege ensuite pour le NPS global.
 
 model TicketSatisfaction {
-  id              String    @id @default(uuid())
+  id             String    @id @default(uuid())
   // Un ticket = au plus une demande NPS active (unique).
-  ticketId        String    @unique
-  ticket          Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId       String    @unique
+  ticket         Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   // Token cryptosecure pour la page publique de notation. Indexe pour lookup rapide.
-  token           String    @unique
-  tokenExpiresAt  DateTime
-  sentTo          String
-  sentAt          DateTime
+  token          String    @unique
+  tokenExpiresAt DateTime
+  sentTo         String
+  sentAt         DateTime
   // Reponse du client. Null tant que pas encore soumise.
-  score           Int?      // 0 - 10
-  comment         String?
-  submittedAt     DateTime?
+  score          Int? // 0 - 10
+  comment        String?
+  submittedAt    DateTime?
   // IP/UA tronques au moment de la soumission, pour detection de fraude basique.
-  submittedIp     String?
-  submittedUa     String?
+  submittedIp    String?
+  submittedUa    String?
 
   @@index([sentAt])
   @@index([submittedAt])
@@ -1997,42 +2024,42 @@ model TicketSatisfaction {
 // token a une duree de vie de 30 jours pour ne pas creer de fuites permanentes.
 
 enum ClientReportStatus {
-  GENERATED   // PDF cree, pas encore envoye
-  SENT        // Email envoye au contact principal
-  DOWNLOADED  // Au moins un telechargement effectue via le lien
-  EXPIRED     // Token expire (information seulement, le PDF reste accessible en admin)
+  GENERATED // PDF cree, pas encore envoye
+  SENT // Email envoye au contact principal
+  DOWNLOADED // Au moins un telechargement effectue via le lien
+  EXPIRED // Token expire (information seulement, le PDF reste accessible en admin)
 }
 
 model ClientReport {
-  id              String              @id @default(uuid())
+  id             String             @id @default(uuid())
   // Multi-tenant : nullable transitoire.
-  tenantId        String?
-  tenant          Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  companyId       String
-  company         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tenantId       String?
+  tenant         Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  companyId      String
+  company        Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Periode couverte : mois entier en general (1er → dernier jour).
-  periodStart     DateTime
-  periodEnd       DateTime
+  periodStart    DateTime
+  periodEnd      DateTime
   // Chemin relatif au UPLOADS_DIR (ex. client-reports/2026/05/abcd.pdf)
-  pdfPath         String
+  pdfPath        String
   // Taille en octets, utile pour les UI et la suppression.
-  pdfSize         Int
+  pdfSize        Int
   // Token cryptosecure pour le download public. Indexe car cle de lookup.
-  accessToken     String              @unique
-  tokenExpiresAt  DateTime
-  status          ClientReportStatus  @default(GENERATED)
+  accessToken    String             @unique
+  tokenExpiresAt DateTime
+  status         ClientReportStatus @default(GENERATED)
   // Stats agregees stockees en JSON pour affichage rapide cote admin sans
   // regenerer le PDF (ex. "12 tickets resolus, 4 interventions, uptime 99.8 %").
-  summary         Json
+  summary        Json
   // Trace de l'envoi
-  sentTo          String?
-  sentAt          DateTime?
+  sentTo         String?
+  sentAt         DateTime?
   // Trace des telechargements (count + dernier)
-  downloadCount   Int                 @default(0)
-  lastDownloadAt  DateTime?
+  downloadCount  Int                @default(0)
+  lastDownloadAt DateTime?
   // Auteur de la generation (null si auto via cron)
-  generatedById   String?
-  createdAt       DateTime            @default(now())
+  generatedById  String?
+  createdAt      DateTime           @default(now())
 
   @@index([tenantId])
   @@index([companyId, periodStart])
@@ -2054,23 +2081,23 @@ model ClientReport {
 // dedupliquer — une regle ne tire qu'UNE fois par entite, pas une fois par jour.
 
 enum WorkflowTrigger {
-  CONTRACT_EXPIRING    // contracts ACTIVE avec endDate dans le futur <= triggerParams.daysBefore
-  TICKET_OVERDUE       // tickets non resolus avec dueDate < now
-  ASSET_EXPIRING       // assets ACTIVE avec expiresAt dans le futur <= triggerParams.daysBefore
-  INVOICE_OVERDUE      // factures non payees avec dueDate < now - triggerParams.daysOverdue
+  CONTRACT_EXPIRING // contracts ACTIVE avec endDate dans le futur <= triggerParams.daysBefore
+  TICKET_OVERDUE // tickets non resolus avec dueDate < now
+  ASSET_EXPIRING // assets ACTIVE avec expiresAt dans le futur <= triggerParams.daysBefore
+  INVOICE_OVERDUE // factures non payees avec dueDate < now - triggerParams.daysOverdue
 }
 
 enum WorkflowAction {
-  CREATE_TASK          // Task creee avec titre/priorite/assignee depuis actionParams
-  CREATE_NOTIFICATION  // Notification in-app push vers actionParams.targetRole (ADMIN/MANAGER/OWNER)
+  CREATE_TASK // Task creee avec titre/priorite/assignee depuis actionParams
+  CREATE_NOTIFICATION // Notification in-app push vers actionParams.targetRole (ADMIN/MANAGER/OWNER)
 }
 
 model WorkflowRule {
-  id              String           @id @default(uuid())
+  id              String          @id @default(uuid())
   // Multi-tenant : nullable transitoire.
   tenantId        String?
-  tenant          Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  name            String           // libelle admin ("Alerte contrats expirant 60 jours")
+  tenant          Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name            String // libelle admin ("Alerte contrats expirant 60 jours")
   description     String?
   trigger         WorkflowTrigger
   // Parametres du trigger (JSON cle/valeur) :
@@ -2078,7 +2105,7 @@ model WorkflowRule {
   //  - ASSET_EXPIRING : { daysBefore: number }
   //  - INVOICE_OVERDUE : { daysOverdue: number }
   //  - TICKET_OVERDUE : {} (pas de param, dueDate suffit)
-  triggerParams   Json             @default("{}")
+  triggerParams   Json            @default("{}")
   action          WorkflowAction
   // Parametres de l'action (JSON cle/valeur) :
   //  - CREATE_TASK : { titleTemplate: string, priority?: TaskPriority,
@@ -2087,40 +2114,40 @@ model WorkflowRule {
   //                            targetRole?: 'ADMIN'|'MANAGER'|'OWNER' }
   // titleTemplate supporte des placeholders {entityField} substitues a l'execution
   // (ex. "Preparer renouvellement {reference}" pour CONTRACT_EXPIRING).
-  actionParams    Json             @default("{}")
-  isActive        Boolean          @default(true)
+  actionParams    Json            @default("{}")
+  isActive        Boolean         @default(true)
   // Audit / observabilite
   lastEvaluatedAt DateTime?
   lastFiredAt     DateTime?
-  firedCount      Int              @default(0)
+  firedCount      Int             @default(0)
   // Assignee par defaut si l'action est CREATE_TASK et qu'aucun assigneeId
   // n'est specifie dans actionParams. Permet de dire "assigne par defaut a moi".
   assigneeId      String?
-  assignee        User?            @relation("WorkflowRuleAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignee        User?           @relation("WorkflowRuleAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   createdById     String
-  createdBy       User             @relation("WorkflowRuleCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdBy       User            @relation("WorkflowRuleCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
-  executions      WorkflowExecution[]
+  executions WorkflowExecution[]
 
   @@index([tenantId])
   @@index([isActive, trigger])
 }
 
 model WorkflowExecution {
-  id          String        @id @default(uuid())
-  ruleId      String
-  rule        WorkflowRule  @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  id         String       @id @default(uuid())
+  ruleId     String
+  rule       WorkflowRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
   // Identite de l'entite cible (Contract, Ticket, Asset, Invoice). On ne fait
   // PAS de FK Prisma vers chaque type — c'est polymorphe. Si l'entite est
   // supprimee plus tard, l'execution reste pour audit (entityId orphelin = OK).
-  entityType  String
-  entityId    String
-  firedAt     DateTime      @default(now())
+  entityType String
+  entityId   String
+  firedAt    DateTime     @default(now())
   // Resultat textuel pour audit ("TASK_CREATED:<taskId>" ou "NOTIFICATION_SENT:N").
   // Permet de retracer ce que la regle a fait sans charger d'autres tables.
-  result      String?
+  result     String?
 
   // Cle de dedup : une regle ne tire qu'UNE fois par entite (sauf reset manuel
   // de l'execution). Si tu veux qu'une regle re-tire periodiquement, supprime
@@ -2150,54 +2177,54 @@ enum QuoteStatus {
 }
 
 model Quote {
-  id            String      @id @default(uuid())
+  id         String      @id @default(uuid())
   // Multi-tenant : nullable transitoire. reference unique par tenant.
-  tenantId      String?
-  tenant        Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  reference     String
-  title         String
-  status        QuoteStatus @default(DRAFT)
+  tenantId   String?
+  tenant     Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  reference  String
+  title      String
+  status     QuoteStatus @default(DRAFT)
   // Validite : dateLimite d'acceptation cote client. Au-dela, status passe a
   // EXPIRED automatiquement par cron (job journalier dans QuotesService).
-  validUntil    DateTime
-  issueDate     DateTime    @default(now())
-  vatRate       Decimal     @default(20) @db.Decimal(5, 2)
-  notes         String?
+  validUntil DateTime
+  issueDate  DateTime    @default(now())
+  vatRate    Decimal     @default(20) @db.Decimal(5, 2)
+  notes      String?
   // Conditions affichees en bas du PDF (delais paiement, RIB, mentions legales)
   // Editable par devis ; valeur par defaut depuis Settings('quote.defaultTerms').
-  terms         String?
+  terms      String?
 
   // Totaux denormalises (recalcules a chaque update lignes). Eviter les requetes
   // d'agregation a chaque liste de devis.
-  subtotalHt    Decimal     @default(0) @db.Decimal(12, 2)
-  vatAmount     Decimal     @default(0) @db.Decimal(12, 2)
-  totalTtc      Decimal     @default(0) @db.Decimal(12, 2)
+  subtotalHt Decimal @default(0) @db.Decimal(12, 2)
+  vatAmount  Decimal @default(0) @db.Decimal(12, 2)
+  totalTtc   Decimal @default(0) @db.Decimal(12, 2)
 
   // Tracage workflow
-  sentAt        DateTime?
-  acceptedAt    DateTime?
-  rejectedAt    DateTime?
+  sentAt          DateTime?
+  acceptedAt      DateTime?
+  rejectedAt      DateTime?
   rejectionReason String?
 
   companyId     String
-  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company       Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   contactId     String?
-  contact       Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
   opportunityId String?
   opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   ownerId       String?
-  owner         User?       @relation("QuoteOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  owner         User?        @relation("QuoteOwner", fields: [ownerId], references: [id], onDelete: SetNull)
 
   // Si converti en contrat : reference vers le Contract cree. Permet "1 quote
   // -> 1 contract max", on ne peut pas convertir 2 fois le meme devis.
-  convertedToContractId String?  @unique
+  convertedToContractId String?   @unique
   convertedToContract   Contract? @relation("ContractFromQuote", fields: [convertedToContractId], references: [id], onDelete: SetNull)
   convertedAt           DateTime?
 
-  lines         QuoteLine[]
+  lines QuoteLine[]
 
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, reference])
   @@index([tenantId])
@@ -2207,27 +2234,27 @@ model Quote {
 }
 
 model QuoteLine {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   // Multi-tenant : nullable transitoire (herite Quote).
   tenantId    String?
-  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant      Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   quoteId     String
-  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  position    Int      @default(0)
+  quote       Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  position    Int     @default(0)
   description String
-  quantity    Decimal  @default(1) @db.Decimal(10, 2)
-  unitPriceHt Decimal  @db.Decimal(10, 2)
+  quantity    Decimal @default(1) @db.Decimal(10, 2)
+  unitPriceHt Decimal @db.Decimal(10, 2)
   // Remise % appliquee a cette ligne uniquement (0..100). Calcule :
   // lineTotalHt = quantity * unitPriceHt * (1 - discountPct/100).
-  discountPct Decimal  @default(0) @db.Decimal(5, 2)
+  discountPct Decimal @default(0) @db.Decimal(5, 2)
   // Pre-calcule pour la liste des devis et pour le PDF (evite recalcul cote front).
-  lineTotalHt Decimal  @db.Decimal(12, 2)
+  lineTotalHt Decimal @db.Decimal(12, 2)
 
   // Lien optionnel vers le catalogue produits (pour suivi marges revente).
   // Si renseigne, le purchasePriceHt du Product est utilise pour calculer
   // la marge reelle de cette ligne (cf module profitability + dashboard exec).
-  productId   String?
-  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productId               String?
+  product                 Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   // Snapshot du prix d'achat AU MOMENT du devis (le Product peut evoluer apres,
   // on veut que la marge historique reste calculee correctement).
   purchasePriceHtSnapshot Decimal? @db.Decimal(10, 2)
@@ -2248,24 +2275,30 @@ model QuoteLine {
 //  - Suivi engagements vendor (renouvellement licence cote MDO chez le vendor)
 
 enum ProductType {
-  LICENSE          // licence logicielle (M365, BD GravityZone, ...)
-  HARDWARE         // materiel revendu (NAS, switch, firewall, ...)
-  SERVICE          // prestation MDO (audit, formation, install, ...)
-  RECURRING        // abonnement (cloud, monitoring, supervision, ...)
+  LICENSE // licence logicielle (M365, BD GravityZone, ...)
+  HARDWARE // materiel revendu (NAS, switch, firewall, ...)
+  SERVICE // prestation MDO (audit, formation, install, ...)
+  RECURRING // abonnement (cloud, monitoring, supervision, ...)
 }
 
 model Product {
   id              String      @id @default(uuid())
-  // Code interne court et unique (ex. "M365_BP", "BD_GZ_10", "VEEAM_O365_10").
-  // Affiche dans les listes de selection.
-  code            String      @unique
+  // Multi-tenant : nullable transitoire. Catalogue commercial 100% propre a
+  // chaque tenant (prix, marges, fournisseurs). UN tenant ne doit JAMAIS
+  // voir les prix d'achat / marges d'un autre — leak commercial critique.
+  tenantId        String?
+  tenant          Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  // Code interne court (ex. "M365_BP", "BD_GZ_10", "VEEAM_O365_10").
+  // Unicite passe d'unique global a unique par tenant (2 catalogues
+  // tenants peuvent avoir un code "M365_BP" chacun avec leurs prix).
+  code            String
   name            String
   description     String?
-  vendor          String?     // 'Microsoft', 'Bitdefender', 'Veeam', 'HPE', ...
+  vendor          String? // 'Microsoft', 'Bitdefender', 'Veeam', 'HPE', ...
   type            ProductType @default(SERVICE)
   // Periodicite par defaut pour les RECURRING. Affiche dans le selecteur
   // pour clarifier "9.10 €/utilisateur/mois" vs "275 € HT one-shot".
-  recurringPeriod String?     // 'mensuel', 'annuel', null pour ONE_OFF
+  recurringPeriod String? // 'mensuel', 'annuel', null pour ONE_OFF
   // Prix d'achat HT (cout MDO chez le vendor). Sert au calcul de marge.
   purchasePriceHt Decimal?    @db.Decimal(10, 2)
   // Prix de vente conseille HT (proposition par defaut, le commercial peut
@@ -2281,12 +2314,14 @@ model Product {
   // mais il n'apparait plus dans les selecteurs.
   isActive        Boolean     @default(true)
 
-  quoteLines      QuoteLine[]
+  quoteLines         QuoteLine[]
   quoteTemplateLines QuoteTemplateLine[]
 
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  @@unique([tenantId, code])
+  @@index([tenantId])
   @@index([isActive])
   @@index([vendor])
   @@index([type])
@@ -2300,42 +2335,48 @@ model Product {
 // catalogue. Le commercial peut ensuite ajuster qte / prix / lignes.
 
 model QuoteTemplate {
-  id              String                @id @default(uuid())
-  name            String                // "Pack MDO Pro 10 utilisateurs", "Audit cyber initial"
-  description     String?
+  id           String         @id @default(uuid())
+  // Multi-tenant : nullable transitoire. Les templates de devis sont
+  // specifiques au catalogue commercial de chaque tenant : MDO MSP a des
+  // "Pack Pro 10 users" qui n'ont aucun sens pour une DSI publique.
+  tenantId     String?
+  tenant       Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name         String // "Pack MDO Pro 10 utilisateurs", "Audit cyber initial"
+  description  String?
   // Categorie pour grouper dans le selecteur ("Offres standards", "Add-ons", "Audits"...)
-  category        String?
+  category     String?
   // Offre cible si applicable — si renseignee, le template est pre-suggere
   // dans le selecteur quand l'opportunite/devis est lie a cette offre.
-  offer           ContractOffer?
+  offer        ContractOffer?
   // Conditions / mentions par defaut pre-remplies sur le devis
-  defaultTerms    String?
-  isActive        Boolean               @default(true)
+  defaultTerms String?
+  isActive     Boolean        @default(true)
 
-  lines           QuoteTemplateLine[]
+  lines QuoteTemplateLine[]
 
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  @@index([tenantId])
   @@index([isActive, offer])
 }
 
 model QuoteTemplateLine {
-  id              String          @id @default(uuid())
-  templateId      String
-  template        QuoteTemplate   @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  position        Int             @default(0)
-  description     String
+  id          String        @id @default(uuid())
+  templateId  String
+  template    QuoteTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  position    Int           @default(0)
+  description String
   // Quantite par defaut. Le commercial peut overrider sur le devis genere.
-  quantity        Decimal         @default(1) @db.Decimal(10, 2)
+  quantity    Decimal       @default(1) @db.Decimal(10, 2)
   // Prix unitaire HT par defaut (peut etre overrride si productId est defini —
   // le sellingPriceHt du Product prend le dessus a la generation).
-  unitPriceHt     Decimal         @db.Decimal(10, 2)
-  discountPct     Decimal         @default(0) @db.Decimal(5, 2)
+  unitPriceHt Decimal       @db.Decimal(10, 2)
+  discountPct Decimal       @default(0) @db.Decimal(5, 2)
   // Lien vers le catalogue produits — si renseigne, le snapshot purchasePrice
   // est capture lors de la generation du devis (cf module products).
-  productId       String?
-  product         Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productId   String?
+  product     Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([templateId])
 }
@@ -2357,31 +2398,31 @@ enum CustomerSuccessReviewStatus {
 }
 
 model CustomerSuccessReview {
-  id            String                       @id @default(uuid())
+  id        String  @id @default(uuid())
   // Multi-tenant : nullable transitoire.
-  tenantId      String?
-  tenant        Tenant?                      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  companyId     String
-  company       Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tenantId  String?
+  tenant    Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  scheduledAt   DateTime                     // date prevue
-  status        CustomerSuccessReviewStatus  @default(SCHEDULED)
-  heldAt        DateTime?                    // date effective de tenue
+  scheduledAt       DateTime // date prevue
+  status            CustomerSuccessReviewStatus @default(SCHEDULED)
+  heldAt            DateTime? // date effective de tenue
   // Owner = generalement le commercial / customer success manager du client
-  ownerId       String?
-  owner         User?                        @relation("CustomerSuccessReviewOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId           String?
+  owner             User?                       @relation("CustomerSuccessReviewOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   // Resume de la reunion (notes saisies apres tenue)
-  notes         String?
+  notes             String?
   // Items d'agenda pre-generes par le service (Health alerts, contrats a
   // renouveler, opportunites, etc.) — JSON pour flexibilite.
-  agendaItems   Json?
+  agendaItems       Json?
   // Score satisfaction client a l'issue de la reunion (0-10, optionnel)
   satisfactionScore Int?
   // Tracking : a-t-on declenche une notif J-7 a l'owner ?
-  reminderSentAt DateTime?
+  reminderSentAt    DateTime?
 
-  createdAt     DateTime                     @default(now())
-  updatedAt     DateTime                     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([companyId])
@@ -2404,8 +2445,8 @@ model CustomerSuccessReview {
 // (enrolledAt + dayOffset == aujourd'hui), avance au suivant.
 
 enum DripCampaignTrigger {
-  MANUAL              // enrollement manuel via UI
-  COMPANY_CREATED_AS_LEAD  // auto a la creation d'une Company avec status=LEAD
+  MANUAL // enrollement manuel via UI
+  COMPANY_CREATED_AS_LEAD // auto a la creation d'une Company avec status=LEAD
 }
 
 enum DripEnrollmentStatus {
@@ -2416,66 +2457,66 @@ enum DripEnrollmentStatus {
 }
 
 model DripCampaign {
-  id            String                @id @default(uuid())
+  id          String              @id @default(uuid())
   // Multi-tenant : nullable transitoire.
-  tenantId      String?
-  tenant        Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  name          String
-  description   String?
-  trigger       DripCampaignTrigger   @default(MANUAL)
-  isActive      Boolean               @default(true)
+  tenantId    String?
+  tenant      Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name        String
+  description String?
+  trigger     DripCampaignTrigger @default(MANUAL)
+  isActive    Boolean             @default(true)
 
-  steps         DripCampaignStep[]
-  enrollments   DripEnrollment[]
+  steps       DripCampaignStep[]
+  enrollments DripEnrollment[]
 
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([isActive, trigger])
 }
 
 model DripCampaignStep {
-  id            String            @id @default(uuid())
-  campaignId    String
-  campaign      DripCampaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  position      Int               @default(0)
+  id         String       @id @default(uuid())
+  campaignId String
+  campaign   DripCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  position   Int          @default(0)
   // Decalage en jours depuis l'enrollment. Step a J+0 part le jour meme.
-  dayOffset     Int               @default(0)
-  subject       String
+  dayOffset  Int          @default(0)
+  subject    String
   // Corps HTML (avec placeholders {firstName}, {companyName} substitues a l'envoi)
-  bodyHtml      String
+  bodyHtml   String
 
-  sentEmails    DripSentEmail[]
+  sentEmails DripSentEmail[]
 
   @@index([campaignId])
 }
 
 model DripEnrollment {
-  id              String                  @id @default(uuid())
-  campaignId      String
-  campaign        DripCampaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id             String       @id @default(uuid())
+  campaignId     String
+  campaign       DripCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   // Destinataire identifie par email (peut etre un Contact, ou une adresse
   // externe importee). Pas de FK dure pour rester souple.
-  recipientEmail  String
-  recipientName   String?
+  recipientEmail String
+  recipientName  String?
   // Si lie a un Contact existant (contexte commercial)
-  contactId       String?
-  contact         Contact?                @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contactId      String?
+  contact        Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
   // Company associee (utile pour les substitutions {companyName} et le filtre UI)
-  companyId       String?
-  company         Company?                @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyId      String?
+  company        Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
-  status          DripEnrollmentStatus    @default(RUNNING)
-  enrolledAt      DateTime                @default(now())
-  completedAt     DateTime?
+  status        DripEnrollmentStatus @default(RUNNING)
+  enrolledAt    DateTime             @default(now())
+  completedAt   DateTime?
   // Index du prochain step a envoyer (0 = etape 1). Avance apres chaque envoi.
-  nextStepIndex   Int                     @default(0)
+  nextStepIndex Int                  @default(0)
 
-  sentEmails      DripSentEmail[]
+  sentEmails DripSentEmail[]
 
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Un meme email ne peut etre enroll qu'une fois par campagne (sauf
   // re-enrollement manuel apres COMPLETED — supprimer puis recreer).
@@ -2486,16 +2527,16 @@ model DripEnrollment {
 }
 
 model DripSentEmail {
-  id              String           @id @default(uuid())
-  enrollmentId    String
-  enrollment      DripEnrollment   @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  stepId          String
-  step            DripCampaignStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  sentAt          DateTime         @default(now())
+  id           String           @id @default(uuid())
+  enrollmentId String
+  enrollment   DripEnrollment   @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  stepId       String
+  step         DripCampaignStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  sentAt       DateTime         @default(now())
   // Status d'envoi (succes/echec) — texte libre pour stocker le message
   // d'erreur SMTP eventuel.
-  sendStatus      String           @default("SENT")
-  sendError       String?
+  sendStatus   String           @default("SENT")
+  sendError    String?
 
   @@unique([enrollmentId, stepId])
   @@index([enrollmentId])
@@ -2513,11 +2554,11 @@ model DripSentEmail {
 // consent cote client + ajout dans le scope app M365).
 
 model PatchManagedDevice {
-  id                String      @id @default(uuid())
-  m365TenantId      String
-  m365Tenant        M365Tenant  @relation(fields: [m365TenantId], references: [id], onDelete: Cascade)
+  id           String     @id @default(uuid())
+  m365TenantId String
+  m365Tenant   M365Tenant @relation(fields: [m365TenantId], references: [id], onDelete: Cascade)
   // Identifiant Intune (managedDevices.id)
-  externalId        String
+  externalId   String
 
   deviceName        String
   // OS string brute ("Windows", "iOS", "macOS", ...)
@@ -2530,14 +2571,14 @@ model PatchManagedDevice {
   // Date du dernier sync de l'appareil avec Intune
   lastSyncDateTime  DateTime?
   enrolledDateTime  DateTime?
-  isEncrypted       Boolean     @default(false)
-  isSupervised      Boolean     @default(false)
+  isEncrypted       Boolean   @default(false)
+  isSupervised      Boolean   @default(false)
   userPrincipalName String?
   serialNumber      String?
   manufacturer      String?
   model             String?
   // Date de notre dernier sync avec Graph
-  syncedAt          DateTime    @default(now())
+  syncedAt          DateTime  @default(now())
 
   @@unique([m365TenantId, externalId])
   @@index([m365TenantId, complianceState])
@@ -2561,51 +2602,51 @@ model PatchManagedDevice {
 // Cron quotidien : alerte les jobs sans SUCCESS dans la fenetre attendue.
 
 enum BackupSourceType {
-  M365            // Backup M365 mailbox/SharePoint/OneDrive
-  VM              // VM hyperviseur (Veeam, Vinchin, ...)
-  FILES           // Fichiers/serveurs (NAS, FileServer)
-  DATABASE        // SQL/Postgres/Mongo
-  ENDPOINT        // Postes utilisateurs (Datto, ...)
+  M365 // Backup M365 mailbox/SharePoint/OneDrive
+  VM // VM hyperviseur (Veeam, Vinchin, ...)
+  FILES // Fichiers/serveurs (NAS, FileServer)
+  DATABASE // SQL/Postgres/Mongo
+  ENDPOINT // Postes utilisateurs (Datto, ...)
   OTHER
 }
 
 enum BackupRunStatus {
   RUNNING
   SUCCESS
-  WARNING       // succes partiel (ex. 95 % des items, vendor genere un warning)
+  WARNING // succes partiel (ex. 95 % des items, vendor genere un warning)
   FAILED
   SKIPPED
 }
 
 model BackupJob {
-  id                String           @id @default(uuid())
+  id                     String           @id @default(uuid())
   // Multi-tenant : nullable transitoire.
-  tenantId          String?
-  tenant            Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  companyId         String
-  company           Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name              String           // libelle interne
-  vendor            String?          // 'Veeam', 'Acronis', 'Datto', 'Vinchin', '365 Backup'...
-  sourceType        BackupSourceType @default(OTHER)
+  tenantId               String?
+  tenant                 Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  companyId              String
+  company                Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name                   String // libelle interne
+  vendor                 String? // 'Veeam', 'Acronis', 'Datto', 'Vinchin', '365 Backup'...
+  sourceType             BackupSourceType @default(OTHER)
   // Identifiant chez le vendor (job id Veeam, plan id Acronis, ...)
-  sourceIdentifier  String?
+  sourceIdentifier       String?
   // Frequence attendue : si pas de SUCCESS dans cette fenetre, on alerte.
   // Defaut 26h (laisse 2h de marge sur un backup quotidien).
-  expectedFrequencyHours Int         @default(26)
+  expectedFrequencyHours Int              @default(26)
   // Secret pour authentifier les ingestions webhook. Genere a la creation,
   // affiche UNE FOIS dans l'UI puis masque (hash stocke).
-  ingestSecret      String?
-  isActive          Boolean          @default(true)
+  ingestSecret           String?
+  isActive               Boolean          @default(true)
   // Compteurs miroirs (recalcules apres chaque ingestion)
-  lastRunStatus     BackupRunStatus?
-  lastRunAt         DateTime?
-  lastSuccessAt     DateTime?
-  lastSuccessSizeBytes BigInt?
+  lastRunStatus          BackupRunStatus?
+  lastRunAt              DateTime?
+  lastSuccessAt          DateTime?
+  lastSuccessSizeBytes   BigInt?
 
-  runs              BackupRun[]
+  runs BackupRun[]
 
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([companyId])
@@ -2613,23 +2654,23 @@ model BackupJob {
 }
 
 model BackupRun {
-  id              String           @id @default(uuid())
-  jobId           String
-  job             BackupJob        @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  status          BackupRunStatus
-  startedAt       DateTime
-  endedAt         DateTime?
-  durationSec     Int?
+  id            String          @id @default(uuid())
+  jobId         String
+  job           BackupJob       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  status        BackupRunStatus
+  startedAt     DateTime
+  endedAt       DateTime?
+  durationSec   Int?
   // Taille du backup en octets (BigInt — peut depasser 4 Go)
-  sizeBytes       BigInt?
-  itemsCount      Int?             // nombre d'items / fichiers / mailbox sauvegardes
+  sizeBytes     BigInt?
+  itemsCount    Int? // nombre d'items / fichiers / mailbox sauvegardes
   // Message du vendor (texte libre, errors, warnings)
-  message         String?
+  message       String?
   // Identifiant de l'execution chez le vendor (run id) — dedup webhooks
-  externalRunId   String?
-  rawPayload      Json?            // payload brut webhook pour audit/debug
+  externalRunId String?
+  rawPayload    Json? // payload brut webhook pour audit/debug
 
-  createdAt       DateTime         @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([jobId, externalRunId])
   @@index([jobId, startedAt])
@@ -2647,23 +2688,23 @@ model BackupRun {
 // UserSkill = niveau d'un technicien sur un skill specifique.
 
 model Skill {
-  id          String      @id @default(uuid())
+  id             String  @id @default(uuid())
   // Code unique court ("MS_AZ104", "ANSSI_SECNUM", "BD_GZ", "VEEAM_VMCE")
-  code        String      @unique
-  name        String      // "Azure Administrator AZ-104"
+  code           String  @unique
+  name           String // "Azure Administrator AZ-104"
   // Categorie : 'Microsoft' | 'Cybersecurity' | 'Backup' | 'Networking' | 'Cloud' | 'Other'
-  category    String?
+  category       String?
   // Organisme certificateur ('Microsoft', 'ANSSI', 'Bitdefender', 'Veeam', ...)
-  provider    String?
+  provider       String?
   // Duree de validite par defaut en mois (Microsoft = 24, ANSSI = variable)
   validityMonths Int?
-  description String?
-  isActive    Boolean     @default(true)
+  description    String?
+  isActive       Boolean @default(true)
 
-  userSkills  UserSkill[]
+  userSkills UserSkill[]
 
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([category])
 }
@@ -2675,20 +2716,20 @@ enum SkillLevel {
 }
 
 model UserSkill {
-  id              String     @id @default(uuid())
-  userId          String
-  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  skillId         String
-  skill           Skill      @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  id      String @id @default(uuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillId String
+  skill   Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
-  level           SkillLevel @default(INTERMEDIATE)
-  certifiedAt     DateTime?  // date de passage de la certif
-  expiresAt       DateTime?  // si vide : pas de date d'expiration ou validite a saisir
-  certificateUrl  String?    // lien vers le PDF de certif (Sharepoint, GED)
-  notes           String?
+  level          SkillLevel @default(INTERMEDIATE)
+  certifiedAt    DateTime? // date de passage de la certif
+  expiresAt      DateTime? // si vide : pas de date d'expiration ou validite a saisir
+  certificateUrl String? // lien vers le PDF de certif (Sharepoint, GED)
+  notes          String?
 
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([userId, skillId])
   @@index([userId])
@@ -2710,9 +2751,9 @@ model UserSkill {
 // une phrase de confirmation cote UI.
 
 enum SystemBackupKind {
-  MANUAL          // declenche par un admin via UI
-  SCHEDULED       // declenche par le cron quotidien
-  PRE_RESTORE     // genere automatiquement avant un restore (safety net)
+  MANUAL // declenche par un admin via UI
+  SCHEDULED // declenche par le cron quotidien
+  PRE_RESTORE // genere automatiquement avant un restore (safety net)
 }
 
 enum SystemBackupStatus {
@@ -2722,36 +2763,36 @@ enum SystemBackupStatus {
 }
 
 model SystemBackup {
-  id              String              @id @default(uuid())
-  kind            SystemBackupKind    @default(MANUAL)
-  status          SystemBackupStatus  @default(RUNNING)
-  filename        String              // nom du fichier .tar.gz
-  pathRelative    String              // chemin relatif dans /app/backups (ex. "2026/05/abc.tar.gz")
+  id              String             @id @default(uuid())
+  kind            SystemBackupKind   @default(MANUAL)
+  status          SystemBackupStatus @default(RUNNING)
+  filename        String // nom du fichier .tar.gz
+  pathRelative    String // chemin relatif dans /app/backups (ex. "2026/05/abc.tar.gz")
   // Tailles : BigInt — un dump avec uploads peut depasser 4 Go
   sizeBytes       BigInt?
   // Composants inclus (denormalise pour affichage UI)
-  includesDb      Boolean             @default(true)
-  includesUploads Boolean             @default(true)
+  includesDb      Boolean            @default(true)
+  includesUploads Boolean            @default(true)
   // Version Prisma schema au moment du backup (utile pour detecter une
   // tentative de restore vers un schema incompatible)
   schemaVersion   String?
 
   // Audit
-  createdById     String?
-  createdBy       User?               @relation("SystemBackupCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  errorMessage    String?
-  durationMs      Int?
+  createdById  String?
+  createdBy    User?   @relation("SystemBackupCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  errorMessage String?
+  durationMs   Int?
 
   // Si restaure, on horodate ici. Une fois restaure, le record reste pour audit.
-  restoredAt      DateTime?
-  restoredById    String?
-  restoredBy      User?               @relation("SystemBackupRestorer", fields: [restoredById], references: [id], onDelete: SetNull)
-  restoreError    String?
+  restoredAt   DateTime?
+  restoredById String?
+  restoredBy   User?     @relation("SystemBackupRestorer", fields: [restoredById], references: [id], onDelete: SetNull)
+  restoreError String?
 
-  downloadCount   Int                 @default(0)
-  lastDownloadAt  DateTime?
+  downloadCount  Int       @default(0)
+  lastDownloadAt DateTime?
 
-  createdAt       DateTime            @default(now())
+  createdAt DateTime @default(now())
 
   @@index([kind, createdAt])
   @@index([status])
@@ -2780,36 +2821,36 @@ enum WebhookEvent {
 }
 
 model WebhookEndpoint {
-  id          String        @id @default(uuid())
+  id             String         @id @default(uuid())
   // Multi-tenant : nullable transitoire.
-  tenantId    String?
-  tenant      Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  url         String        // URL HTTPS du webhook
-  description String?       // libelle pour identification UI
+  tenantId       String?
+  tenant         Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  url            String // URL HTTPS du webhook
+  description    String? // libelle pour identification UI
   // Liste des events souscrits (array PostgreSQL)
-  events      WebhookEvent[]
+  events         WebhookEvent[]
   // Si companyId non null, le webhook ne recoit QUE les events lies a
   // cette societe (scope client). Sinon, il recoit TOUS les events
   // (scope global, reserve aux integrations internes).
-  companyId   String?
-  company     Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId      String?
+  company        Company?       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Secret HMAC stocke en clair (necessaire pour signer chaque payload).
   // Sera regenere si l'utilisateur clique sur "Regenerer le secret".
-  secret      String
-  isActive    Boolean       @default(true)
+  secret         String
+  isActive       Boolean        @default(true)
   // Compteurs pour suivi UI (recalcules a chaque delivery)
-  successCount Int          @default(0)
-  failureCount Int          @default(0)
+  successCount   Int            @default(0)
+  failureCount   Int            @default(0)
   lastDeliveryAt DateTime?
   lastSuccessAt  DateTime?
   // Audit
-  createdById String
-  createdBy   User          @relation("WebhookEndpointCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdById    String
+  createdBy      User           @relation("WebhookEndpointCreator", fields: [createdById], references: [id], onDelete: Restrict)
 
-  deliveries  WebhookDelivery[]
+  deliveries WebhookDelivery[]
 
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([isActive])
@@ -2817,24 +2858,24 @@ model WebhookEndpoint {
 }
 
 model WebhookDelivery {
-  id              String          @id @default(uuid())
-  endpointId      String
-  endpoint        WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
-  event           WebhookEvent
+  id                  String          @id @default(uuid())
+  endpointId          String
+  endpoint            WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  event               WebhookEvent
   // Payload envoye (JSON serialise)
-  payload         Json
+  payload             Json
   // Resultat HTTP du dernier essai
-  httpStatus      Int?
-  responseBody    String?         // tronque a 2000 chars
-  attemptCount    Int             @default(0)
+  httpStatus          Int?
+  responseBody        String? // tronque a 2000 chars
+  attemptCount        Int             @default(0)
   // Si null, encore en attente / en cours de retry. Sinon = horodatage final.
-  succeededAt     DateTime?
+  succeededAt         DateTime?
   // Si toutes les tentatives ont echoue (5 retries epuises)
   failedPermanentlyAt DateTime?
-  errorMessage    String?
+  errorMessage        String?
 
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([endpointId, createdAt])
   @@index([event])
@@ -2852,63 +2893,63 @@ model WebhookDelivery {
 // Yousign/DocuSeal (signature), Qonto (facturation), Stripe (paiement)...
 
 enum SubprocessorRole {
-  HOSTING            // hebergement infra
-  EMAIL              // email transactionnel/marketing
-  BACKUP             // sauvegarde
-  EDR                // antivirus/endpoint detection
-  AI                 // intelligence artificielle (LLM, transcription, ...)
-  PAYMENT            // paiement / facturation
-  COMMUNICATION      // telephonie, SMS, visio
-  SIGNATURE          // signature electronique
-  MONITORING         // monitoring/log/observabilite
+  HOSTING // hebergement infra
+  EMAIL // email transactionnel/marketing
+  BACKUP // sauvegarde
+  EDR // antivirus/endpoint detection
+  AI // intelligence artificielle (LLM, transcription, ...)
+  PAYMENT // paiement / facturation
+  COMMUNICATION // telephonie, SMS, visio
+  SIGNATURE // signature electronique
+  MONITORING // monitoring/log/observabilite
   OTHER
 }
 
 enum DataTransferMechanism {
-  ADEQUACY_DECISION  // pays adequats (CH, JP, NZ, ...)
-  SCC                // Standard Contractual Clauses (UE -> US/INDIA/...)
-  BCR                // Binding Corporate Rules
-  DEROGATION         // derogations specifiques (consent, contract necessity)
-  NOT_APPLICABLE     // donnees restant dans l'UE
+  ADEQUACY_DECISION // pays adequats (CH, JP, NZ, ...)
+  SCC // Standard Contractual Clauses (UE -> US/INDIA/...)
+  BCR // Binding Corporate Rules
+  DEROGATION // derogations specifiques (consent, contract necessity)
+  NOT_APPLICABLE // donnees restant dans l'UE
 }
 
 model Subprocessor {
-  id              String                 @id @default(uuid())
+  id             String           @id @default(uuid())
   // Multi-tenant : nullable transitoire. Chaque tenant gere son propre
   // registre RGPD article 28 (la liste sous-traitants MDO != la liste
   // sous-traitants Mairie de SEYSSES).
-  tenantId        String?
-  tenant          Tenant?                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  name            String                 // "Microsoft Corporation"
-  legalEntity     String?                // raison sociale exacte si differente
-  role            SubprocessorRole       @default(OTHER)
-  purpose         String                 // description claire du role pour les donnees client
+  tenantId       String?
+  tenant         Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name           String // "Microsoft Corporation"
+  legalEntity    String? // raison sociale exacte si differente
+  role           SubprocessorRole @default(OTHER)
+  purpose        String // description claire du role pour les donnees client
   // Categories de donnees traitees (array libre : "PII", "EMAIL_CONTENT",
   // "FINANCIAL", "AUTH", "TELEMETRY"...)
-  dataCategories  String[]               @default([])
+  dataCategories String[]         @default([])
 
   // Localisation infrastructure / siege
-  hostingCountry  String?                // 'France', 'Irlande', 'USA'...
-  headquarters    String?                // adresse siege si applicable
+  hostingCountry String? // 'France', 'Irlande', 'USA'...
+  headquarters   String? // adresse siege si applicable
 
   // Transferts hors UE
-  transfersOutsideEu      Boolean        @default(false)
-  transferMechanism       DataTransferMechanism @default(NOT_APPLICABLE)
+  transfersOutsideEu Boolean               @default(false)
+  transferMechanism  DataTransferMechanism @default(NOT_APPLICABLE)
 
   // DPA (Data Processing Agreement) signe
-  dpaUrl          String?                // lien vers le PDF du DPA signe
-  dpaSignedAt     DateTime?
+  dpaUrl                    String? // lien vers le PDF du DPA signe
+  dpaSignedAt               DateTime?
   // Lien pubic des sous-traitants du fournisseur (transparence)
   vendorSubprocessorListUrl String?
 
   // Cycle de vie
-  startedAt       DateTime               @default(now())
-  endedAt         DateTime?              // si on arrete la sous-traitance
-  isActive        Boolean                @default(true)
-  notes           String?
+  startedAt DateTime  @default(now())
+  endedAt   DateTime? // si on arrete la sous-traitance
+  isActive  Boolean   @default(true)
+  notes     String?
 
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([isActive])
@@ -2941,72 +2982,72 @@ enum OnboardingStepStatus {
 }
 
 model OnboardingTemplate {
-  id          String              @id @default(uuid())
+  id          String         @id @default(uuid())
   // Multi-tenant : nullable transitoire.
   tenantId    String?
-  tenant      Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant      Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name        String
   description String?
   offer       ContractOffer?
-  isActive    Boolean             @default(true)
+  isActive    Boolean        @default(true)
 
-  steps       OnboardingTemplateStep[]
-  runs        OnboardingRun[]
+  steps OnboardingTemplateStep[]
+  runs  OnboardingRun[]
 
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([offer, isActive])
 }
 
 model OnboardingTemplateStep {
-  id              String              @id @default(uuid())
-  templateId      String
-  template        OnboardingTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  position        Int                 @default(0)
-  title           String
-  description     String?
+  id                String             @id @default(uuid())
+  templateId        String
+  template          OnboardingTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  position          Int                @default(0)
+  title             String
+  description       String?
   // Decalage en jours par rapport au demarrage du run pour calculer dueDate
   // de la step. Permet "Etape 1 le jour J, etape 7 a J+30".
-  dueDateOffsetDays Int               @default(0)
+  dueDateOffsetDays Int                @default(0)
   // Role par defaut a qui la step est assignee (resolu cote service en
   // prenant le premier user actif du role).
-  assigneeRole    Role?
+  assigneeRole      Role?
 
   @@index([templateId])
 }
 
 model OnboardingRun {
-  id           String                @id @default(uuid())
+  id         String             @id @default(uuid())
   // Multi-tenant : nullable transitoire.
-  tenantId     String?
-  tenant       Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  templateId   String
-  template     OnboardingTemplate    @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  tenantId   String?
+  tenant     Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  templateId String
+  template   OnboardingTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
   // Contrat declencheur. Si null, c'est un onboarding manuel (sans contrat
   // associe — rare mais possible).
-  contractId   String?               @unique
-  contract     Contract?             @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  contractId String?            @unique
+  contract   Contract?          @relation(fields: [contractId], references: [id], onDelete: SetNull)
   // Societe cible (denormalise pour eviter la jointure quand on liste les
   // onboardings par client cote UI).
-  companyId    String
-  company      Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId  String
+  company    Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  status       OnboardingRunStatus   @default(IN_PROGRESS)
-  startedAt    DateTime              @default(now())
-  completedAt  DateTime?
+  status      OnboardingRunStatus @default(IN_PROGRESS)
+  startedAt   DateTime            @default(now())
+  completedAt DateTime?
 
   // Compteurs miroirs (recalcules a chaque update step) : evite agregation
   // pour la liste et permet de derive un % d'avancement.
-  totalSteps    Int                  @default(0)
-  doneSteps     Int                  @default(0)
-  skippedSteps  Int                  @default(0)
+  totalSteps   Int @default(0)
+  doneSteps    Int @default(0)
+  skippedSteps Int @default(0)
 
-  steps        OnboardingRunStep[]
+  steps OnboardingRunStep[]
 
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([companyId])
@@ -3014,23 +3055,23 @@ model OnboardingRun {
 }
 
 model OnboardingRunStep {
-  id          String                @id @default(uuid())
+  id          String               @id @default(uuid())
   runId       String
-  run         OnboardingRun         @relation(fields: [runId], references: [id], onDelete: Cascade)
-  position    Int                   @default(0)
+  run         OnboardingRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  position    Int                  @default(0)
   title       String
   description String?
-  status      OnboardingStepStatus  @default(PENDING)
+  status      OnboardingStepStatus @default(PENDING)
   dueDate     DateTime?
   assigneeId  String?
-  assignee    User?                 @relation("OnboardingStepAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignee    User?                @relation("OnboardingStepAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   doneAt      DateTime?
   doneById    String?
-  doneBy      User?                 @relation("OnboardingStepCloser", fields: [doneById], references: [id], onDelete: SetNull)
+  doneBy      User?                @relation("OnboardingStepCloser", fields: [doneById], references: [id], onDelete: SetNull)
   notes       String?
 
-  createdAt   DateTime              @default(now())
-  updatedAt   DateTime              @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([runId])
   @@index([assigneeId, status])
@@ -3056,47 +3097,47 @@ enum KbScope {
 }
 
 model KbArticle {
-  id              String   @id @default(uuid())
+  id       String  @id @default(uuid())
   // Multi-tenant : nullable transitoire. Chaque tenant a sa propre KB.
-  tenantId        String?
-  tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  title           String
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  title    String
   // Slug URL-friendly. Passe d'unique global a unique par tenant.
-  slug            String
+  slug     String
   // Markdown — rendu cote frontend (pas de HTML pour eviter XSS sur portail).
-  content         String
+  content  String
   // Resume court (1-2 phrases) pour les listes / cartes de recherche.
-  excerpt         String?
+  excerpt  String?
 
-  scope           KbScope  @default(INTERNAL)
+  scope     KbScope  @default(INTERNAL)
   // Si scope=CLIENT, l'article ne concerne que cette societe (visible
   // techniciens MDO + portail de cette societe uniquement).
-  companyId       String?
-  company         Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  category        String?  // libre : "Email", "Backup", "MFA", "Reseau"...
-  tags            String[] @default([])
+  category String? // libre : "Email", "Backup", "MFA", "Reseau"...
+  tags     String[] @default([])
 
   // Workflow publication : DRAFT -> PUBLISHED. Seuls les PUBLISHED sont
   // visibles cote portail client. Les INTERNAL DRAFT restent visibles MDO.
-  isPublished     Boolean  @default(false)
-  publishedAt     DateTime?
+  isPublished    Boolean   @default(false)
+  publishedAt    DateTime?
   // Date de derniere relecture/maj (pour signaler les KB obsoletes via
   // badge "revue depuis > 12 mois").
-  lastReviewedAt  DateTime?
+  lastReviewedAt DateTime?
 
   // Compteurs (incrementes par les endpoints de lecture)
-  viewCount       Int      @default(0)
-  helpfulCount    Int      @default(0)
+  viewCount    Int @default(0)
+  helpfulCount Int @default(0)
 
   // Si l'article a ete genere depuis un ticket (bouton "Convert to KB")
-  sourceTicketId  String?
+  sourceTicketId String?
 
-  authorId        String
-  author          User     @relation("KbArticleAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  authorId String
+  author   User   @relation("KbArticleAuthor", fields: [authorId], references: [id], onDelete: Restrict)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -3124,36 +3165,36 @@ model KbArticle {
 // Cron quotidien re-verifie tous les domaines (asset type=DOMAIN actifs).
 
 model EmailSecurityCheck {
-  id            String   @id @default(uuid())
+  id        String   @id @default(uuid())
   // Multi-tenant : nullable transitoire. Domaine passe d'unique global a
   // unique par tenant (un meme domaine peut etre verifie par plusieurs
   // tenants si un fournisseur est commun).
-  tenantId      String?
-  tenant        Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  domain        String
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  domain    String
   // Si rattachable a une societe (via lookup Asset), on denormalise pour
   // pouvoir filtrer par client cote UI.
-  companyId     String?
-  company       Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   // ----- SPF -----
-  spfRecord     String?  // valeur brute du record TXT v=spf1
-  spfPolicy     String?  // 'pass' (-all), 'softfail' (~all), 'neutral' (?all), 'all' (+all)
+  spfRecord String? // valeur brute du record TXT v=spf1
+  spfPolicy String? // 'pass' (-all), 'softfail' (~all), 'neutral' (?all), 'all' (+all)
 
   // ----- DMARC -----
-  dmarcRecord   String?  // valeur brute du record TXT v=DMARC1
-  dmarcPolicy   String?  // 'reject', 'quarantine', 'none'
-  dmarcRua      String?  // adresse(s) reporting agregee
+  dmarcRecord          String? // valeur brute du record TXT v=DMARC1
+  dmarcPolicy          String? // 'reject', 'quarantine', 'none'
+  dmarcRua             String? // adresse(s) reporting agregee
   dmarcSubdomainPolicy String?
 
   // ----- DKIM -----
-  dkimSelector  String?  // selector trouve (default, selector1, google, ...)
-  dkimRecord    String?
-  dkimPresent   Boolean  @default(false)
+  dkimSelector String? // selector trouve (default, selector1, google, ...)
+  dkimRecord   String?
+  dkimPresent  Boolean @default(false)
 
-  scorePct      Int      @default(0)
+  scorePct Int     @default(0)
   // Erreur eventuelle (DNS timeout, NXDOMAIN, etc.)
-  error         String?
+  error    String?
 
   lastCheckedAt DateTime @default(now())
   createdAt     DateTime @default(now())
@@ -3188,35 +3229,35 @@ enum PhishingCampaignStatus {
 }
 
 model PhishingCampaign {
-  id              String                  @id @default(uuid())
+  id         String         @id @default(uuid())
   // Multi-tenant : nullable transitoire.
-  tenantId        String?
-  tenant          Tenant?                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  name            String                  // libelle interne ("Phishing Q2 2026 Banque")
-  vendor          PhishingVendor          @default(GOPHISH)
-  externalId      String?                 // id externe chez le vendor
+  tenantId   String?
+  tenant     Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name       String // libelle interne ("Phishing Q2 2026 Banque")
+  vendor     PhishingVendor @default(GOPHISH)
+  externalId String? // id externe chez le vendor
 
-  companyId       String
-  company         Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  status          PhishingCampaignStatus  @default(DRAFT)
-  sentAt          DateTime?               // date d'envoi des emails
-  completedAt     DateTime?               // date de cloture (analyse terminee)
+  status      PhishingCampaignStatus @default(DRAFT)
+  sentAt      DateTime? // date d'envoi des emails
+  completedAt DateTime? // date de cloture (analyse terminee)
 
   // Compteurs (recalcules depuis les results a chaque import CSV)
-  totalRecipients   Int                   @default(0)
-  openedCount       Int                   @default(0)
-  clickedCount      Int                   @default(0)
-  reportedCount     Int                   @default(0)  // signale comme phishing par le user
-  dataEnteredCount  Int                   @default(0)  // a saisi des creds (le pire)
+  totalRecipients  Int @default(0)
+  openedCount      Int @default(0)
+  clickedCount     Int @default(0)
+  reportedCount    Int @default(0) // signale comme phishing par le user
+  dataEnteredCount Int @default(0) // a saisi des creds (le pire)
 
-  templateName    String?                 // nom du modele d'email phishing utilise
-  notes           String?
+  templateName String? // nom du modele d'email phishing utilise
+  notes        String?
 
-  results         PhishingResult[]
+  results PhishingResult[]
 
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([companyId])
@@ -3224,25 +3265,25 @@ model PhishingCampaign {
 }
 
 model PhishingResult {
-  id              String              @id @default(uuid())
-  campaignId      String
-  campaign        PhishingCampaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id         String           @id @default(uuid())
+  campaignId String
+  campaign   PhishingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
-  userEmail       String              // identifiant unique dans la campagne
-  userName        String?
+  userEmail String // identifiant unique dans la campagne
+  userName  String?
 
   // Etats de progression : opened > clicked > dataEntered (escalade)
-  opened          Boolean             @default(false)
-  clicked         Boolean             @default(false)
-  reportedAsPhish Boolean             @default(false)
-  dataEntered     Boolean             @default(false)
+  opened          Boolean @default(false)
+  clicked         Boolean @default(false)
+  reportedAsPhish Boolean @default(false)
+  dataEntered     Boolean @default(false)
 
-  openedAt        DateTime?
-  clickedAt       DateTime?
-  reportedAt      DateTime?
-  dataEnteredAt   DateTime?
+  openedAt      DateTime?
+  clickedAt     DateTime?
+  reportedAt    DateTime?
+  dataEnteredAt DateTime?
 
-  createdAt       DateTime            @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([campaignId, userEmail])
   @@index([campaignId])
@@ -3266,30 +3307,30 @@ enum SignatureProvider {
 }
 
 enum SignatureStatus {
-  PENDING       // creee, signataire pas encore venu
-  VIEWED        // signataire a ouvert le document
-  SIGNED        // signature finalisee
-  DECLINED      // signataire a refuse
-  EXPIRED       // delai de signature depasse
-  CANCELLED     // annulee cote MDO avant signature
+  PENDING // creee, signataire pas encore venu
+  VIEWED // signataire a ouvert le document
+  SIGNED // signature finalisee
+  DECLINED // signataire a refuse
+  EXPIRED // delai de signature depasse
+  CANCELLED // annulee cote MDO avant signature
 }
 
 model SignatureRequest {
-  id                String            @id @default(uuid())
+  id         String            @id @default(uuid())
   // Multi-tenant : nullable transitoire.
-  tenantId          String?
-  tenant            Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenantId   String?
+  tenant     Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   // Polymorphe (pas de FK Prisma — l'entite est dereferencable a la main).
   // Utiliser type discriminant ('Quote' | 'Contract') + id pour retrouver l'entite.
-  entityType        String            // 'Quote' | 'Contract'
-  entityId          String
-  provider          SignatureProvider @default(DOCUSEAL)
-  status            SignatureStatus   @default(PENDING)
+  entityType String // 'Quote' | 'Contract'
+  entityId   String
+  provider   SignatureProvider @default(DOCUSEAL)
+  status     SignatureStatus   @default(PENDING)
 
   // Identifiants externes du provider (varient selon le provider) :
   //  - DocuSeal : submission id (numerique, on stocke en string)
   //  - Yousign : signature_request id (UUID)
-  providerSubmissionId String?        @unique
+  providerSubmissionId String? @unique
   // URL ouvrable par le signataire (envoyee par email)
   providerSignerUrl    String?
   // URL du document signe une fois finalise (CDN provider ou stockage local)
@@ -3298,30 +3339,30 @@ model SignatureRequest {
   // Signataire principal (un seul pour le MVP — la plupart de nos contrats
   // ont un seul signataire client). Si besoin ulterieur de multi-signataires,
   // ajouter une table SignatureSigner.
-  signerName        String
-  signerEmail       String
-  signerPhone       String?            // pour OTP SMS si provider supporte
+  signerName  String
+  signerEmail String
+  signerPhone String? // pour OTP SMS si provider supporte
 
-  requestedAt       DateTime          @default(now())
-  viewedAt          DateTime?
-  signedAt          DateTime?
-  declinedAt        DateTime?
-  declineReason     String?
-  expiresAt         DateTime?
+  requestedAt   DateTime  @default(now())
+  viewedAt      DateTime?
+  signedAt      DateTime?
+  declinedAt    DateTime?
+  declineReason String?
+  expiresAt     DateTime?
 
   // Audit trail : on garde tous les webhooks recus en JSON pour pouvoir
   // re-jouer / debugger / prouver en cas de litige.
-  webhookEvents     Json[]            @default([])
+  webhookEvents Json[] @default([])
 
   // Companies/Contact pour faciliter le filtre cote UI (denormalise depuis
   // l'entite cible — petit cout d'ecriture, gros gain en lecture).
-  companyId         String?
-  company           Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
-  createdById       String
-  createdBy         User              @relation("SignatureRequestCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  createdById String
+  createdBy   User     @relation("SignatureRequestCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([tenantId])
   @@index([entityType, entityId])
@@ -3354,49 +3395,49 @@ enum CallStatus {
 }
 
 model CallLog {
-  id            String        @id @default(uuid())
+  id         String        @id @default(uuid())
   // Multi-tenant : nullable transitoire.
-  tenantId      String?
-  tenant        Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  direction     CallDirection
-  status        CallStatus    @default(RINGING)
+  tenantId   String?
+  tenant     Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  direction  CallDirection
+  status     CallStatus    @default(RINGING)
   // Numeros normalises E.164 (+33...) si possible. On garde les versions
   // brutes recues du provider dans rawPayload pour debug.
-  fromNumber    String
-  toNumber      String
+  fromNumber String
+  toNumber   String
 
-  startedAt     DateTime      @default(now())
-  answeredAt    DateTime?
-  endedAt       DateTime?
-  durationSec   Int?
+  startedAt   DateTime  @default(now())
+  answeredAt  DateTime?
+  endedAt     DateTime?
+  durationSec Int?
 
   // Resolution automatique
-  contactId     String?
-  contact       Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  companyId     String?
-  company       Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   // Utilisateur MDO concerne (passeur d'appel sortant ou destinataire d'entrant).
-  userId        String?
-  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   // Optionnels (selon provider)
-  recordingUrl  String?
-  notes         String?
+  recordingUrl          String?
+  notes                 String?
   // ----- Transcription / resume IA (cf module CallTranscription) -----
-  transcript            String?          // texte integral (Whisper)
-  summary               String?          // resume Claude (3-5 puces + actions)
+  transcript            String? // texte integral (Whisper)
+  summary               String? // resume Claude (3-5 puces + actions)
   transcribedAt         DateTime?
-  transcriptionStatus   String?          // 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED'
+  transcriptionStatus   String? // 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED'
   transcriptionError    String?
-  transcriptionLanguage String?          // 'fr' | 'en' | autre detecte par Whisper
+  transcriptionLanguage String? // 'fr' | 'en' | autre detecte par Whisper
   // Provider technique (FREE_PRO|TEL_URI|MANUAL) pour debug.
-  provider      String        @default("MANUAL")
+  provider              String    @default("MANUAL")
   // Identifiant externe (call_id, sip_id) pour deduplication des webhooks.
-  externalId    String?       @unique
+  externalId            String?   @unique
   // Payload brut pour audit / debug.
-  rawPayload    Json?
+  rawPayload            Json?
 
-  createdAt     DateTime      @default(now())
+  createdAt DateTime @default(now())
 
   @@index([tenantId])
   @@index([contactId])
@@ -3432,48 +3473,48 @@ enum AiCapability {
 // Attachment (qui sont eux lies aux Tickets uniquement). Permet une vraie
 // gestion documentaire avec categorisation, expiration et exposition portail.
 enum DocumentCategory {
-  CONTRACT_SIGNED   // contrats signes (PDF revenu signe)
-  KYC               // KBIS, RIB, identite dirigeant
-  LEGAL             // lettres de mission, mandats, NDAs
-  COMPLIANCE        // attestations URSSAF, assurance RC pro, RGPD
-  TECHNICAL         // schemas reseau, plans serveurs, runbooks
-  COMMUNICATION     // courriers, mails archives importants
+  CONTRACT_SIGNED // contrats signes (PDF revenu signe)
+  KYC // KBIS, RIB, identite dirigeant
+  LEGAL // lettres de mission, mandats, NDAs
+  COMPLIANCE // attestations URSSAF, assurance RC pro, RGPD
+  TECHNICAL // schemas reseau, plans serveurs, runbooks
+  COMMUNICATION // courriers, mails archives importants
   OTHER
 }
 
 model CompanyDocument {
-  id              String           @id @default(uuid())
+  id        String  @id @default(uuid())
   // Multi-tenant : nullable transitoire (rempli au seed retro-compat).
-  tenantId        String?
-  tenant          Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  companyId       String
-  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tenantId  String?
+  tenant    Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   // Stockage : meme repertoire physique que les attachments (uploads/), avec
   // un prefixe de cle pour distinguer.
-  filename        String           // nom de fichier original (apres sanitize)
-  storageKey      String           @unique
-  mimeType        String
-  sizeBytes       Int
+  filename   String // nom de fichier original (apres sanitize)
+  storageKey String @unique
+  mimeType   String
+  sizeBytes  Int
 
-  category        DocumentCategory @default(OTHER)
+  category    DocumentCategory @default(OTHER)
   // Libelle editable, distinct du filename (ex: "KBIS Mai 2026" pour un fichier
   // qui s'appellerait "scan_001.pdf").
-  title           String?
-  description     String?
+  title       String?
+  description String?
   // Date d'expiration : sert au cron qui alerte 30j avant (KBIS valide 3 mois,
   // attestation URSSAF 6 mois, etc.).
-  expiresAt       DateTime?
+  expiresAt   DateTime?
 
   // Exposition portail : si true, le client voit ce doc dans son espace
   // /portal/documents. Defaut false : par securite, on n'expose RIEN
   // tant qu'on a pas explicitement coche la visibilite.
-  visibleToClient Boolean          @default(false)
+  visibleToClient Boolean @default(false)
 
-  uploadedById    String?
-  uploadedBy      User?            @relation("DocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
-  uploadedAt      DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  uploadedById String?
+  uploadedBy   User?    @relation("DocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedAt   DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([tenantId])
   @@index([tenantId, expiresAt])
@@ -3483,32 +3524,32 @@ model CompanyDocument {
 }
 
 model AiUsage {
-  id            String        @id @default(uuid())
+  id                  String       @id @default(uuid())
   // Multi-tenant : nullable transitoire. Chaque tenant paye sa propre
   // consommation IA (cles API separees, cf vague 6 Settings).
-  tenantId      String?
-  tenant        Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  capability    AiCapability
-  model         String        // 'claude-sonnet-4-6', etc.
+  tenantId            String?
+  tenant              Tenant?      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  capability          AiCapability
+  model               String // 'claude-sonnet-4-6', etc.
   // Tokens : reportes par l'API. cacheReadTokens et cacheCreationTokens si
   // prompt caching active (les cache reads coutent 10x moins cher).
-  inputTokens   Int           @default(0)
-  outputTokens  Int           @default(0)
-  cacheReadTokens     Int     @default(0)
-  cacheCreationTokens Int     @default(0)
+  inputTokens         Int          @default(0)
+  outputTokens        Int          @default(0)
+  cacheReadTokens     Int          @default(0)
+  cacheCreationTokens Int          @default(0)
   // Cout estime en USD (calcule cote service avec tarifs publies, peut diverger
   // legerement de la facture reelle Anthropic).
-  costUsd       Decimal?      @db.Decimal(10, 6)
-  durationMs    Int?
+  costUsd             Decimal?     @db.Decimal(10, 6)
+  durationMs          Int?
   // Entite cible si applicable (ticket id, company id, ...). Polymorphe.
-  entityType    String?
-  entityId      String?
+  entityType          String?
+  entityId            String?
   // Erreur eventuelle (timeout, refus politique, etc.)
-  errorMessage  String?
-  userId        String?
-  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  errorMessage        String?
+  userId              String?
+  user                User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  createdAt     DateTime      @default(now())
+  createdAt DateTime @default(now())
 
   @@index([tenantId])
   @@index([tenantId, createdAt])
@@ -3531,11 +3572,11 @@ model AiUsage {
 //      recalcule a chaque update (denormalise pour la liste clients).
 
 enum ComplianceControlStatus {
-  NOT_STARTED       // pas encore evalue
-  IN_PROGRESS       // en cours de mise en conformite
-  COMPLIANT         // conforme — preuve a l'appui
-  NON_COMPLIANT     // ecart identifie
-  NOT_APPLICABLE    // hors scope client
+  NOT_STARTED // pas encore evalue
+  IN_PROGRESS // en cours de mise en conformite
+  COMPLIANT // conforme — preuve a l'appui
+  NON_COMPLIANT // ecart identifie
+  NOT_APPLICABLE // hors scope client
 }
 
 enum ComplianceCriticality {
@@ -3546,39 +3587,39 @@ enum ComplianceCriticality {
 }
 
 model ComplianceFramework {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   // Code court unique (NIS2, ISO27001, HDS, RGPD_TPE, ...)
-  code        String   @unique
+  code        String  @unique
   name        String
   description String?
   // Version du referentiel (utile quand NIS2 sera mis a jour)
-  version     String   @default("1.0")
+  version     String  @default("1.0")
   // Si false, le framework est cache dans les listes (deprecated mais on garde
   // les assessments existants).
-  isActive    Boolean  @default(true)
+  isActive    Boolean @default(true)
 
   controls    ComplianceControl[]
   assessments ComplianceAssessment[]
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([isActive])
 }
 
 model ComplianceControl {
-  id           String                @id @default(uuid())
-  frameworkId  String
-  framework    ComplianceFramework   @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  id          String                @id @default(uuid())
+  frameworkId String
+  framework   ComplianceFramework   @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
   // Code dans le referentiel (ex. "NIS2-1", "ISO-A.5.1", "HDS-3.2")
-  code         String
-  title        String
-  description  String?
+  code        String
+  title       String
+  description String?
   // Categorie metier (Gouvernance, Technique, Personnel, Continuite, ...)
-  category     String?
-  criticality  ComplianceCriticality @default(MEDIUM)
+  category    String?
+  criticality ComplianceCriticality @default(MEDIUM)
   // Ordre d'affichage dans la checklist
-  position     Int                   @default(0)
+  position    Int                   @default(0)
 
   controlAssessments ComplianceControlAssessment[]
 
@@ -3587,36 +3628,36 @@ model ComplianceControl {
 }
 
 model ComplianceAssessment {
-  id            String              @id @default(uuid())
+  id                 String              @id @default(uuid())
   // Multi-tenant : nullable transitoire (audit cyber par client = par tenant).
-  tenantId      String?
-  tenant        Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  companyId     String
-  company       Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  frameworkId   String
-  framework     ComplianceFramework @relation(fields: [frameworkId], references: [id], onDelete: Restrict)
+  tenantId           String?
+  tenant             Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  companyId          String
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  frameworkId        String
+  framework          ComplianceFramework @relation(fields: [frameworkId], references: [id], onDelete: Restrict)
   // Score 0-100 denormalise (recalcule par le service a chaque mise a jour
   // de controle). Permet d'afficher le score dans la liste des clients sans
   // joindre + agreger les controles.
-  scorePct      Int                 @default(0)
+  scorePct           Int                 @default(0)
   // Compteurs miroirs pour eviter les agregations (utiles pour les badges UI).
-  compliantCount       Int          @default(0)
-  nonCompliantCount    Int          @default(0)
-  inProgressCount      Int          @default(0)
-  notStartedCount      Int          @default(0)
-  notApplicableCount   Int          @default(0)
-  totalControls        Int          @default(0)
+  compliantCount     Int                 @default(0)
+  nonCompliantCount  Int                 @default(0)
+  inProgressCount    Int                 @default(0)
+  notStartedCount    Int                 @default(0)
+  notApplicableCount Int                 @default(0)
+  totalControls      Int                 @default(0)
   // Owner cote MDO (le RSSI / consultant en charge)
-  ownerId       String?
-  owner         User?               @relation("ComplianceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId            String?
+  owner              User?               @relation("ComplianceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   // Echeance globale (date de revision suivante)
-  nextReviewAt  DateTime?
-  notes         String?
+  nextReviewAt       DateTime?
+  notes              String?
 
   controlAssessments ComplianceControlAssessment[]
 
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Une societe ne peut avoir qu'UN audit actif par framework. Si besoin de
   // re-auditer, on remplace celui-la (l'historique est trace via Activity).
@@ -3627,25 +3668,25 @@ model ComplianceAssessment {
 }
 
 model ComplianceControlAssessment {
-  id            String                  @id @default(uuid())
-  assessmentId  String
-  assessment    ComplianceAssessment    @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
-  controlId     String
-  control       ComplianceControl       @relation(fields: [controlId], references: [id], onDelete: Cascade)
-  status        ComplianceControlStatus @default(NOT_STARTED)
+  id             String                  @id @default(uuid())
+  assessmentId   String
+  assessment     ComplianceAssessment    @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  controlId      String
+  control        ComplianceControl       @relation(fields: [controlId], references: [id], onDelete: Cascade)
+  status         ComplianceControlStatus @default(NOT_STARTED)
   // Preuves : texte libre (chemin doc IT Glue, nom de procedure, etc.) +
   // optionnellement URL externe (Sharepoint / GED). Pas d'upload pour le MVP
   // mais les attachments existants peuvent y etre lies via ItemLink si besoin.
-  evidence      String?
-  evidenceUrl   String?
-  notes         String?
-  dueDate       DateTime?
+  evidence       String?
+  evidenceUrl    String?
+  notes          String?
+  dueDate        DateTime?
   lastReviewedAt DateTime?
-  reviewedById  String?
-  reviewedBy    User?                   @relation("ControlReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedById   String?
+  reviewedBy     User?                   @relation("ControlReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
-  createdAt     DateTime                @default(now())
-  updatedAt     DateTime                @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([assessmentId, controlId])
   @@index([assessmentId])
@@ -3688,32 +3729,32 @@ enum ApiKeyScope {
 }
 
 model ApiKey {
-  id          String      @id @default(uuid())
+  id        String      @id @default(uuid())
   // Multi-tenant : nullable transitoire. Chaque tenant gere ses propres
   // cles API. Une cle d'un tenant ne peut PAS appeler les endpoints d'un
   // autre tenant (a renforcer dans l'auth strategy api-key).
-  tenantId    String?
-  tenant      Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  name        String      // libelle pour identification ("Zapier prod", "Backup script")
-  scope       ApiKeyScope @default(CLIENT_READ)
+  tenantId  String?
+  tenant    Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name      String // libelle pour identification ("Zapier prod", "Backup script")
+  scope     ApiKeyScope @default(CLIENT_READ)
   // Hash SHA-256 de la cle complete. La cle elle-meme n'est jamais stockee.
-  keyHash     String      @unique
+  keyHash   String      @unique
   // Prefix lisible (premiers 12 chars de la cle) pour l'UI : "mdo_live_a3f"
-  prefix      String      @db.VarChar(20)
+  prefix    String      @db.VarChar(20)
   // Si scope = CLIENT_*, la cle est limitee a cette societe.
-  companyId   String?
-  company     Company?    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String?
+  company   Company?    @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   // Audit
   createdById String
-  createdBy   User        @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy   User      @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: Restrict)
   lastUsedAt  DateTime?
   lastUsedIp  String?
-  usageCount  Int         @default(0)
+  usageCount  Int       @default(0)
   expiresAt   DateTime?
   revokedAt   DateTime?
 
-  createdAt   DateTime    @default(now())
+  createdAt DateTime @default(now())
 
   @@index([tenantId])
   @@index([companyId])
@@ -3722,26 +3763,26 @@ model ApiKey {
 }
 
 model PushSubscription {
-  id          String   @id @default(uuid())
+  id           String    @id @default(uuid())
   // Multi-tenant : nullable transitoire (herite User.tenantId).
-  tenantId    String?
-  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId     String?
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   // URL de push specifique au browser/device. Format long, contient un ID
   // opaque cote service push (FCM/Mozilla/etc.).
-  endpoint    String   @unique
+  endpoint     String    @unique
   // Cles necessaires au chiffrement E2E du payload (Push API specs).
-  p256dh      String
-  auth        String
+  p256dh       String
+  auth         String
   // Etiquette informelle pour l'UI sessions (browser + OS sniffe au moment
   // de l'inscription).
-  userAgent   String?
+  userAgent    String?
   // Compteur d'echecs de push. Au-dela de 5 echecs (typiquement 410 Gone =
   // l'utilisateur a desinstalle l'app), on supprime la subscription.
-  failureCount Int     @default(0)
-  lastUsedAt  DateTime?
-  createdAt   DateTime @default(now())
+  failureCount Int       @default(0)
+  lastUsedAt   DateTime?
+  createdAt    DateTime  @default(now())
 
   @@index([tenantId])
   @@index([userId])
