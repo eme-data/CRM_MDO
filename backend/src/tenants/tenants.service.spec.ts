@@ -177,6 +177,8 @@ describe('TenantsService — resolution domaine + cache + protections', () => {
         'invoiceLine', 'invoice', 'quoteLine', 'quote', 'contract',
         'opportunity', 'contact', 'company', 'setting', 'clientPortalUser',
         'refreshToken', 'userSkill', 'user',
+        // Vague 9 (migration 0003) : nouveaux modeles racine multi-tenant
+        'quoteTemplate', 'product', 'runbook', 'flexibleAssetType', 'team',
       ];
       for (const m of models) {
         prisma[m] = prisma[m] ?? {};
@@ -252,6 +254,8 @@ describe('TenantsService — resolution domaine + cache + protections', () => {
         'clientReport', 'customerSuccessReview', 'webhookEndpoint',
         'emailSecurityCheck', 'signatureRequest', 'callLog', 'pushSubscription',
         'clientPortalUser',
+        // Vague 9 (migration 0003) : 5 nouveaux modeles racine tenant-scope
+        'team', 'product', 'quoteTemplate', 'runbook', 'flexibleAssetType',
       ];
       for (const m of models) {
         prisma[m] = prisma[m] ?? {};

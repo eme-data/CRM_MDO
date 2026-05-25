@@ -311,6 +311,31 @@ export class TenantsService implements OnModuleInit {
       where: { tenantId: null }, data: { tenantId: tenant.id },
     });
     if (pushSubsUpdated.count > 0) this.logger.log(`Retro-compat : ${pushSubsUpdated.count} push subscription(s) assignees`);
+    // Vague 9 (migration 0003) : 5 derniers modeles racine passes en multi-tenant
+    // (Team, Product, QuoteTemplate, Runbook, FlexibleAssetType). La migration
+    // 0003 fait deja le backfill SQL, mais ces updateMany sont des garde-fous
+    // pour les rows creees AVANT que prisma migrate deploy tourne (ex: un seed
+    // dev qui inserait avec tenantId=null).
+    const teamsUpdated = await this.prisma.team.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (teamsUpdated.count > 0) this.logger.log(`Retro-compat : ${teamsUpdated.count} team(s) assignees`);
+    const productsUpdated = await this.prisma.product.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (productsUpdated.count > 0) this.logger.log(`Retro-compat : ${productsUpdated.count} product(s) assignes`);
+    const quoteTemplatesUpdated = await this.prisma.quoteTemplate.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (quoteTemplatesUpdated.count > 0) this.logger.log(`Retro-compat : ${quoteTemplatesUpdated.count} quote template(s) assignes`);
+    const runbooksUpdated = await this.prisma.runbook.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (runbooksUpdated.count > 0) this.logger.log(`Retro-compat : ${runbooksUpdated.count} runbook(s) assignes`);
+    const flexTypesUpdated = await this.prisma.flexibleAssetType.updateMany({
+      where: { tenantId: null }, data: { tenantId: tenant.id },
+    });
+    if (flexTypesUpdated.count > 0) this.logger.log(`Retro-compat : ${flexTypesUpdated.count} flexible asset type(s) assignes`);
   }
 
   // ============================================================
@@ -474,6 +499,8 @@ export class TenantsService implements OnModuleInit {
       notifications, bankTransactions, clientReports, customerSuccessReviews,
       webhookEndpoints, emailSecurityChecks, signatureRequests, callLogs,
       pushSubscriptions, portalUsers,
+      // Vague 9 (migration 0003) : tenantId ajoute sur 5 modeles racine.
+      teams, products, quoteTemplates, runbooks, flexibleAssetTypes,
     ] = await Promise.all([
       this.prisma.user.findMany({ where: { tenantId: id }, select: { id: true, email: true, firstName: true, lastName: true, role: true, isActive: true, lastLoginAt: true, createdAt: true } }),
       this.prisma.company.findMany({ where: { tenantId: id } }),
@@ -527,6 +554,13 @@ export class TenantsService implements OnModuleInit {
       this.prisma.callLog.findMany({ where: { tenantId: id } }),
       this.prisma.pushSubscription.findMany({ where: { tenantId: id }, select: { id: true, userId: true, userAgent: true, createdAt: true } }),
       this.prisma.clientPortalUser.findMany({ where: { tenantId: id }, select: { id: true, email: true, contactId: true, isActive: true, createdAt: true } }),
+      // Vague 9 : Team, Product, QuoteTemplate (+lines via include), Runbook
+      // (+steps via include), FlexibleAssetType (+fields via include).
+      this.prisma.team.findMany({ where: { tenantId: id } }),
+      this.prisma.product.findMany({ where: { tenantId: id } }),
+      this.prisma.quoteTemplate.findMany({ where: { tenantId: id }, include: { lines: true } }),
+      this.prisma.runbook.findMany({ where: { tenantId: id }, include: { steps: true } }),
+      this.prisma.flexibleAssetType.findMany({ where: { tenantId: id }, include: { fields: true } }),
     ]);
 
     return {
@@ -595,6 +629,11 @@ export class TenantsService implements OnModuleInit {
       signatureRequests,
       callLogs,
       pushSubscriptions,
+      teams,
+      products,
+      quoteTemplates,
+      runbooks,
+      flexibleAssetTypes,
     };
   }
 
@@ -643,6 +682,9 @@ export class TenantsService implements OnModuleInit {
     const where = { tenantId: id };
     // Ordre : enfants -> parents. On supprime d'abord les lignes/messages qui
     // ont des FK vers les entites principales, puis les entites principales.
+    // Vague 9 (migration 0003) : Team / Product / QuoteTemplate / Runbook /
+    // FlexibleAssetType en premier car ils sont referencés par d'autres
+    // entites tenant-scopees (QuoteLine.productId, FlexibleAsset.typeId, etc.).
     await drop('aiUsage', () => this.prisma.aiUsage.deleteMany({ where }));
     await drop('activities', () => this.prisma.activity.deleteMany({ where }));
     await drop('notifications', () => this.prisma.notification.deleteMany({ where }));
@@ -703,6 +745,14 @@ export class TenantsService implements OnModuleInit {
       await drop('refreshTokens', () => this.prisma.refreshToken.deleteMany({ where: { userId: { in: userIds } } }));
       await drop('userSkills', () => this.prisma.userSkill.deleteMany({ where: { userId: { in: userIds } } }));
     }
+    // Vague 9 : modeles racine ajoutes en migration 0003. QuoteLines + Quotes
+    // ont deja ete supprimes plus haut, donc Product.quoteLines FK est purgee.
+    // FlexibleAsset.typeId FK est sur FlexibleAssetType qu'on supprime ici.
+    await drop('quoteTemplates', () => this.prisma.quoteTemplate.deleteMany({ where }));
+    await drop('products', () => this.prisma.product.deleteMany({ where }));
+    await drop('runbooks', () => this.prisma.runbook.deleteMany({ where }));
+    await drop('flexibleAssetTypes', () => this.prisma.flexibleAssetType.deleteMany({ where }));
+    await drop('teams', () => this.prisma.team.deleteMany({ where }));
     // Users en dernier (avant le tenant lui-meme — User a FK onDelete:Restrict)
     await drop('users', () => this.prisma.user.deleteMany({ where }));
     // Enfin : le tenant
