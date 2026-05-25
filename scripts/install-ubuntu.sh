@@ -879,4 +879,24 @@ if [[ "${MODE}" == "install" ]]; then
   warn "      sudo shred -u ${BOOTSTRAP_SECRETS_FILE:-/root/CRM_MDO_BOOTSTRAP_SECRETS_${DOMAIN}.txt}"
   warn "    Documentation : ${INSTALL_DIR}/docs/secrets-escrow.md"
 fi
+
+# Backup offsite : alerte explicite si non configure (silence = oubli).
+# Le cron 04h00 log [SKIP] tous les jours mais personne ne va le lire en prod.
+# Sans offsite, un crash disque = perte totale.
+if [[ ! -r /etc/crm-mdo/backup.env ]]; then
+  echo
+  warn "==> BACKUP OFFSITE NON CONFIGURE"
+  warn "    /etc/crm-mdo/backup.env absent : aucun backup chiffre offsite n'est"
+  warn "    pousse vers B2/S3/Hetzner. Un crash disque = perte totale des donnees."
+  warn ""
+  warn "    Pour activer (recommande avant toute mise en prod client) :"
+  warn "      sudo cp /etc/crm-mdo/backup.env.example /etc/crm-mdo/backup.env"
+  warn "      sudo \$EDITOR /etc/crm-mdo/backup.env       # choisir provider + creds"
+  warn "      sudo chmod 600 /etc/crm-mdo/backup.env"
+  warn "      sudo -E bash -c 'source /etc/crm-mdo/backup.env && restic init'"
+  warn "      sudo bash ${INSTALL_DIR}/scripts/backup-offsite.sh   # test"
+  warn ""
+  warn "    Tant que le heartbeat n'est pas ecrit, /health renvoie"
+  warn "    backupOffsite.status=disabled (silencieux cote UI)."
+fi
 echo
