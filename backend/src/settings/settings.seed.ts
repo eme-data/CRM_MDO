@@ -96,6 +96,50 @@ export const SETTINGS_DEFS: SettingDef[] = [
     envVar: 'SMTP_FROM',
   },
 
+  // ---------- Backup off-site chiffre (restic) ----------
+  // Config INSTANCE-WIDE (tenantId=null) : sauvegarde la BDD entiere + uploads
+  // de tous les tenants vers un repository restic chiffre. Pilotee depuis l'UI
+  // super-admin (page system-backup). Les secrets sont stockes en base comme
+  // smtp.password (masques en lecture). Garder une cle S3 SANS droit de
+  // suppression pour preserver la resilience ransomware (append-only : le
+  // backend ne fait jamais `forget --prune`).
+  {
+    key: 'offsiteBackup.enabled',
+    category: 'offsiteBackup',
+    label: 'Backup off-site automatique active',
+    description:
+      'Si actif, le backend pousse chaque nuit (04:00 Europe/Paris) la BDD + uploads vers le repository restic. Necessite un repository initialise.',
+    defaultValue: 'false',
+  },
+  {
+    key: 'offsiteBackup.repository',
+    category: 'offsiteBackup',
+    label: 'Repository restic',
+    description:
+      'Scaleway : s3:s3.fr-par.scw.cloud/mon-bucket   —   OVH : s3:s3.gra.io.cloud.ovh.net/mon-bucket   —   Hetzner SFTP : sftp:user@host:/crm-mdo',
+  },
+  {
+    key: 'offsiteBackup.s3AccessKeyId',
+    category: 'offsiteBackup',
+    label: 'Access Key (S3)',
+    description: 'Cle d\'acces S3 (Scaleway/OVH). Laisser vide pour un repository non-S3 (SFTP).',
+    isSecret: true,
+  },
+  {
+    key: 'offsiteBackup.s3SecretAccessKey',
+    category: 'offsiteBackup',
+    label: 'Secret Key (S3)',
+    isSecret: true,
+  },
+  {
+    key: 'offsiteBackup.resticPassword',
+    category: 'offsiteBackup',
+    label: 'Passphrase de chiffrement restic',
+    description:
+      'Generee via "openssl rand -hex 32". IRRECUPERABLE si perdue : sans elle aucun backup n\'est restaurable. A conserver aussi en escrow externe.',
+    isSecret: true,
+  },
+
   // ---------- IMAP entrant (creation tickets) ----------
   {
     key: 'imap.enabled',
