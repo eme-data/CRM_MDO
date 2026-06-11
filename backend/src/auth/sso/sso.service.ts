@@ -11,6 +11,7 @@ import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../database/prisma.service';
 import { SettingsService } from '../../settings/settings.service';
+import { encryptSecret } from '../../common/crypto/secret-cipher';
 
 // SsoService — flux OIDC standard avec PKCE.
 //
@@ -103,7 +104,20 @@ export class SsoService {
     const nonce = generators.nonce();
     const codeVerifier = generators.codeVerifier();
     const codeChallenge = generators.codeChallenge(codeVerifier);
-    const scopes = (await this.settings.get('sso.oidc.scopes', tenant.id)) ?? 'openid email profile';
+    let scopes = (await this.settings.get('sso.oidc.scopes', tenant.id)) ?? 'openid email profile';
+
+    // Envoi delegue : si active ET IdP Entra, on demande en plus le scope Graph
+    // Mail.Send + offline_access pour capturer un refresh token delegue (envoi
+    // des replies tickets « au nom » de l'agent). Gate stricte : on ne touche
+    // pas aux scopes pour les IdP non-Entra (Keycloak/Google casseraient).
+    const issuerUrl = await this.settings.get('sso.oidc.issuerUrl', tenant.id);
+    if (
+      (await this.settings.getBool('mail.delegatedEnabled', tenant.id)) &&
+      issuerUrl?.includes('login.microsoftonline.com')
+    ) {
+      if (!/\boffline_access\b/.test(scopes)) scopes += ' offline_access';
+      if (!/Mail\.Send/.test(scopes)) scopes += ' https://graph.microsoft.com/Mail.Send';
+    }
 
     const url = client.authorizationUrl({
       scope: scopes,
@@ -210,6 +224,27 @@ export class SsoService {
 
     if (!user.isActive) {
       throw new UnauthorizedException('Utilisateur desactive');
+    }
+
+    // Capture du refresh token delegue M365 (envoi mail « au nom » de l'agent).
+    // NON BLOQUANT : un echec ici ne doit jamais empecher le login. Gate sur
+    // mail.delegatedEnabled + presence d'un refresh_token (scope offline_access).
+    try {
+      if (
+        (tokenSet as any).refresh_token &&
+        (await this.settings.getBool('mail.delegatedEnabled', tenant.id))
+      ) {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            m365RefreshTokenEnc: encryptSecret((tokenSet as any).refresh_token as string),
+            m365TokenUpdatedAt: new Date(),
+          },
+        });
+        this.logger.log('SSO : refresh token M365 delegue capture pour ' + user.email);
+      }
+    } catch (err: any) {
+      this.logger.warn('Capture refresh token M365 echec (non bloquant) : ' + err.message);
     }
 
     // Trace audit

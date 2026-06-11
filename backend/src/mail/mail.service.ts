@@ -5,7 +5,8 @@ import { fr } from 'date-fns/locale';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
 import { SettingsService } from '../settings/settings.service';
-import { sendGraphMail } from './graph-mail';
+import { sendGraphMail, sendGraphMailWithToken, refreshDelegatedToken } from './graph-mail';
+import { encryptSecret, decryptSecret } from '../common/crypto/secret-cipher';
 
 interface ContractAlertParams {
   to: string;
@@ -45,6 +46,10 @@ interface SendOptions {
   // Multi-tenant : si fourni, le SMTP / from sera resolu depuis les settings
   // du tenant (cf vague 12). Sinon : config globale (compat MDO single-instance).
   tenantId?: string | null;
+  // Envoi delegue : si fourni ET mail.delegatedEnabled ET transport=graph, le
+  // mail part « au nom » de cet utilisateur (sa boite M365) via son refresh
+  // token capture au login SSO. Sinon repli sur l'app-only (boite fixe).
+  actingUserId?: string;
 }
 
 interface SendResult {
@@ -111,7 +116,23 @@ export class MailService {
 
     const messageId = params.messageId ?? (await this.generateMessageId(tenantId));
 
-    // Transport : "graph" (Microsoft 365 OAuth2 app-only) ou "smtp" (defaut).
+    // 1. Envoi DELEGUE « au nom » de l'agent — independant du transport global.
+    // trySendDelegated se garde lui-meme (mail.delegatedEnabled resolu dans le
+    // tenant de l'agent + presence d'un refresh token) et renvoie false si non
+    // applicable ou en cas d'echec -> on retombe alors sur le transport configure
+    // pour que le mail parte quand meme (boite fixe / SMTP).
+    if (params.actingUserId) {
+      const sentDelegated = await this.trySendDelegated(params.actingUserId, params);
+      if (sentDelegated) {
+        await this.prisma.emailLog.update({
+          where: { id: log.id },
+          data: { status: 'SENT', sentAt: new Date() },
+        });
+        return { messageId, status: 'SENT' };
+      }
+    }
+
+    // 2. Transport configure : "graph" (Microsoft 365 app-only, boite fixe) ou "smtp".
     const transport = (await this.settings.get('mail.transport', tenantId)) === 'graph' ? 'graph' : 'smtp';
 
     if (transport === 'graph') {
@@ -202,6 +223,61 @@ export class MailService {
     });
   }
 
+  // Envoi DELEGUE « au nom » de l'agent (sa propre boite M365) via son refresh
+  // token capture au login SSO. Renvoie true si envoye, false si non applicable
+  // ou en cas d'echec (l'appelant retombe alors sur l'app-only boite fixe).
+  // L'app SSO (sso.oidc.clientId/secret) est celle qui a emis le refresh token.
+  private async trySendDelegated(userId: string, params: SendOptions): Promise<boolean> {
+    const tenantId = params.tenantId ?? null;
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, tenantId: true, m365RefreshTokenEnc: true },
+      });
+      if (!user?.m365RefreshTokenEnc || !user.email) return false;
+
+      // L'app SSO + le tenant Azure se resolvent dans le contexte du tenant de
+      // l'agent (c'est SON app SSO qui a emis le refresh token), pas celui passe
+      // a l'envoi (souvent null pour les replies tickets).
+      const cfgTenant = user.tenantId ?? tenantId;
+      // Gate dans le bon contexte tenant (souvent null cote params pour les tickets).
+      if (!(await this.settings.getBool('mail.delegatedEnabled', cfgTenant))) return false;
+      const clientId = await this.settings.get('sso.oidc.clientId', cfgTenant);
+      const clientSecret = await this.settings.get('sso.oidc.clientSecret', cfgTenant);
+      const azureTenantId = await this.settings.get('mail.graphTenantId', cfgTenant);
+      if (!clientId || !clientSecret || !azureTenantId) return false;
+
+      const refreshToken = decryptSecret(user.m365RefreshTokenEnc);
+      const tok = await refreshDelegatedToken({ azureTenantId, clientId, clientSecret }, refreshToken);
+
+      // Entra fait tourner le refresh token -> re-stocke le nouveau, sinon il
+      // sera revoque a terme et l'envoi delegue cessera de fonctionner.
+      if (tok.refreshToken && tok.refreshToken !== refreshToken) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: {
+            m365RefreshTokenEnc: encryptSecret(tok.refreshToken),
+            m365TokenUpdatedAt: new Date(),
+          },
+        }).catch(() => {});
+      }
+
+      await sendGraphMailWithToken(tok.accessToken, user.email, {
+        subject: params.subject,
+        html: params.html,
+        to: params.to,
+        cc: params.cc,
+        bcc: params.bcc,
+        replyTo: params.replyTo,
+        attachments: params.attachments,
+      });
+      return true;
+    } catch (err: any) {
+      this.logger.warn('Envoi delegue M365 echoue (fallback boite fixe) : ' + err.message);
+      return false;
+    }
+  }
+
   // ============================================================
   // Tickets : reply sortant + auto-acknowledgement
   // ============================================================
@@ -220,6 +296,7 @@ export class MailService {
     attachments?: MailAttachment[];
     relatedEntityId?: string;
     tenantId?: string | null;
+    actingUserId?: string;
   }): Promise<SendResult> {
     const subject = '[' + params.ticketReference + '] ' + this.cleanSubject(params.ticketTitle);
     const signature = params.signature && params.signature.trim()
@@ -255,6 +332,7 @@ export class MailService {
       relatedEntity: 'Ticket',
       relatedEntityId: params.relatedEntityId,
       tenantId: params.tenantId,
+      actingUserId: params.actingUserId,
     });
   }
 
