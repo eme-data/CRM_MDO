@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Save, TestTube, Eye, EyeOff, RefreshCw, Building2, Send, Inbox, Clock, Receipt } from 'lucide-react';
+import { Save, TestTube, Eye, EyeOff, RefreshCw, Building2, Send, Inbox, Clock, Receipt, KeyRound } from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface SettingItem {
@@ -43,9 +43,15 @@ const CATEGORY_META: Record<string, { title: string; icon: any; description: str
     description:
       'Connecteur vers Qonto (PDP de facturation electronique + synchronisation des transactions bancaires pour rapprochement).',
   },
+  sso: {
+    title: 'SSO - connexion entreprise (OIDC)',
+    icon: KeyRound,
+    description:
+      'Active le bouton "Se connecter avec votre compte entreprise" sur la page de login (Microsoft 365 / Entra ID, Google Workspace, Keycloak...). Renseignez Issuer URL + Client ID + Client Secret puis passez "Activer le SSO" a true. Redirect URI a declarer cote IdP : https://crm.mdoservices.fr/api/auth/sso/callback',
+  },
 };
 
-const ORDER = ['lookup', 'smtp', 'imap', 'sla', 'billing'];
+const ORDER = ['lookup', 'smtp', 'imap', 'sla', 'billing', 'sso'];
 
 export default function AdminSettingsPage() {
   const [groups, setGroups] = useState<Record<string, SettingItem[]>>({});
