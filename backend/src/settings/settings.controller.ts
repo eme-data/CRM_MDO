@@ -14,6 +14,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import * as nodemailer from 'nodemailer';
 import { ImapFlow } from 'imapflow';
 import { SettingsService } from './settings.service';
+import { sendGraphMail } from '../mail/graph-mail';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -45,6 +46,35 @@ export class SettingsController {
 
   @Post('test/smtp')
   async testSmtp(@Body() body: { to?: string }, @CurrentUser() me: JwtUser) {
+    // Si le transport actif est Graph, on teste l'envoi Microsoft 365 (OAuth2
+    // app-only) plutot que le SMTP basic-auth.
+    const transport = await this.service.get('mail.transport', me.tenantId);
+    if (transport === 'graph') {
+      const cfg = {
+        clientId: (await this.service.get('m365.clientId', me.tenantId)) ?? '',
+        clientSecret: (await this.service.get('m365.clientSecret', me.tenantId)) ?? '',
+        azureTenantId: (await this.service.get('mail.graphTenantId', me.tenantId)) ?? '',
+        sender: (await this.service.get('mail.graphSender', me.tenantId)) ?? '',
+      };
+      if (!cfg.clientId || !cfg.clientSecret || !cfg.azureTenantId || !cfg.sender) {
+        throw new HttpException(
+          'Config Graph incomplete (requis : m365.clientId, m365.clientSecret, mail.graphTenantId, mail.graphSender)',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      const to = body.to || cfg.sender;
+      try {
+        await sendGraphMail(cfg, {
+          subject: '[CRM MDO] Test Microsoft Graph',
+          html: '<p>Ceci est un email de test envoye via Microsoft Graph (OAuth2 app-only).</p><p>La configuration fonctionne correctement.</p>',
+          to,
+        });
+        return { ok: true, message: 'Email de test (Graph) envoye a ' + to };
+      } catch (err: any) {
+        throw new HttpException('Echec envoi Graph : ' + err.message, HttpStatus.BAD_GATEWAY);
+      }
+    }
+
     const host = await this.service.get('smtp.host', me.tenantId);
     const port = await this.service.getInt('smtp.port', 587, me.tenantId);
     const secure = await this.service.getBool('smtp.secure', me.tenantId);
