@@ -2,7 +2,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { ShieldCheck, KeyRound, Mail, ArrowLeft, LogIn, Loader2 } from 'lucide-react';
+import { ShieldCheck, KeyRound, Mail, ArrowLeft, Loader2 } from 'lucide-react';
 import { login } from '@/lib/auth';
 import { useBranding } from '@/components/BrandingProvider';
 import { getSsoStatus, ssoStartUrl, SsoStatus } from '@/lib/sso';
@@ -131,8 +131,13 @@ function LoginPageInner() {
                   href={ssoStartUrl(sso.tenantSlug, '/dashboard')}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800/80 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-700"
                 >
-                  <LogIn size={16} />
-                  Se connecter avec votre compte entreprise (SSO)
+                  <svg width="16" height="16" viewBox="0 0 23 23" aria-hidden="true">
+                    <path fill="#f25022" d="M1 1h10v10H1z" />
+                    <path fill="#7fba00" d="M12 1h10v10H12z" />
+                    <path fill="#00a4ef" d="M1 12h10v10H1z" />
+                    <path fill="#ffb900" d="M12 12h10v10H12z" />
+                  </svg>
+                  Se connecter avec Microsoft 365
                 </a>
                 <div className="flex items-center gap-3 text-xs text-slate-500">
                   <div className="h-px flex-1 bg-slate-800" />
