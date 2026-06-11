@@ -96,6 +96,34 @@ export const SETTINGS_DEFS: SettingDef[] = [
     envVar: 'SMTP_FROM',
   },
 
+  // ---------- Transport mail (SMTP vs Microsoft Graph) ----------
+  // Permet d'envoyer les mails via Microsoft Graph (OAuth2 app-only) au lieu du
+  // SMTP basic-auth, en reutilisant l'app Entra MDO (m365.clientId/secret).
+  // Avantage : plus d'app-password, conforme a la depreciation du SMTP AUTH par
+  // Microsoft. Les alertes (cron, sans user) partent d'une boite fixe.
+  {
+    key: 'mail.transport',
+    category: 'smtp',
+    label: 'Transport des emails',
+    description:
+      '"smtp" (defaut, basic-auth) ou "graph" (Microsoft 365 via OAuth2 app-only, reutilise l\'app Entra m365.clientId/secret). En "graph", renseigner mail.graphTenantId + mail.graphSender ci-dessous.',
+    defaultValue: 'smtp',
+  },
+  {
+    key: 'mail.graphTenantId',
+    category: 'smtp',
+    label: 'Graph - Azure AD Tenant ID',
+    description:
+      'GUID du tenant Entra MDO (Azure portal > Microsoft Entra ID > Overview). Requis pour le transport "graph".',
+  },
+  {
+    key: 'mail.graphSender',
+    category: 'smtp',
+    label: 'Graph - Boite expeditrice',
+    description:
+      'UPN/adresse de la boite qui envoie (ex: no-reply@mdoservices.fr). L\'app Entra doit avoir la permission Mail.Send (application) + admin-consent ; restreindre a cette boite via une Application Access Policy Exchange (recommande).',
+  },
+
   // ---------- IMAP entrant (creation tickets) ----------
   {
     key: 'imap.enabled',

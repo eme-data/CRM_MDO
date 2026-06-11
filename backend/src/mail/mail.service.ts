@@ -5,6 +5,7 @@ import { fr } from 'date-fns/locale';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
 import { SettingsService } from '../settings/settings.service';
+import { sendGraphMail } from './graph-mail';
 
 interface ContractAlertParams {
   to: string;
@@ -96,9 +97,10 @@ export class MailService {
   }
 
   async send(params: SendOptions): Promise<SendResult> {
+    const tenantId = params.tenantId ?? null;
     const log = await this.prisma.emailLog.create({
       data: {
-        tenantId: params.tenantId ?? null,
+        tenantId,
         toEmail: params.to,
         subject: params.subject,
         bodyHtml: params.html,
@@ -107,7 +109,30 @@ export class MailService {
       },
     });
 
-    const transporter = await this.buildTransporter(params.tenantId ?? null);
+    const messageId = params.messageId ?? (await this.generateMessageId(tenantId));
+
+    // Transport : "graph" (Microsoft 365 OAuth2 app-only) ou "smtp" (defaut).
+    const transport = (await this.settings.get('mail.transport', tenantId)) === 'graph' ? 'graph' : 'smtp';
+
+    if (transport === 'graph') {
+      try {
+        await this.sendViaGraph(params);
+        await this.prisma.emailLog.update({
+          where: { id: log.id },
+          data: { status: 'SENT', sentAt: new Date() },
+        });
+        return { messageId, status: 'SENT' };
+      } catch (err: any) {
+        this.logger.error('Echec envoi mail Graph (' + params.to + ') : ' + err.message);
+        await this.prisma.emailLog.update({
+          where: { id: log.id },
+          data: { status: 'FAILED', error: err.message },
+        });
+        return { messageId: '', status: 'FAILED', error: err.message };
+      }
+    }
+
+    const transporter = await this.buildTransporter(tenantId);
     if (!transporter) {
       this.logger.warn('Email non envoye (SMTP non configure) - to=' + params.to);
       await this.prisma.emailLog.update({
@@ -117,8 +142,7 @@ export class MailService {
       return { messageId: '', status: 'FAILED', error: 'SMTP non configure' };
     }
 
-    const messageId = params.messageId ?? (await this.generateMessageId(params.tenantId ?? null));
-    const defaultFrom = await this.getFrom(params.tenantId ?? null);
+    const defaultFrom = await this.getFrom(tenantId);
 
     try {
       await transporter.sendMail({
@@ -148,6 +172,34 @@ export class MailService {
       });
       return { messageId: '', status: 'FAILED', error: err.message };
     }
+  }
+
+  // ============================================================
+  // Transport Microsoft Graph (OAuth2 app-only / client_credentials)
+  // ============================================================
+  // Reutilise l'app Entra MDO (m365.clientId/secret) + mail.graphTenantId +
+  // mail.graphSender. Envoie via POST /users/{sender}/sendMail. Necessite la
+  // permission applicative Mail.Send + admin-consent cote Entra. Le From est
+  // impose par la boite expeditrice (mail.graphSender) ; on porte l'adresse de
+  // contact dans replyTo.
+  private async sendViaGraph(params: SendOptions): Promise<void> {
+    const tenantId = params.tenantId ?? null;
+    const cfg = {
+      clientId: (await this.settings.get('m365.clientId', tenantId)) ?? '',
+      clientSecret: (await this.settings.get('m365.clientSecret', tenantId)) ?? '',
+      azureTenantId: (await this.settings.get('mail.graphTenantId', tenantId)) ?? '',
+      sender: (await this.settings.get('mail.graphSender', tenantId)) ?? '',
+    };
+    await sendGraphMail(cfg, {
+      subject: params.subject,
+      html: params.html,
+      to: params.to,
+      cc: params.cc,
+      bcc: params.bcc,
+      // From impose par la boite expeditrice -> on porte l'adresse de contact en replyTo.
+      replyTo: params.replyTo ?? params.from,
+      attachments: params.attachments,
+    });
   }
 
   // ============================================================
