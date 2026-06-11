@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   Res,
@@ -45,6 +46,42 @@ export class SystemBackupController {
   @Get('stats')
   stats() {
     return this.service.stats();
+  }
+
+  // ---- Backup off-site (restic) — chemins statiques declares AVANT @Get(':id')
+  @Get('offsite/config')
+  offsiteConfig() {
+    return this.service.offsiteConfig();
+  }
+
+  @Patch('offsite/config')
+  updateOffsiteConfig(
+    @Body()
+    body: {
+      enabled?: boolean;
+      repository?: string;
+      s3AccessKeyId?: string;
+      s3SecretAccessKey?: string;
+      resticPassword?: string;
+    },
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.service.updateOffsiteConfig(body, user.id);
+  }
+
+  @Post('offsite/init')
+  offsiteInit() {
+    return this.service.offsiteInit();
+  }
+
+  @Post('offsite/test')
+  offsiteTest() {
+    return this.service.offsiteTest();
+  }
+
+  @Post('offsite/run')
+  offsiteRun() {
+    return this.service.offsiteRun();
   }
 
   @Post()

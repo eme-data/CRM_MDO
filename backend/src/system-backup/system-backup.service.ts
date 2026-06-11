@@ -11,6 +11,7 @@ import { Cron } from '@nestjs/schedule';
 import { spawn } from 'child_process';
 import { createReadStream, createWriteStream, promises as fs } from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { randomBytes } from 'crypto';
 import { compare } from 'bcryptjs';
 import { SystemBackupKind, SystemBackupStatus } from '@prisma/client';
@@ -423,5 +424,196 @@ export class SystemBackupService implements OnModuleInit {
       lastBackupAt: last,
       restoredCount: all.filter((b) => b.restoredAt).length,
     };
+  }
+
+  // ============================================================
+  // BACKUP OFF-SITE (restic) — pilotable depuis l'UI super-admin
+  // ============================================================
+  // La config (repository + credentials + passphrase) est stockee dans les
+  // Settings globaux (tenantId=null), categorie offsiteBackup. Le backend
+  // execute restic lui-meme (binaire present dans l'image) au lieu de dependre
+  // du cron hote /etc/crm-mdo/backup.env. Principe append-only : on ne lance
+  // JAMAIS `forget --prune` ici (resilience ransomware) — la rotation reste un
+  // job operateur manuel depuis un poste de confiance.
+  private static readonly OFFSITE = {
+    enabled: 'offsiteBackup.enabled',
+    repository: 'offsiteBackup.repository',
+    accessKey: 'offsiteBackup.s3AccessKeyId',
+    secretKey: 'offsiteBackup.s3SecretAccessKey',
+    resticPassword: 'offsiteBackup.resticPassword',
+  };
+
+  private offsiteHeartbeatFile(): string {
+    return path.join(this.getBackupDir(), '.offsite-lastrun');
+  }
+
+  // Construit l'environnement restic depuis les settings globaux. Throw si la
+  // config minimale (repository + passphrase, + creds S3 si repo s3:) manque.
+  private async buildResticEnv(): Promise<Record<string, string>> {
+    const K = SystemBackupService.OFFSITE;
+    const repository = await this.settings.get(K.repository);
+    const resticPassword = await this.settings.get(K.resticPassword);
+    const accessKey = await this.settings.get(K.accessKey);
+    const secretKey = await this.settings.get(K.secretKey);
+
+    const missing: string[] = [];
+    if (!repository) missing.push('repository');
+    if (!resticPassword) missing.push('passphrase restic');
+    if (repository?.startsWith('s3:')) {
+      if (!accessKey) missing.push('Access Key S3');
+      if (!secretKey) missing.push('Secret Key S3');
+    }
+    if (missing.length) {
+      throw new BadRequestException('Configuration off-site incomplete : ' + missing.join(', '));
+    }
+
+    const env: Record<string, string> = {
+      RESTIC_REPOSITORY: repository as string,
+      RESTIC_PASSWORD: resticPassword as string,
+      // Cache restic dans le volume system-backups (ecrit par l'utilisateur node).
+      RESTIC_CACHE_DIR: path.join(this.getBackupDir(), '.restic-cache'),
+    };
+    if (accessKey) env.AWS_ACCESS_KEY_ID = accessKey;
+    if (secretKey) env.AWS_SECRET_ACCESS_KEY = secretKey;
+    return env;
+  }
+
+  // Etat (masque) de la config off-site + freshness du dernier run.
+  async offsiteConfig() {
+    const K = SystemBackupService.OFFSITE;
+    const enabled = await this.settings.getBool(K.enabled);
+    const repository = (await this.settings.get(K.repository)) ?? '';
+    const hasAccessKey = Boolean(await this.settings.get(K.accessKey));
+    const hasSecretKey = Boolean(await this.settings.get(K.secretKey));
+    const hasResticPassword = Boolean(await this.settings.get(K.resticPassword));
+
+    let lastRunAt: string | null = null;
+    let ageHours: number | null = null;
+    try {
+      const raw = (await fs.readFile(this.offsiteHeartbeatFile(), 'utf8')).trim();
+      const unix = parseInt(raw, 10);
+      if (!Number.isNaN(unix)) {
+        lastRunAt = new Date(unix * 1000).toISOString();
+        ageHours = Math.round((Date.now() - unix * 1000) / 3_600_000);
+      }
+    } catch { /* pas encore de run */ }
+
+    return { enabled, repository, hasAccessKey, hasSecretKey, hasResticPassword, lastRunAt, ageHours };
+  }
+
+  // Met a jour la config off-site (chaque champ optionnel). Les secrets vides
+  // sont ignores (on conserve l'existant) — c'est l'UI qui n'envoie un secret
+  // que si l'operateur l'a saisi.
+  async updateOffsiteConfig(
+    input: {
+      enabled?: boolean;
+      repository?: string;
+      s3AccessKeyId?: string;
+      s3SecretAccessKey?: string;
+      resticPassword?: string;
+    },
+    userId: string,
+  ) {
+    const K = SystemBackupService.OFFSITE;
+    if (input.enabled !== undefined) {
+      await this.settings.update(K.enabled, input.enabled ? 'true' : 'false', userId, null);
+    }
+    if (input.repository !== undefined) {
+      await this.settings.update(K.repository, input.repository.trim(), userId, null);
+    }
+    if (input.s3AccessKeyId) {
+      await this.settings.update(K.accessKey, input.s3AccessKeyId, userId, null);
+    }
+    if (input.s3SecretAccessKey) {
+      await this.settings.update(K.secretKey, input.s3SecretAccessKey, userId, null);
+    }
+    if (input.resticPassword) {
+      await this.settings.update(K.resticPassword, input.resticPassword, userId, null);
+    }
+    return this.offsiteConfig();
+  }
+
+  // Initialise le repository restic (une seule fois). Idempotent cote UX : si
+  // deja initialise, on renvoie un message clair au lieu d'une erreur.
+  async offsiteInit() {
+    const env = await this.buildResticEnv();
+    try {
+      await this.runShell('restic', ['init'], { env, timeoutMs: 120_000 });
+      return { ok: true, message: 'Repository restic initialise' };
+    } catch (err: any) {
+      const msg = String(err.message ?? '');
+      if (/already initialized|already exists|config file already/i.test(msg)) {
+        return { ok: true, message: 'Repository deja initialise (rien a faire)' };
+      }
+      throw new BadRequestException('Echec init restic : ' + msg.slice(0, 400));
+    }
+  }
+
+  // Teste la connexion + l'acces au repository (lit la config restic distante).
+  async offsiteTest() {
+    const env = await this.buildResticEnv();
+    try {
+      await this.runShell('restic', ['cat', 'config'], { env, timeoutMs: 60_000 });
+      return { ok: true, message: 'Connexion OK — repository accessible et initialise' };
+    } catch (err: any) {
+      const msg = String(err.message ?? '');
+      if (/does not exist|no such|unable to open config|repository.*not/i.test(msg)) {
+        throw new BadRequestException('Repository joignable mais non initialise — clique sur "Initialiser".');
+      }
+      throw new BadRequestException('Echec test off-site : ' + msg.slice(0, 400));
+    }
+  }
+
+  // Execute un backup off-site : pg_dump (BDD entiere) + uploads, pousse vers
+  // restic (append). Ecrit le heartbeat lu par /health + /metrics.
+  async offsiteRun() {
+    const env = await this.buildResticEnv();
+    const workDir = path.join(this.getBackupDir(), '.offsite-' + randomBytes(8).toString('hex'));
+    await fs.mkdir(workDir, { recursive: true });
+    try {
+      // 1. Dump BDD (plain SQL — restic deduplique tres bien entre snapshots)
+      const db = this.parseDatabaseUrl();
+      const dumpFile = path.join(workDir, 'db.sql');
+      await this.runShell('pg_dump', [
+        '-h', db.host, '-p', db.port, '-U', db.user, '-d', db.database,
+        '--no-owner', '--no-acl', '-f', dumpFile,
+      ], { env: { PGPASSWORD: db.password }, timeoutMs: PG_DUMP_TIMEOUT_MS });
+
+      // 2. restic backup (dump + uploads). Append-only : pas de forget/prune.
+      await this.runShell('restic', [
+        'backup',
+        '--tag', 'stack=crm-mdo',
+        '--host', os.hostname(),
+        '--exclude-caches',
+        dumpFile,
+        this.getUploadsDir(),
+      ], { env, timeoutMs: PG_DUMP_TIMEOUT_MS });
+
+      // 3. Heartbeat pour /health + /metrics (freshness du dernier offsite OK)
+      const nowUnix = Math.floor(Date.now() / 1000);
+      await fs.writeFile(this.offsiteHeartbeatFile(), String(nowUnix));
+      this.logger.log('Backup off-site OK (restic)');
+      return { ok: true, message: 'Backup off-site termine', ranAt: new Date().toISOString() };
+    } catch (err: any) {
+      this.logger.error('Backup off-site FAILED : ' + err.message);
+      throw new BadRequestException('Backup off-site echoue : ' + String(err.message).slice(0, 400));
+    } finally {
+      await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  // Cron quotidien 04:00 — pousse l'offsite si active via l'UI. Tourne apres le
+  // backup local interne (02:30). Si l'offsite est gere par le cron hote
+  // (backup-offsite.sh), garder offsiteBackup.enabled = false pour ne pas
+  // doublonner.
+  @Cron('0 4 * * *', { name: 'offsite-backup-daily', timeZone: 'Europe/Paris' })
+  async runDailyOffsite() {
+    const enabled = await this.settings.getBool(SystemBackupService.OFFSITE.enabled);
+    if (!enabled) return;
+    try {
+      await this.offsiteRun();
+    } catch (err: any) {
+      this.logger.error('Daily offsite backup failed : ' + err.message);
+    }
   }
 }

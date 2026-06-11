@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Database, Download, Trash2, AlertTriangle, RefreshCw, ShieldAlert, Plus } from 'lucide-react';
+import { Database, Download, Trash2, AlertTriangle, RefreshCw, ShieldAlert, Plus, CloudUpload, TestTube, Save, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, authedFetch } from '@/lib/api';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
@@ -186,6 +186,8 @@ export default function SystemBackupPage() {
         </div>
       )}
 
+      <OffsiteBackupPanel />
+
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left">
@@ -282,6 +284,163 @@ export default function SystemBackupPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// Panneau de configuration du backup OFF-SITE (restic)
+// ============================================================
+function OffsiteBackupPanel() {
+  const [cfg, setCfg] = useState<any>(null);
+  const [enabled, setEnabled] = useState(false);
+  const [repository, setRepository] = useState('');
+  const [accessKey, setAccessKey] = useState('');
+  const [secretKey, setSecretKey] = useState('');
+  const [resticPassword, setResticPassword] = useState('');
+  const [reveal, setReveal] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function load() {
+    try {
+      const c = await api.get('/system-backup/offsite/config');
+      setCfg(c);
+      setEnabled(Boolean(c.enabled));
+      setRepository(c.repository ?? '');
+    } catch {
+      // 403 si non super-admin : on n'affiche simplement pas le panneau.
+      setCfg(null);
+    }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    setBusy('save');
+    try {
+      const payload: any = { enabled, repository };
+      if (accessKey) payload.s3AccessKeyId = accessKey;
+      if (secretKey) payload.s3SecretAccessKey = secretKey;
+      if (resticPassword) payload.resticPassword = resticPassword;
+      await api.patch('/system-backup/offsite/config', payload);
+      toast.success('Configuration off-site enregistree');
+      setAccessKey(''); setSecretKey(''); setResticPassword('');
+      load();
+    } catch (err: any) { toast.error(err.message ?? 'Erreur'); }
+    finally { setBusy(null); }
+  }
+
+  async function action(kind: 'init' | 'test' | 'run') {
+    setBusy(kind);
+    try {
+      const r = await api.post('/system-backup/offsite/' + kind, {});
+      toast.success(r.message ?? 'OK');
+      load();
+    } catch (err: any) { toast.error(err.message ?? ('Echec ' + kind)); }
+    finally { setBusy(null); }
+  }
+
+  if (!cfg) return null;
+
+  const secretField = (
+    label: string,
+    value: string,
+    onChange: (v: string) => void,
+    isSet: boolean,
+    placeholderKept = '******** (laisser vide pour conserver)',
+  ) => (
+    <div>
+      <label className="text-sm font-medium">
+        {label}
+        {isSet
+          ? <span className="ml-2 text-xs text-emerald-600">OK</span>
+          : <span className="ml-2 text-xs text-slate-400">non defini</span>}
+      </label>
+      <div className="relative mt-1">
+        <input
+          type={reveal ? 'text' : 'password'}
+          className="input pr-9"
+          placeholder={isSet ? placeholderKept : ''}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <button
+          type="button"
+          onClick={() => setReveal((r) => !r)}
+          className="absolute right-2 top-2.5 text-slate-400 hover:text-slate-600"
+          title={reveal ? 'Masquer' : 'Afficher'}
+        >
+          {reveal ? <EyeOff size={14} /> : <Eye size={14} />}
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="card p-6 space-y-4">
+      <div className="flex items-center gap-3 pb-2 border-b">
+        <CloudUpload size={20} className="text-mdo-500" />
+        <div className="flex-1">
+          <h2 className="font-semibold">Backup off-site chiffre (restic)</h2>
+          <p className="text-xs text-slate-500">
+            Pousse la BDD + uploads vers un stockage distant chiffre (Scaleway, OVH, Hetzner...).
+            Append-only : la rotation (forget/prune) reste un job operateur manuel.
+          </p>
+        </div>
+        <span className={'badge ' + (cfg.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600')}>
+          {cfg.enabled ? 'Actif' : 'Inactif'}
+        </span>
+      </div>
+
+      <div className="text-xs text-slate-500">
+        Dernier backup off-site :{' '}
+        {cfg.lastRunAt
+          ? <span className={cfg.ageHours != null && cfg.ageHours > 26 ? 'text-amber-600 font-medium' : 'text-emerald-700 font-medium'}>
+              {formatDateTime(cfg.lastRunAt)} ({cfg.ageHours}h)
+            </span>
+          : <span className="text-slate-400">jamais</span>}
+      </div>
+
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+        Activer le push automatique quotidien (04:00)
+      </label>
+
+      <div>
+        <label className="text-sm font-medium">Repository restic</label>
+        <input
+          className="input mt-1 font-mono text-xs"
+          placeholder="s3:s3.fr-par.scw.cloud/mon-bucket"
+          value={repository}
+          onChange={(e) => setRepository(e.target.value)}
+        />
+        <p className="text-xs text-slate-500 mt-1">
+          Scaleway : <code>s3:s3.fr-par.scw.cloud/&lt;bucket&gt;</code> — OVH : <code>s3:s3.gra.io.cloud.ovh.net/&lt;bucket&gt;</code>
+        </p>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-3">
+        {secretField('Access Key (S3)', accessKey, setAccessKey, cfg.hasAccessKey)}
+        {secretField('Secret Key (S3)', secretKey, setSecretKey, cfg.hasSecretKey)}
+      </div>
+      {secretField('Passphrase de chiffrement restic', resticPassword, setResticPassword, cfg.hasResticPassword)}
+      <p className="text-xs text-amber-600">
+        ⚠ La passphrase est IRRECUPERABLE si perdue (aucun backup restaurable sans elle). Conserve-la aussi en escrow externe.
+      </p>
+
+      <div className="border-t pt-4 flex flex-wrap gap-2">
+        <button onClick={save} disabled={busy === 'save'} className="btn btn-primary">
+          <Save size={14} className="mr-1" /> {busy === 'save' ? '...' : 'Enregistrer'}
+        </button>
+        <button onClick={() => action('init')} disabled={!!busy} className="btn btn-secondary">
+          {busy === 'init' ? 'Init...' : 'Initialiser le repository'}
+        </button>
+        <button onClick={() => action('test')} disabled={!!busy} className="btn btn-secondary">
+          <TestTube size={14} className="mr-1" /> {busy === 'test' ? 'Test...' : 'Tester la connexion'}
+        </button>
+        <button onClick={() => action('run')} disabled={!!busy} className="btn btn-secondary">
+          <CloudUpload size={14} className="mr-1" /> {busy === 'run' ? 'Backup en cours...' : 'Lancer un backup maintenant'}
+        </button>
+      </div>
     </div>
   );
 }
