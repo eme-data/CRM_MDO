@@ -337,6 +337,16 @@ else
 fi
 chown -R "${TARGET_USER}:${TARGET_USER}" "${INSTALL_DIR}"
 
+# docker/postgres/init.sql est bind-monte en lecture seule dans le conteneur
+# Postgres et lu par l'utilisateur postgres (uid 70), different du proprietaire
+# du repo. Selon l'umask du clone, il peut etre en 600/700 → "Permission denied"
+# a l'init, et les extensions (uuid-ossp/pgcrypto/citext) ne sont jamais creees
+# (incident deploy 2026-06). On garantit la lisibilite, independamment de l'umask.
+if [[ -f "${INSTALL_DIR}/docker/postgres/init.sql" ]]; then
+  chmod a+rx "${INSTALL_DIR}/docker" "${INSTALL_DIR}/docker/postgres" 2>/dev/null || true
+  chmod a+r  "${INSTALL_DIR}/docker/postgres/init.sql" 2>/dev/null || true
+fi
+
 # =============================================================================
 # Restore mode : extraire l'archive et utiliser SON .env
 # =============================================================================
@@ -572,20 +582,23 @@ ok "Stack demarree"
 # Apres le 1er boot, les tenants peuvent etre ajoutes/modifies dynamiquement
 # via CaddyProvisioningService qui ecrit dans le meme volume.
 log "Verification du Caddyfile dans le volume partage..."
-CADDY_FILE_SIZE=$(docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-  exec -T caddy stat -c '%s' /etc/caddy/Caddyfile 2>/dev/null || echo "0")
-# Caddy ecrit un Caddyfile par defaut de qq dizaines d'octets si vide → on
-# considere < 200 octets comme "non bootstrap".
-if [[ "${CADDY_FILE_SIZE}" -lt 200 ]]; then
-  log "Bootstrap Caddyfile (taille actuelle: ${CADDY_FILE_SIZE} octets)..."
+# On detecte la presence de NOTRE config (marqueur reverse_proxy vers le backend)
+# plutot qu'un seuil de taille : l'image caddy ship un Caddyfile par defaut de
+# ~769 octets (bloc :80 + file_server) qui passait l'ancien test `< 200` → notre
+# Caddyfile n'etait jamais copie, d'ou pas de reverse_proxy ni HTTPS (incident
+# deploy 2026-06).
+if docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+    exec -T caddy grep -q "reverse_proxy backend:4000" /etc/caddy/Caddyfile 2>/dev/null; then
+  ok "Caddyfile applicatif deja en place"
+else
+  log "Bootstrap Caddyfile (config par defaut ou absente detectee)..."
   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
     cp docker/caddy/Caddyfile caddy:/etc/caddy/Caddyfile
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-    exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || \
-    docker compose -f docker-compose.yml -f docker-compose.prod.yml restart caddy
+  # Un restart est plus deterministe qu'un `caddy reload` via l'admin API au
+  # 1er boot (l'admin peut etre encore sur localhost si la config par defaut
+  # tournait). Caddy relit /etc/caddy/Caddyfile (volume partage) au demarrage.
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml restart caddy
   ok "Caddyfile bootstrap (HTTPS + ACME vont demarrer)"
-else
-  ok "Caddyfile deja en place (${CADDY_FILE_SIZE} octets)"
 fi
 
 # =============================================================================
