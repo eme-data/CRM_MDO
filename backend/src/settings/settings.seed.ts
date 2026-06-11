@@ -139,6 +139,14 @@ export const SETTINGS_DEFS: SettingDef[] = [
       'Generee via "openssl rand -hex 32". IRRECUPERABLE si perdue : sans elle aucun backup n\'est restaurable. A conserver aussi en escrow externe.',
     isSecret: true,
   },
+  {
+    key: 'mail.delegatedEnabled',
+    category: 'smtp',
+    label: 'Graph - Envoi delegue (compte connecte)',
+    description:
+      '"true" pour que les replies tickets partent « au nom » de l\'agent connecte (sa propre boite M365). Necessite : transport=graph, SSO Entra actif, et la permission DELEGUEE Mail.Send + offline_access cote app SSO (le scope est demande au login). Les alertes cron continuent de partir de la boite fixe mail.graphSender. Defaut : "false".',
+    defaultValue: 'false',
+  },
 
   // ---------- IMAP entrant (creation tickets) ----------
   {

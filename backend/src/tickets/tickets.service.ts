@@ -413,6 +413,8 @@ export class TicketsService {
       references: allMessageIds.map((m) => m.messageId!).filter(Boolean),
       attachments: mailAttachments,
       relatedEntityId: ticket.id,
+      // Envoi « au nom » de l'agent si l'envoi delegue M365 est actif.
+      actingUserId: userId,
     });
 
     if (result.status === 'SENT' && result.messageId) {

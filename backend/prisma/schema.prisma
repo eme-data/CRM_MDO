@@ -151,6 +151,16 @@ model User {
   // exister dans plusieurs tenants si IdP partage (ex: Entra commune).
   ssoIssuer    String?
   ssoSubject   String?
+  // ----- Envoi mail delegue Microsoft 365 (Graph) -----
+  // Refresh token OAuth2 DELEGUE capture au login SSO Entra quand le scope
+  // Mail.Send + offline_access est demande (active via Settings
+  // mail.delegatedEnabled). Chiffre au repos (AES-256-GCM, SECRETS_MASTER_KEY).
+  // Permet d'envoyer les replies tickets « au nom » de l'agent via
+  // /users/{email}/sendMail. Entra fait tourner le refresh token a chaque
+  // usage -> on re-stocke le nouveau. NULL si l'user ne s'est jamais connecte
+  // en SSO avec ce scope.
+  m365RefreshTokenEnc String?
+  m365TokenUpdatedAt  DateTime?
   // Taux horaire interne (cout du technicien pour MDO). Sert au calcul de
   // marge / rentabilite (cf module profitability). Si null, on utilise la
   // valeur par defaut Settings('profitability.defaultHourlyRate').
