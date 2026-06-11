@@ -96,32 +96,48 @@ export const SETTINGS_DEFS: SettingDef[] = [
     envVar: 'SMTP_FROM',
   },
 
-  // ---------- Transport mail (SMTP vs Microsoft Graph) ----------
-  // Permet d'envoyer les mails via Microsoft Graph (OAuth2 app-only) au lieu du
-  // SMTP basic-auth, en reutilisant l'app Entra MDO (m365.clientId/secret).
-  // Avantage : plus d'app-password, conforme a la depreciation du SMTP AUTH par
-  // Microsoft. Les alertes (cron, sans user) partent d'une boite fixe.
+  // ---------- Backup off-site chiffre (restic) ----------
+  // Config INSTANCE-WIDE (tenantId=null) : sauvegarde la BDD entiere + uploads
+  // de tous les tenants vers un repository restic chiffre. Pilotee depuis l'UI
+  // super-admin (page system-backup). Les secrets sont stockes en base comme
+  // smtp.password (masques en lecture). Garder une cle S3 SANS droit de
+  // suppression pour preserver la resilience ransomware (append-only : le
+  // backend ne fait jamais `forget --prune`).
   {
-    key: 'mail.transport',
-    category: 'smtp',
-    label: 'Transport des emails',
+    key: 'offsiteBackup.enabled',
+    category: 'offsiteBackup',
+    label: 'Backup off-site automatique active',
     description:
-      '"smtp" (defaut, basic-auth) ou "graph" (Microsoft 365 via OAuth2 app-only, reutilise l\'app Entra m365.clientId/secret). En "graph", renseigner mail.graphTenantId + mail.graphSender ci-dessous.',
-    defaultValue: 'smtp',
+      'Si actif, le backend pousse chaque nuit (04:00 Europe/Paris) la BDD + uploads vers le repository restic. Necessite un repository initialise.',
+    defaultValue: 'false',
   },
   {
-    key: 'mail.graphTenantId',
-    category: 'smtp',
-    label: 'Graph - Azure AD Tenant ID',
+    key: 'offsiteBackup.repository',
+    category: 'offsiteBackup',
+    label: 'Repository restic',
     description:
-      'GUID du tenant Entra MDO (Azure portal > Microsoft Entra ID > Overview). Requis pour le transport "graph".',
+      'Scaleway : s3:s3.fr-par.scw.cloud/mon-bucket   —   OVH : s3:s3.gra.io.cloud.ovh.net/mon-bucket   —   Hetzner SFTP : sftp:user@host:/crm-mdo',
   },
   {
-    key: 'mail.graphSender',
-    category: 'smtp',
-    label: 'Graph - Boite expeditrice',
+    key: 'offsiteBackup.s3AccessKeyId',
+    category: 'offsiteBackup',
+    label: 'Access Key (S3)',
+    description: 'Cle d\'acces S3 (Scaleway/OVH). Laisser vide pour un repository non-S3 (SFTP).',
+    isSecret: true,
+  },
+  {
+    key: 'offsiteBackup.s3SecretAccessKey',
+    category: 'offsiteBackup',
+    label: 'Secret Key (S3)',
+    isSecret: true,
+  },
+  {
+    key: 'offsiteBackup.resticPassword',
+    category: 'offsiteBackup',
+    label: 'Passphrase de chiffrement restic',
     description:
-      'UPN/adresse de la boite qui envoie (ex: no-reply@mdoservices.fr). L\'app Entra doit avoir la permission Mail.Send (application) + admin-consent ; restreindre a cette boite via une Application Access Policy Exchange (recommande).',
+      'Generee via "openssl rand -hex 32". IRRECUPERABLE si perdue : sans elle aucun backup n\'est restaurable. A conserver aussi en escrow externe.',
+    isSecret: true,
   },
 
   // ---------- IMAP entrant (creation tickets) ----------

@@ -1,5 +1,11 @@
 {
     email {$ACME_EMAIL}
+    # Admin API exposee sur le reseau Docker (pas publiee sur l'hote, cf
+    # `expose: 2019` dans docker-compose.prod.yml). Necessaire pour que le
+    # backend (CaddyProvisioningService) regenere la config a chaud lors de
+    # l'ajout/suppression d'un tenant. Par defaut Caddy bind l'admin sur
+    # localhost:2019, injoignable depuis le conteneur backend.
+    admin 0.0.0.0:2019
     servers {
         # Le frontend Next.js est derriere Caddy ; sans `trusted_proxies` les
         # logs et le rate-limit Caddy n'auraient pas l'IP client reelle.
