@@ -105,6 +105,7 @@ const sections: NavSection[] = [
   {
     title: 'SIRH',
     items: [
+      { href: '/sirh', label: 'Tableau de bord RH', icon: LayoutDashboard },
       { href: '/conges', label: 'Conges & absences', icon: CalendarDays },
       { href: '/planning', label: 'Planning equipe', icon: CalendarRange },
       { href: '/feuilles', label: 'Feuilles de temps', icon: Timer },
