@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SettingsService } from '../settings/settings.service';
 
 export interface CompanyLookupResult {
-  source: 'pappers' | 'sirene';
+  source: 'pappers' | 'sirene' | 'recherche-entreprises';
   name: string;
   siren: string;
   siret?: string | null;

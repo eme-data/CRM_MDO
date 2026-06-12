@@ -1,10 +1,11 @@
-import { Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CompanySector } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { TenantScope } from '../common/tenant/tenant-scope.helper';
 import { JwtUser } from '../common/decorators/current-user.decorator';
 import { PappersProvider, CompanyLookupResult } from './pappers.provider';
 import { SireneProvider } from './sirene.provider';
+import { RechercheEntreprisesProvider } from './recherche-entreprises.provider';
 
 @Injectable()
 export class CompanyLookupService {
@@ -13,29 +14,34 @@ export class CompanyLookupService {
   constructor(
     private readonly pappers: PappersProvider,
     private readonly sirene: SireneProvider,
+    // API gouv gratuite et sans cle : toujours disponible, sert de defaut.
+    private readonly rechercheEntreprises: RechercheEntreprisesProvider,
     private readonly prisma: PrismaService,
     private readonly scope: TenantScope,
   ) {}
 
-  async hasAnyProvider(tenantId: string | null = null): Promise<boolean> {
-    return (await this.pappers.isEnabled(tenantId)) || (await this.sirene.isEnabled(tenantId));
+  async hasAnyProvider(_tenantId: string | null = null): Promise<boolean> {
+    // recherche-entreprises (API gouv, gratuite, sans cle) est toujours actif
+    // -> il y a toujours au moins un provider disponible.
+    return true;
   }
 
   async search(query: string, tenantId: string | null = null): Promise<CompanyLookupResult[]> {
     if (!query || query.trim().length < 3) return [];
-    if (!(await this.hasAnyProvider(tenantId))) {
-      throw new ServiceUnavailableException(
-        'Aucun provider configure : renseignez la cle Pappers ou Sirene dans Admin > Parametres',
-      );
-    }
+    const q = query.trim();
+    // 1. Pappers (payant, le plus riche) si une cle est configuree.
     if (await this.pappers.isEnabled(tenantId)) {
-      const results = await this.pappers.search(query.trim(), 10, tenantId);
+      const results = await this.pappers.search(q, 10, tenantId);
       if (results.length > 0) return results;
     }
+    // 2. Recherche d'entreprises (API gouv gratuite, sans cle) : defaut.
+    const gouv = await this.rechercheEntreprises.search(q, 10, tenantId);
+    if (gouv.length > 0) return gouv;
+    // 3. INSEE Sirene (gratuit, avec cle) en dernier recours si configure.
     if (await this.sirene.isEnabled(tenantId)) {
-      return this.sirene.search(query.trim(), 10, tenantId);
+      return this.sirene.search(q, 10, tenantId);
     }
-    return [];
+    return gouv;
   }
 
   async getBySiren(siren: string, tenantId: string | null = null): Promise<CompanyLookupResult> {
@@ -47,6 +53,8 @@ export class CompanyLookupService {
       const r = await this.pappers.getBySiren(cleaned, tenantId);
       if (r) return r;
     }
+    const gouv = await this.rechercheEntreprises.getBySiren(cleaned, tenantId);
+    if (gouv) return gouv;
     if (await this.sirene.isEnabled(tenantId)) {
       const r = await this.sirene.getBySiren(cleaned, tenantId);
       if (r) return r;

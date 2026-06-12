@@ -20,7 +20,7 @@ const CATEGORY_META: Record<string, { title: string; icon: any; description: str
   lookup: {
     title: 'Annuaire entreprises',
     icon: Building2,
-    description: 'Cles API pour la recherche automatique de societes (Pappers et INSEE Sirene).',
+    description: 'La recherche de societes fonctionne par defaut GRATUITEMENT via l\'API gouv "Recherche d\'entreprises" (sans cle). Les cles ci-dessous sont OPTIONNELLES : Pappers (payant, ajoute les bilans financiers) ou INSEE Sirene (gratuit, avec cle).',
   },
   smtp: {
     title: 'SMTP - emails sortants',

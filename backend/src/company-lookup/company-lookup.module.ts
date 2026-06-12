@@ -3,9 +3,10 @@ import { CompanyLookupService } from './company-lookup.service';
 import { CompanyLookupController } from './company-lookup.controller';
 import { PappersProvider } from './pappers.provider';
 import { SireneProvider } from './sirene.provider';
+import { RechercheEntreprisesProvider } from './recherche-entreprises.provider';
 
 @Module({
-  providers: [CompanyLookupService, PappersProvider, SireneProvider],
+  providers: [CompanyLookupService, PappersProvider, SireneProvider, RechercheEntreprisesProvider],
   controllers: [CompanyLookupController],
   exports: [CompanyLookupService],
 })
