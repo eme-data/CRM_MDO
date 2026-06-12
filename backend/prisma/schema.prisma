@@ -38,6 +38,10 @@ model Tenant {
   // Permet de geler un tenant (impaye, maintenance, etc.) sans le supprimer.
   isActive     Boolean @default(true)
 
+  // Tenant de demonstration : MFA optionnel (jamais force), bandeau "demo"
+  // affiche, et donnees reinitialisees periodiquement (cf DemoSeederService).
+  isDemo       Boolean @default(false)
+
   // ----- Branding (fallback ENV BRAND_* si non rempli ici) -----
   brandName         String
   brandShortName    String

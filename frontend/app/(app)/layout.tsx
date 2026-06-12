@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { CommandPalette } from '@/components/CommandPalette';
 import { TimerWidget } from '@/components/TimerWidget';
+import { DemoBanner } from '@/components/DemoBanner';
 import { me, User } from '@/lib/auth';
 import { featureForPath, hasFeature, homePathFor } from '@/lib/modules';
 import { bootstrapNativePush } from '@/lib/native';
@@ -58,6 +59,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen">
       <Sidebar user={user ?? undefined} />
       <main className="flex-1 bg-slate-50 dark:bg-slate-900 dark:text-slate-100">
+        <DemoBanner />
         <div className="p-8">{children}</div>
       </main>
       <CommandPalette />

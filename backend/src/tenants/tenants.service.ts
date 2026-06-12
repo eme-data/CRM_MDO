@@ -457,20 +457,13 @@ export class TenantsService implements OnModuleInit {
     if (before.slug === 'mdo') {
       throw new BadRequestException('Le tenant mdo ne peut pas etre supprime');
     }
-    // Defense en profondeur : on refuse si users existent (le Restrict de la FK
-    // le fait aussi mais erreur Prisma moins lisible).
-    const userCount = await this.prisma.user.count({ where: { tenantId: id } });
-    if (userCount > 0) {
-      throw new BadRequestException(
-        `Impossible de supprimer : ${userCount} user(s) dans ce tenant. ` +
-        `Pour un retrait RGPD complet, utilisez purge() avec le slug de confirmation.`,
-      );
-    }
-    await this.prisma.tenant.delete({ where: { id } });
-    this.invalidateCache(before.customDomain);
-    // Retire le site Caddy correspondant
-    await this.caddy.triggerSilent('tenant.remove ' + before.slug);
-    return { ok: true };
+    // Suppression complete (cascade applicative) : on delegue a purge() qui
+    // efface toutes les donnees tenant-scopees AVANT le tenant (FK
+    // onDelete:Restrict cote tenant) puis supprime le tenant + retire la route
+    // Caddy. L'UI super-admin confirme deja l'action ; on passe donc le slug
+    // comme confirmation. purge() gere cache + Caddy + journal.
+    const { deleted } = await this.purge(id, before.slug, 'system:remove');
+    return { ok: true, deleted };
   }
 
   // ============================================================
@@ -725,6 +718,19 @@ export class TenantsService implements OnModuleInit {
     await drop('documents', () => this.prisma.companyDocument.deleteMany({ where }));
     await drop('attachments', () => this.prisma.attachment.deleteMany({ where }));
     await drop('timeEntries', () => this.prisma.timeEntry.deleteMany({ where }));
+    // ----- SIRH (migrations 0007-0012) : enfants -> parents, avant users -----
+    await drop('objectives', () => this.prisma.objective.deleteMany({ where }));
+    await drop('reviews', () => this.prisma.review.deleteMany({ where }));
+    await drop('timesheets', () => this.prisma.timesheet.deleteMany({ where }));
+    await drop('journeys', () => this.prisma.journey.deleteMany({ where }));
+    await drop('journeyTemplates', () => this.prisma.journeyTemplate.deleteMany({ where }));
+    await drop('leaveRequests', () => this.prisma.leaveRequest.deleteMany({ where }));
+    await drop('leaveBalances', () => this.prisma.leaveBalance.deleteMany({ where }));
+    await drop('leaveTypes', () => this.prisma.leaveType.deleteMany({ where }));
+    await drop('expenseClaims', () => this.prisma.expenseClaim.deleteMany({ where }));
+    await drop('expenseCategories', () => this.prisma.expenseCategory.deleteMany({ where }));
+    await drop('employeeDocuments', () => this.prisma.employeeDocument.deleteMany({ where }));
+    await drop('employeeProfiles', () => this.prisma.employeeProfile.deleteMany({ where }));
     await drop('interventions', () => this.prisma.intervention.deleteMany({ where }));
     await drop('ticketMessages', () => this.prisma.ticketMessage.deleteMany({ where }));
     await drop('tickets', () => this.prisma.ticket.deleteMany({ where }));

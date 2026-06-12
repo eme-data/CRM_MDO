@@ -23,6 +23,9 @@ export interface BrandingConfig {
   primaryColor: string;
   footerText: string;
   instanceType: 'MDO' | 'CLIENT';
+  // Tenant de demonstration : le frontend affiche un bandeau "demo" (MFA
+  // optionnel, donnees reinitialisees periodiquement).
+  isDemo: boolean;
 }
 
 @Injectable()
@@ -60,6 +63,7 @@ export class BrandingService {
       instanceType: tenant && tenant.slug !== 'mdo'
         ? 'CLIENT'
         : (this.config.get<string>('BRAND_INSTANCE_TYPE') === 'CLIENT' ? 'CLIENT' : 'MDO'),
+      isDemo: tenant?.isDemo === true,
     };
   }
 }

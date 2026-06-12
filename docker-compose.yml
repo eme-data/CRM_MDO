@@ -118,6 +118,9 @@ services:
       IMAP_PROCESSED_FOLDER: ${IMAP_PROCESSED_FOLDER}
       TZ: ${TZ:-Europe/Paris}
       PORT: ${BACKEND_PORT:-4000}
+      # Tenant de demonstration : reseed quotidien (04:00) si "true".
+      DEMO_RESET_ENABLED: ${DEMO_RESET_ENABLED:-false}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
     volumes:
       - attachments-data:/app/uploads
       - system-backups:/app/backups

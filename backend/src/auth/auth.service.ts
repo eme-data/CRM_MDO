@@ -33,6 +33,15 @@ export class AuthService {
   // encore activee. Tant que ce flag est true, le MfaRequiredGuard bloque tous
   // les endpoints sauf /mfa/*, /auth/* et ceux annotes @AllowMfaPending.
   private async computeMfaPending(userId: string, role: string): Promise<boolean> {
+    // Tenant de demonstration : la 2FA n'est JAMAIS forcee (elle reste possible
+    // mais optionnelle). En production, elle reste obligatoire selon
+    // auth.mfaRequiredRoles (defaut ADMIN,MANAGER).
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { tenant: { select: { isDemo: true } } },
+    });
+    if (u?.tenant?.isDemo) return false;
+
     const requiredRolesRaw = (await this.settings.get('auth.mfaRequiredRoles')) ?? '';
     const requiredRoles = requiredRolesRaw
       .split(',')

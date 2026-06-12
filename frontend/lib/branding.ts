@@ -17,6 +17,7 @@ export interface Branding {
   primaryColor: string;
   footerText: string;
   instanceType: 'MDO' | 'CLIENT';
+  isDemo?: boolean;
 }
 
 const STORAGE_KEY = 'crm_branding_v1';

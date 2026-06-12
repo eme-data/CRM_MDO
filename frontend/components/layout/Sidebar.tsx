@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -182,6 +182,23 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
   const adminActive = isAdmin && adminItems.some((i) => pathname?.startsWith(i.href));
   const [adminOpen, setAdminOpen] = useState<boolean>(adminActive);
 
+  // Sections repliables (persistance localStorage). Une section absente de la
+  // map = depliee par defaut.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem('crm_mdo_sidebar_collapsed');
+      if (s) setCollapsed(JSON.parse(s));
+    } catch { /* ignore */ }
+  }, []);
+  function toggleSection(title: string) {
+    setCollapsed((c) => {
+      const next = { ...c, [title]: !c[title] };
+      try { localStorage.setItem('crm_mdo_sidebar_collapsed', JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
   async function handleLogout() {
     await logout();
     router.replace('/login');
@@ -211,16 +228,24 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
           // dans l'offre du tenant. Une section sans entree visible disparait.
           const visible = section.items.filter((item) => hasFeature(user?.modules, featureForPath(item.href)));
           if (visible.length === 0) return null;
+          const isCollapsed = !!collapsed[section.title];
           return (
             <div key={section.title} className="mb-4">
-              <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                {section.title}
-              </p>
-              <div className="space-y-0.5 mt-1">
-                {visible.map((item) => (
-                  <NavLink key={item.href} item={item} active={isActive(item.href)} />
-                ))}
-              </div>
+              <button
+                onClick={() => toggleSection(section.title)}
+                aria-expanded={!isCollapsed}
+                className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors"
+              >
+                <span>{section.title}</span>
+                <ChevronDown size={12} className={cn('transition-transform', isCollapsed && '-rotate-90')} />
+              </button>
+              {!isCollapsed && (
+                <div className="space-y-0.5 mt-1">
+                  {visible.map((item) => (
+                    <NavLink key={item.href} item={item} active={isActive(item.href)} />
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
