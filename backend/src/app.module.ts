@@ -45,6 +45,7 @@ import { MonitoringModule } from './monitoring/monitoring.module';
 import { UptimeModule } from './uptime/uptime.module';
 import { LeavesModule } from './leaves/leaves.module';
 import { ExpensesModule } from './expenses/expenses.module';
+import { EmployeesModule } from './employees/employees.module';
 import { EmergencyPdfModule } from './emergency-pdf/emergency-pdf.module';
 import { RunbooksModule } from './runbooks/runbooks.module';
 import { MfaModule } from './mfa/mfa.module';
@@ -170,6 +171,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     UptimeModule,
     LeavesModule,
     ExpensesModule,
+    EmployeesModule,
     EmergencyPdfModule,
     RunbooksModule,
     ImportsModule,

@@ -123,6 +123,8 @@ model Tenant {
   leaveBalances          LeaveBalance[]
   expenseCategories      ExpenseCategory[]
   expenseClaims          ExpenseClaim[]
+  employeeProfiles       EmployeeProfile[]
+  employeeDocuments      EmployeeDocument[]
 
   @@index([customDomain])
   @@index([slug])
@@ -235,6 +237,10 @@ model User {
   leaveBalances              LeaveBalance[]                @relation("LeaveBalanceUser")
   expenseClaims              ExpenseClaim[]                @relation("ExpenseClaimUser")
   approvedExpenses           ExpenseClaim[]                @relation("ExpenseClaimApprover")
+  employeeProfile            EmployeeProfile?              @relation("EmployeeProfileUser")
+  managedEmployees           EmployeeProfile[]             @relation("EmployeeProfileManager")
+  employeeDocuments          EmployeeDocument[]            @relation("EmployeeDocumentUser")
+  uploadedEmployeeDocuments  EmployeeDocument[]            @relation("EmployeeDocumentUploader")
 
   // Email unique PAR tenant : permet d'avoir le meme email dans 2 tenants
   // differents (ex: mathieu@mdoservices.fr peut exister dans tenant 'mdo'
@@ -1542,6 +1548,78 @@ model ExpenseClaim {
 
   @@index([tenantId])
   @@index([tenantId, status])
+  @@index([userId])
+}
+
+// =====================================================================
+// SIRH - Dossier collaborateur (brique RH, multi-tenant)
+// =====================================================================
+enum ContractType {
+  CDI
+  CDD
+  STAGE
+  ALTERNANCE
+  FREELANCE
+  AUTRE
+}
+
+enum EmployeeDocType {
+  CONTRAT
+  AVENANT
+  FICHE_PAIE
+  ATTESTATION
+  AUTRE
+}
+
+// Fiche RH 1:1 avec un User (le collaborateur). Donnees RH sensibles : acces
+// reserve au collaborateur (sa fiche) + ADMIN/MANAGER (RH) du tenant.
+model EmployeeProfile {
+  id          String        @id @default(uuid())
+  tenantId    String?
+  tenant      Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId      String        @unique
+  user        User          @relation("EmployeeProfileUser", fields: [userId], references: [id], onDelete: Cascade)
+  jobTitle    String?
+  department  String?
+  managerId   String?
+  manager     User?         @relation("EmployeeProfileManager", fields: [managerId], references: [id], onDelete: SetNull)
+  contractType ContractType?
+  hireDate    DateTime?     @db.Date
+  endDate     DateTime?     @db.Date
+  phone       String?
+  mobile      String?
+  address     String?
+  postalCode  String?
+  city        String?
+  country     String?
+  birthDate   DateTime?     @db.Date
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  iban        String?
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([tenantId])
+  @@index([managerId])
+}
+
+// Document RH rattache a un collaborateur (contrat, fiche de paie, ...). Le
+// fichier reutilise le stockage attachments (attachmentId), servi avec garde.
+model EmployeeDocument {
+  id           String          @id @default(uuid())
+  tenantId     String?
+  tenant       Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId       String
+  user         User            @relation("EmployeeDocumentUser", fields: [userId], references: [id], onDelete: Cascade)
+  type         EmployeeDocType @default(AUTRE)
+  name         String
+  attachmentId String
+  uploadedById String?
+  uploadedBy   User?           @relation("EmployeeDocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime        @default(now())
+
+  @@index([tenantId])
   @@index([userId])
 }
 
