@@ -138,16 +138,6 @@ function LoginPageInner() {
                   <ShieldAlert size={14} className="mt-0.5 shrink-0" />
                   MFA optionnel ici ; en production il est obligatoire pour les roles Admin et Manager.
                 </p>
-                <div className="rounded bg-slate-950/50 p-2 font-mono text-[11px] text-slate-300">
-                  admin@demo.mdoservices.fr · DemoMDO2026!
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setEmail('admin@demo.mdoservices.fr'); setPassword('DemoMDO2026!'); }}
-                  className="w-full rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 font-medium text-amber-100 transition hover:bg-amber-500/20"
-                >
-                  Remplir les identifiants de demo
-                </button>
               </div>
             )}
 
