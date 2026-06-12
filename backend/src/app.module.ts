@@ -47,6 +47,7 @@ import { LeavesModule } from './leaves/leaves.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { EmployeesModule } from './employees/employees.module';
 import { TimesheetsModule } from './timesheets/timesheets.module';
+import { PlanningModule } from './planning/planning.module';
 import { EmergencyPdfModule } from './emergency-pdf/emergency-pdf.module';
 import { RunbooksModule } from './runbooks/runbooks.module';
 import { MfaModule } from './mfa/mfa.module';
@@ -174,6 +175,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     ExpensesModule,
     EmployeesModule,
     TimesheetsModule,
+    PlanningModule,
     EmergencyPdfModule,
     RunbooksModule,
     ImportsModule,
