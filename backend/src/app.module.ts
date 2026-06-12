@@ -43,6 +43,7 @@ import { ItemLinksModule } from './item-links/item-links.module';
 import { QuickNotesModule } from './quick-notes/quick-notes.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { UptimeModule } from './uptime/uptime.module';
+import { LeavesModule } from './leaves/leaves.module';
 import { EmergencyPdfModule } from './emergency-pdf/emergency-pdf.module';
 import { RunbooksModule } from './runbooks/runbooks.module';
 import { MfaModule } from './mfa/mfa.module';
@@ -166,6 +167,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     QuickNotesModule,
     MonitoringModule,
     UptimeModule,
+    LeavesModule,
     EmergencyPdfModule,
     RunbooksModule,
     ImportsModule,

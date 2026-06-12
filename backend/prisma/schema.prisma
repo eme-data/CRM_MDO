@@ -118,6 +118,9 @@ model Tenant {
   runbooks               Runbook[]
   flexibleAssetTypes     FlexibleAssetType[]
   proxmoxClusters        ProxmoxCluster[]
+  leaveTypes             LeaveType[]
+  leaveRequests          LeaveRequest[]
+  leaveBalances          LeaveBalance[]
 
   @@index([customDomain])
   @@index([slug])
@@ -225,6 +228,9 @@ model User {
   webhookEndpointsCreated    WebhookEndpoint[]             @relation("WebhookEndpointCreator")
   complianceAssessments      ComplianceAssessment[]        @relation("ComplianceOwner")
   controlReviews             ComplianceControlAssessment[] @relation("ControlReviewer")
+  leaveRequests              LeaveRequest[]                @relation("LeaveRequestUser")
+  approvedLeaves             LeaveRequest[]                @relation("LeaveRequestApprover")
+  leaveBalances              LeaveBalance[]                @relation("LeaveBalanceUser")
 
   // Email unique PAR tenant : permet d'avoir le meme email dans 2 tenants
   // differents (ex: mathieu@mdoservices.fr peut exister dans tenant 'mdo'
@@ -1395,6 +1401,85 @@ enum BillingProviderKind {
   SELLSY
   QONTO // Qonto Factures (PDP) + synchro bancaire
   PENNYLANE // Pennylane (compta + facturation, API v2)
+}
+
+// =====================================================================
+// SIRH - Conges & absences (brique RH, multi-tenant)
+// =====================================================================
+enum LeaveStatus {
+  PENDING // en attente de validation
+  APPROVED // validee
+  REJECTED // refusee
+  CANCELLED // annulee (par le demandeur ou un admin)
+}
+
+// Type de conge/absence configurable par tenant (CP, RTT, sans solde, maladie...).
+model LeaveType {
+  id        String   @id @default(uuid())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name      String
+  color     String   @default("#3b82f6")
+  // paid : conge remunere (CP/RTT) vs non (sans solde). Info d'affichage.
+  paid      Boolean  @default(true)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  requests LeaveRequest[]
+  balances LeaveBalance[]
+
+  @@index([tenantId])
+}
+
+// Demande de conge : workflow PENDING -> APPROVED/REJECTED, decompte en jours
+// ouvres (workingDays), demi-journees possibles aux extremites.
+model LeaveRequest {
+  id          String      @id @default(uuid())
+  tenantId    String?
+  tenant      Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId      String
+  user        User        @relation("LeaveRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  typeId      String
+  type        LeaveType   @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  startDate   DateTime    @db.Date
+  endDate     DateTime    @db.Date
+  // Demi-journees : halfStart = apres-midi du 1er jour, halfEnd = matin du dernier.
+  halfStart   Boolean     @default(false)
+  halfEnd     Boolean     @default(false)
+  workingDays Decimal     @db.Decimal(5, 1) // nb de jours ouvres decomptes
+  reason      String?
+  status      LeaveStatus @default(PENDING)
+  approverId  String?
+  approver    User?       @relation("LeaveRequestApprover", fields: [approverId], references: [id], onDelete: SetNull)
+  decidedAt   DateTime?
+  decisionNote String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([userId])
+  @@index([startDate, endDate])
+}
+
+// Solde annuel alloue par collaborateur/type. Le "pris" est calcule depuis les
+// LeaveRequest APPROVED de l'annee. Restant = allocated - pris.
+model LeaveBalance {
+  id        String    @id @default(uuid())
+  tenantId  String?
+  tenant    Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId    String
+  user      User      @relation("LeaveBalanceUser", fields: [userId], references: [id], onDelete: Cascade)
+  typeId    String
+  type      LeaveType @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  year      Int
+  allocated Decimal   @db.Decimal(5, 1) @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([tenantId, userId, typeId, year])
+  @@index([tenantId])
+  @@index([userId])
 }
 
 model Invoice {
