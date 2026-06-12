@@ -8,6 +8,7 @@ import { MailService } from '../mail/mail.service';
 import { CreateLeaveDto } from './dto/create-leave.dto';
 import { DecideLeaveDto } from './dto/decide-leave.dto';
 import { SetAllocationDto } from './dto/set-allocation.dto';
+import { frenchHolidaysForRange } from './holidays';
 
 // SIRH - Conges & absences (multi-tenant).
 //   - Tout collaborateur cree des demandes pour LUI-MEME (userId = me.id).
@@ -63,23 +64,27 @@ export class LeavesService {
   // ---------- Jours ouvres ----------
   private workingDays(start: Date, end: Date, halfStart: boolean, halfEnd: boolean): number {
     if (start > end) throw new BadRequestException('La date de fin doit etre apres la date de debut');
+    // Jours ouvres = ni week-end ni jour ferie (France).
+    const holidays = frenchHolidaysForRange(start, end);
+    const isWorkday = (day: Date): boolean => {
+      const dow = day.getUTCDay();
+      if (dow === 0 || dow === 6) return false;
+      return !holidays.has(day.toISOString().slice(0, 10));
+    };
     let count = 0;
     const d = new Date(start);
     while (d <= end) {
-      const day = d.getUTCDay(); // 0=dim, 6=sam
-      if (day !== 0 && day !== 6) count++;
+      if (isWorkday(d)) count++;
       d.setUTCDate(d.getUTCDate() + 1);
     }
-    if (count <= 0) throw new BadRequestException('Aucun jour ouvre sur la periode selectionnee');
+    if (count <= 0) throw new BadRequestException('Aucun jour ouvre sur la periode (week-ends et jours feries exclus)');
     const sameDay = start.getTime() === end.getTime();
     if (sameDay) {
       return halfStart || halfEnd ? 0.5 : count;
     }
-    const startWeekday = start.getUTCDay() !== 0 && start.getUTCDay() !== 6;
-    const endWeekday = end.getUTCDay() !== 0 && end.getUTCDay() !== 6;
     let days = count;
-    if (halfStart && startWeekday) days -= 0.5;
-    if (halfEnd && endWeekday) days -= 0.5;
+    if (halfStart && isWorkday(start)) days -= 0.5;
+    if (halfEnd && isWorkday(end)) days -= 0.5;
     return Math.max(0.5, days);
   }
 
