@@ -344,7 +344,7 @@ export class LeavesService {
       select: { id: true, firstName: true, lastName: true },
       orderBy: { lastName: 'asc' },
     });
-    const result = [];
+    const result: any[] = [];
     for (const u of users) {
       const b = await this.balancesForUser(me, u.id, year);
       result.push({ user: u, ...b });
