@@ -82,6 +82,14 @@ export class CaddyProvisioningService implements OnModuleInit {
     return this.config.get<string>('ACME_EMAIL') ?? 'admin@mdoservices.fr';
   }
 
+  // Adresse d'ecoute de l'admin API Caddy. DOIT rester sur 0.0.0.0:2019 (et pas
+  // le defaut localhost:2019) sinon le backend, dans un autre conteneur, ne peut
+  // plus joindre l'admin API apres un reload -> plus aucun provisioning possible.
+  // cf bloc global du Caddyfile statique (docker/caddy/Caddyfile).
+  private get adminListen(): string {
+    return this.config.get<string>('CADDY_ADMIN_LISTEN') ?? '0.0.0.0:2019';
+  }
+
   // Genere la Caddyfile complete : un global block + un site block par tenant.
   // Chaque site block route /api/* vers backend, /health vers backend,
   // /metrics restreint LAN, le reste vers frontend (Next.js).
@@ -94,6 +102,8 @@ export class CaddyProvisioningService implements OnModuleInit {
       // Bloc global
       `{`,
       `    email ${this.acmeEmail}`,
+      // Admin API joignable par le conteneur backend (sinon plus de reload possible).
+      `    admin ${this.adminListen}`,
       `    servers {`,
       `        trusted_proxies static private_ranges`,
       `    }`,

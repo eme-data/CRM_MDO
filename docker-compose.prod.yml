@@ -45,6 +45,14 @@ services:
       CADDY_PROVISIONING: enabled
       CADDY_ADMIN_URL: http://caddy:2019
       CADDY_CONFIG_PATH: /etc/caddy/Caddyfile
+      # Email ACME (Let's Encrypt) injecte dans la Caddyfile generee. Sans lui,
+      # fallback admin@mdoservices.fr. DOMAIN non requis (les domaines viennent
+      # des tenants en base) mais passe pour coherence.
+      ACME_EMAIL: ${ACME_EMAIL}
+      DOMAIN: ${DOMAIN}
+      # Admin API Caddy en 0.0.0.0:2019 dans la config generee (sinon le backend
+      # perd l'acces apres un reload). cf CaddyProvisioningService.adminListen.
+      CADDY_ADMIN_LISTEN: ${CADDY_ADMIN_LISTEN:-0.0.0.0:2019}
     volumes:
       # Volume partage avec caddy pour ecrire la Caddyfile regeneree
       - caddy-config-shared:/etc/caddy
