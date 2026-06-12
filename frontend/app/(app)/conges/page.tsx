@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { CalendarDays, Plus, Check, X, Clock, Users as UsersIcon } from 'lucide-react';
+import { CalendarDays, Plus, Check, X, Clock, Users as UsersIcon, SlidersHorizontal, Save } from 'lucide-react';
 import { api } from '@/lib/api';
 import { me as fetchMe, User } from '@/lib/auth';
 import { formatDate } from '@/lib/utils';
@@ -35,6 +35,12 @@ export default function CongesPage() {
   const [team, setTeam] = useState<LeaveRequest[]>([]);
   const [draft, setDraft] = useState<any>({ typeId: '', startDate: '', endDate: '', halfStart: false, halfEnd: false, reason: '' });
   const [submitting, setSubmitting] = useState(false);
+  // Gestion des soldes (managers)
+  const [showAlloc, setShowAlloc] = useState(false);
+  const [allRows, setAllRows] = useState<any[]>([]);
+  const [allocYear, setAllocYear] = useState<number>(new Date().getFullYear());
+  const [allocDraft, setAllocDraft] = useState<Record<string, string>>({});
+  const [savingAlloc, setSavingAlloc] = useState(false);
 
   const isManager = !!user && (user.isSuperAdmin || user.role === 'ADMIN' || user.role === 'MANAGER');
 
@@ -97,6 +103,41 @@ export default function CongesPage() {
       toast.success(approve ? 'Demande validee' : 'Demande refusee');
       loadPending(); load();
     } catch (err: any) { toast.error(err.message); }
+  }
+
+  async function loadAlloc(year = allocYear) {
+    try {
+      const rows = await api.get<any[]>('/leaves/balances/all?year=' + year);
+      setAllRows(rows);
+      const d: Record<string, string> = {};
+      for (const row of rows) for (const it of row.items) d[row.user.id + '|' + it.typeId] = String(it.allocated);
+      setAllocDraft(d);
+    } catch (err: any) { toast.error(err?.message ?? 'Chargement des soldes echoue'); }
+  }
+
+  function openAlloc() { setShowAlloc(true); loadAlloc(allocYear); }
+
+  function changeYear(y: number) { setAllocYear(y); loadAlloc(y); }
+
+  async function saveAlloc() {
+    const changes: any[] = [];
+    for (const row of allRows) {
+      for (const it of row.items) {
+        const key = row.user.id + '|' + it.typeId;
+        const v = allocDraft[key];
+        if (v !== undefined && Number(v) !== Number(it.allocated)) {
+          changes.push({ userId: row.user.id, typeId: it.typeId, year: allocYear, allocated: Number(v) });
+        }
+      }
+    }
+    if (!changes.length) { toast.info('Aucune modification a enregistrer'); return; }
+    setSavingAlloc(true);
+    try {
+      for (const c of changes) await api.post('/leaves/allocations', c);
+      toast.success(changes.length + ' solde(s) mis a jour');
+      loadAlloc(allocYear); load();
+    } catch (err: any) { toast.error(err.message); }
+    finally { setSavingAlloc(false); }
   }
 
   function periode(r: LeaveRequest) {
@@ -221,6 +262,62 @@ export default function CongesPage() {
           </ul>
         )}
       </div>
+
+      {/* Gestion des soldes (managers) */}
+      {isManager && (
+        <div className="card overflow-hidden">
+          <div className="p-3 border-b font-semibold flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2"><SlidersHorizontal size={16} className="text-mdo-600" /> Gestion des soldes (equipe)</span>
+            {!showAlloc ? (
+              <button onClick={openAlloc} className="btn btn-secondary text-xs">Ouvrir</button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <select className="input py-1 text-sm" value={allocYear} onChange={(e) => changeYear(Number(e.target.value))}>
+                  {[allocYear - 1, allocYear, allocYear + 1].map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <button onClick={saveAlloc} disabled={savingAlloc} className="btn btn-primary text-xs"><Save size={14} className="mr-1" />{savingAlloc ? '...' : 'Enregistrer'}</button>
+              </div>
+            )}
+          </div>
+          {showAlloc && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="p-3">Collaborateur</th>
+                    {types.map((t) => <th key={t.id} className="p-3 text-center">{t.name}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {allRows.length === 0 ? (
+                    <tr><td colSpan={types.length + 1} className="p-6 text-center text-slate-400">Aucun collaborateur.</td></tr>
+                  ) : allRows.map((row) => (
+                    <tr key={row.user.id} className="border-t">
+                      <td className="p-3 font-medium whitespace-nowrap">{row.user.firstName} {row.user.lastName}</td>
+                      {types.map((t) => {
+                        const it = row.items.find((x: any) => x.typeId === t.id);
+                        const key = row.user.id + '|' + t.id;
+                        return (
+                          <td key={t.id} className="p-2 text-center">
+                            <input
+                              type="number" step="0.5" min="0"
+                              className="input w-20 text-center py-1"
+                              value={allocDraft[key] ?? ''}
+                              onChange={(e) => setAllocDraft((d) => ({ ...d, [key]: e.target.value }))}
+                            />
+                            {it && <div className="text-[10px] text-slate-400 mt-0.5">{it.taken} pris</div>}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-xs text-slate-400 p-3">Jours alloues par collaborateur et par type pour l&apos;annee {allocYear}. « pris » = jours valides cette annee.</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
