@@ -1393,7 +1393,8 @@ enum BillingProviderKind {
   // @deprecated 2026-05 : Sellsy retire du stack MDO. Valeur conservee pour
   // preserver l'integrite des Invoice historiques deja crees avec ce provider.
   SELLSY
-  QONTO // Source de verite : Qonto Factures (PDP)
+  QONTO // Qonto Factures (PDP) + synchro bancaire
+  PENNYLANE // Pennylane (compta + facturation, API v2)
 }
 
 model Invoice {

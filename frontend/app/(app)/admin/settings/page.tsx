@@ -60,7 +60,7 @@ export default function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [testEmail, setTestEmail] = useState('');
-  const [testing, setTesting] = useState<'smtp' | 'imap' | 'qonto' | null>(null);
+  const [testing, setTesting] = useState<'smtp' | 'imap' | 'qonto' | 'pennylane' | null>(null);
 
   async function load() {
     setLoading(true);
@@ -119,7 +119,7 @@ export default function AdminSettingsPage() {
     }
   }
 
-  async function testProvider(kind: 'qonto') {
+  async function testProvider(kind: 'qonto' | 'pennylane') {
     setTesting(kind);
     try {
       const res = await api.post('/billing/test/' + kind);
@@ -219,6 +219,14 @@ export default function AdminSettingsPage() {
                 >
                   <TestTube size={14} className="mr-1" />
                   {testing === 'qonto' ? 'Test...' : 'Tester Qonto'}
+                </button>
+                <button
+                  onClick={() => testProvider('pennylane')}
+                  disabled={testing === 'pennylane'}
+                  className="btn btn-secondary"
+                >
+                  <TestTube size={14} className="mr-1" />
+                  {testing === 'pennylane' ? 'Test...' : 'Tester Pennylane'}
                 </button>
                 <a href="/admin/billing" className="btn btn-secondary">
                   <Receipt size={14} className="mr-1" /> Tableau de bord facturation

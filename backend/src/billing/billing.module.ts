@@ -4,10 +4,11 @@ import { BillingService } from './billing.service';
 import { BillingController } from './billing.controller';
 import { CashFlowService } from './cashflow.service';
 import { QontoProvider } from './qonto.provider';
+import { PennylaneProvider } from './pennylane.provider';
 
 @Module({
   imports: [SettingsModule],
-  providers: [BillingService, CashFlowService, QontoProvider],
+  providers: [BillingService, CashFlowService, QontoProvider, PennylaneProvider],
   controllers: [BillingController],
   exports: [BillingService, QontoProvider],
 })

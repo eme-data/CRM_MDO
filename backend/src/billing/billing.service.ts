@@ -6,6 +6,7 @@ import { TenantScope } from '../common/tenant/tenant-scope.helper';
 import { JwtUser } from '../common/decorators/current-user.decorator';
 import { SettingsService } from '../settings/settings.service';
 import { QontoProvider } from './qonto.provider';
+import { PennylaneProvider } from './pennylane.provider';
 import { BillingProvider } from './types';
 
 // Orchestrateur de facturation externe. Qonto Factures = unique PDP (Plateforme
@@ -27,12 +28,14 @@ export class BillingService {
     private readonly settings: SettingsService,
     private readonly scope: TenantScope,
     private readonly qonto: QontoProvider,
+    private readonly pennylane: PennylaneProvider,
   ) {}
 
   // ---------- Selection du provider ----------
   async getActiveProvider(tenantId: string | null = null): Promise<BillingProvider | null> {
     const choice = (await this.settings.get('billing.provider', tenantId)) ?? 'none';
     if (choice === 'qonto' && (await this.qonto.isConfigured(tenantId))) return this.qonto;
+    if (choice === 'pennylane' && (await this.pennylane.isConfigured(tenantId))) return this.pennylane;
     return null;
   }
 
@@ -43,6 +46,7 @@ export class BillingService {
     disableInternalCron: boolean;
     qontoConfigured: boolean;
     qontoSyncEnabled: boolean;
+    pennylaneConfigured: boolean;
   }> {
     const choice = (await this.settings.get('billing.provider', tenantId)) ?? 'none';
     return {
@@ -52,6 +56,7 @@ export class BillingService {
       disableInternalCron: await this.settings.getBool('billing.disableInternalCron', tenantId),
       qontoConfigured: await this.qonto.isConfigured(tenantId),
       qontoSyncEnabled: await this.settings.getBool('billing.qonto.syncEnabled', tenantId),
+      pennylaneConfigured: await this.pennylane.isConfigured(tenantId),
     };
   }
 
@@ -70,9 +75,11 @@ export class BillingService {
     });
     if (!c) throw new NotFoundException('Societe introuvable');
 
-    // Si deja synchronise vers Qonto, on n'ecrase rien
+    // qontoClientId sert de cache generique de l'id client externe (repris pour
+    // le provider de facturation actif, Qonto ou Pennylane). Si deja synchronise,
+    // on n'ecrase rien.
     if (c.qontoClientId) {
-      return { externalId: c.qontoClientId, provider: 'qonto' };
+      return { externalId: c.qontoClientId, provider: provider.kind };
     }
 
     const remote = await provider.pushClient({
@@ -93,7 +100,7 @@ export class BillingService {
       data: { qontoClientId: remote.externalId },
     });
 
-    return { externalId: remote.externalId, provider: 'qonto' };
+    return { externalId: remote.externalId, provider: provider.kind };
   }
 
   // ---------- Push d'un contrat (client + abonnement recurrent) ----------
@@ -143,7 +150,7 @@ export class BillingService {
     return {
       qontoClientId: clientPush.externalId,
       subscriptionId,
-      provider: 'qonto',
+      provider: provider.kind,
     };
   }
 

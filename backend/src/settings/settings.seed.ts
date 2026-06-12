@@ -289,9 +289,24 @@ export const SETTINGS_DEFS: SettingDef[] = [
     category: 'billing',
     label: 'Outil de facturation actif',
     description:
-      'Choix du moteur de facturation. Valeurs : "none" (interne CRM, mode legacy) ou "qonto" (Qonto Factures, PDP).',
+      'Choix du moteur de facturation. Valeurs : "none" (interne CRM, mode legacy), "qonto" (Qonto Factures, PDP) ou "pennylane" (Pennylane, compta + facturation).',
     defaultValue: 'none',
     envVar: 'BILLING_PROVIDER',
+  },
+  // -- Pennylane --
+  {
+    key: 'billing.pennylane.apiToken',
+    category: 'billing',
+    label: 'Pennylane - Token API',
+    description:
+      'Token genere dans Pennylane > Parametres > Developpeurs (scopes customer_invoices:all + customers). Requis si billing.provider = "pennylane".',
+    isSecret: true,
+  },
+  {
+    key: 'billing.pennylane.apiBase',
+    category: 'billing',
+    label: 'Pennylane - Base API (optionnel)',
+    description: 'Defaut : https://app.pennylane.com/api/external/v2. A ne changer que si Pennylane fait evoluer son endpoint.',
   },
   {
     key: 'billing.autoPushContracts',

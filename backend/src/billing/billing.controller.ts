@@ -10,6 +10,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { BillingService } from './billing.service';
 import { CashFlowService } from './cashflow.service';
 import { QontoProvider } from './qonto.provider';
+import { PennylaneProvider } from './pennylane.provider';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -26,6 +27,7 @@ export class BillingController {
     private readonly billing: BillingService,
     private readonly cashflow: CashFlowService,
     private readonly qonto: QontoProvider,
+    private readonly pennylane: PennylaneProvider,
   ) {}
 
   @Roles('ADMIN', 'MANAGER')
@@ -44,6 +46,12 @@ export class BillingController {
   @Post('test/qonto')
   testQonto(@CurrentUser() user: JwtUser) {
     return this.qonto.ping(user.tenantId);
+  }
+
+  @Roles('ADMIN')
+  @Post('test/pennylane')
+  testPennylane(@CurrentUser() user: JwtUser) {
+    return this.pennylane.ping(user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER')
