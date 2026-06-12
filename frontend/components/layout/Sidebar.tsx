@@ -102,6 +102,17 @@ const sections: NavSection[] = [
     ],
   },
   {
+    title: 'SIRH',
+    items: [
+      { href: '/conges', label: 'Conges & absences', icon: CalendarDays },
+      { href: '/planning', label: 'Planning equipe', icon: CalendarRange },
+      { href: '/feuilles', label: 'Feuilles de temps', icon: Timer },
+      { href: '/frais', label: 'Notes de frais', icon: Receipt },
+      { href: '/entretiens', label: 'Entretiens & objectifs', icon: MessagesSquare },
+      { href: '/rh', label: 'Dossier RH', icon: IdCard },
+    ],
+  },
+  {
     title: 'Outils',
     items: [
       { href: '/tasks', label: 'Taches', icon: CheckSquare },
@@ -261,13 +272,7 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
           <ThemeToggle />
         </div>
         <NavLink item={{ href: '/aide', label: 'Aide & documentation', icon: HelpCircle }} active={isActive('/aide')} />
-        <NavLink item={{ href: '/conges', label: 'Conges & absences', icon: CalendarDays }} active={isActive('/conges')} />
-        <NavLink item={{ href: '/planning', label: 'Planning equipe', icon: CalendarRange }} active={isActive('/planning')} />
-        <NavLink item={{ href: '/frais', label: 'Notes de frais', icon: Receipt }} active={isActive('/frais')} />
-        <NavLink item={{ href: '/rh', label: 'Dossier RH', icon: IdCard }} active={isActive('/rh')} />
-        <NavLink item={{ href: '/entretiens', label: 'Entretiens', icon: MessagesSquare }} active={isActive('/entretiens')} />
         <NavLink item={{ href: '/time', label: 'Mon temps', icon: Clock }} active={isActive('/time')} />
-        <NavLink item={{ href: '/feuilles', label: 'Feuilles de temps', icon: Timer }} active={isActive('/feuilles')} />
         <NavLink item={{ href: '/settings', label: 'Mon profil', icon: User }} active={isActive('/settings')} />
         <button
           onClick={handleLogout}
