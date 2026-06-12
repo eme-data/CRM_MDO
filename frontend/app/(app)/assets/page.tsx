@@ -37,7 +37,13 @@ export default function AssetsPage() {
   }
   useEffect(() => {
     load();
-    api.get('/companies?pageSize=500').then((r) => setCompanies(r.items));
+    // Alimente le selecteur "Client" du formulaire. On surface une erreur
+    // explicite au lieu de laisser le menu vide en silence (sinon "ca marche
+    // pas" est indiagnostiquable). r.items defensif si la reponse change.
+    api
+      .get('/companies?pageSize=500')
+      .then((r) => setCompanies(Array.isArray(r?.items) ? r.items : []))
+      .catch((err) => toast.error('Chargement des societes echoue : ' + (err?.message ?? 'erreur')));
   }, [filterType, filterExpiring]);
   useReloadOnFocus(load);
 
