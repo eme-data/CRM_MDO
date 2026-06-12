@@ -90,6 +90,14 @@ export class CaddyProvisioningService implements OnModuleInit {
     return this.config.get<string>('CADDY_ADMIN_LISTEN') ?? '0.0.0.0:2019';
   }
 
+  // Origines autorisees a appeler l'admin API. Quand l'admin n'ecoute pas sur
+  // loopback, Caddy refuse par defaut les requetes dont le Host n'est pas dans
+  // cette liste (403 "origin not allowed"). Le backend appelle http://caddy:2019
+  // -> il faut y autoriser "caddy:2019".
+  private get adminOrigins(): string {
+    return this.config.get<string>('CADDY_ADMIN_ORIGINS') ?? 'caddy:2019 127.0.0.1:2019 localhost:2019';
+  }
+
   // Genere la Caddyfile complete : un global block + un site block par tenant.
   // Chaque site block route /api/* vers backend, /health vers backend,
   // /metrics restreint LAN, le reste vers frontend (Next.js).
@@ -103,7 +111,9 @@ export class CaddyProvisioningService implements OnModuleInit {
       `{`,
       `    email ${this.acmeEmail}`,
       // Admin API joignable par le conteneur backend (sinon plus de reload possible).
-      `    admin ${this.adminListen}`,
+      `    admin ${this.adminListen} {`,
+      `        origins ${this.adminOrigins}`,
+      `    }`,
       `    servers {`,
       `        trusted_proxies static private_ranges`,
       `    }`,

@@ -5,7 +5,12 @@
     # backend (CaddyProvisioningService) regenere la config a chaud lors de
     # l'ajout/suppression d'un tenant. Par defaut Caddy bind l'admin sur
     # localhost:2019, injoignable depuis le conteneur backend.
-    admin 0.0.0.0:2019
+    admin 0.0.0.0:2019 {
+        # Autorise le conteneur backend (CaddyProvisioningService) a appeler
+        # l'admin API. Sans ca Caddy renvoie 403 "origin not allowed" des que
+        # l'admin n'ecoute pas sur loopback.
+        origins caddy:2019 127.0.0.1:2019 localhost:2019
+    }
     servers {
         # Le frontend Next.js est derriere Caddy ; sans `trusted_proxies` les
         # logs et le rate-limit Caddy n'auraient pas l'IP client reelle.
