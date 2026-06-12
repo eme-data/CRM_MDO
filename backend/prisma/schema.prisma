@@ -125,6 +125,7 @@ model Tenant {
   expenseClaims          ExpenseClaim[]
   employeeProfiles       EmployeeProfile[]
   employeeDocuments      EmployeeDocument[]
+  timesheets             Timesheet[]
 
   @@index([customDomain])
   @@index([slug])
@@ -241,6 +242,8 @@ model User {
   managedEmployees           EmployeeProfile[]             @relation("EmployeeProfileManager")
   employeeDocuments          EmployeeDocument[]            @relation("EmployeeDocumentUser")
   uploadedEmployeeDocuments  EmployeeDocument[]            @relation("EmployeeDocumentUploader")
+  timesheets                 Timesheet[]                   @relation("TimesheetUser")
+  approvedTimesheets         Timesheet[]                   @relation("TimesheetApprover")
 
   // Email unique PAR tenant : permet d'avoir le meme email dans 2 tenants
   // differents (ex: mathieu@mdoservices.fr peut exister dans tenant 'mdo'
@@ -1620,6 +1623,43 @@ model EmployeeDocument {
   createdAt    DateTime        @default(now())
 
   @@index([tenantId])
+  @@index([userId])
+}
+
+// =====================================================================
+// SIRH - Feuilles de temps (validation RH, multi-tenant)
+// =====================================================================
+enum TimesheetStatus {
+  DRAFT // brouillon (non utilise pour l'instant)
+  SUBMITTED // soumise, en attente de validation
+  APPROVED // validee
+  REJECTED // refusee
+}
+
+// Feuille de temps HEBDOMADAIRE : couche de validation RH au-dessus des
+// TimeEntry (le detail des heures reste dans TimeEntry, agrege par semaine).
+// totalMinutes = snapshot au moment de la soumission.
+model Timesheet {
+  id           String          @id @default(uuid())
+  tenantId     String?
+  tenant       Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId       String
+  user         User            @relation("TimesheetUser", fields: [userId], references: [id], onDelete: Cascade)
+  periodStart  DateTime        @db.Date // lundi de la semaine
+  periodEnd    DateTime        @db.Date // dimanche
+  status       TimesheetStatus @default(SUBMITTED)
+  totalMinutes Int             @default(0)
+  submittedAt  DateTime?
+  approverId   String?
+  approver     User?           @relation("TimesheetApprover", fields: [approverId], references: [id], onDelete: SetNull)
+  decidedAt    DateTime?
+  decisionNote String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([tenantId, userId, periodStart])
+  @@index([tenantId])
+  @@index([tenantId, status])
   @@index([userId])
 }
 
