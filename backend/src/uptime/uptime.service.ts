@@ -111,34 +111,57 @@ export class UptimeService {
 
   private async probe(monitor: { url: string; method: string; expectedStatus: number }): Promise<ProbeResult> {
     const start = Date.now();
-    try {
-      await assertSafePublicUrl(monitor.url);
-    } catch (err: any) {
-      return { isUp: false, httpCode: null, responseMs: 0, error: 'URL refusee : ' + err.message };
-    }
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), HTTP_TIMEOUT_MS);
-    try {
-      const r = await fetch(monitor.url, {
-        method: monitor.method,
-        signal: ctrl.signal,
-        redirect: 'manual',
-        headers: { 'User-Agent': 'CRM-MDO-Uptime/1.0' },
-      });
-      const responseMs = Date.now() - start;
-      const isUp = r.status === monitor.expectedStatus;
-      return {
-        isUp,
-        httpCode: r.status,
-        responseMs,
-        error: isUp ? null : 'HTTP ' + r.status + ' (attendu : ' + monitor.expectedStatus + ')',
-      };
-    } catch (err: any) {
-      const responseMs = Date.now() - start;
-      const reason = err.name === 'AbortError' ? 'Timeout (' + HTTP_TIMEOUT_MS + 'ms)' : (err.message ?? 'Erreur reseau');
-      return { isUp: false, httpCode: null, responseMs, error: reason };
-    } finally {
-      clearTimeout(timer);
+    const MAX_REDIRECTS = 5;
+    let url = monitor.url;
+
+    // On suit les redirections (3xx) jusqu'a MAX_REDIRECTS : un site qui
+    // redirige (www -> apex, http -> https, /) est joignable = UP. On garde
+    // `redirect: 'manual'` + on re-valide CHAQUE cible avec assertSafePublicUrl
+    // (anti-SSRF / DNS rebinding : sinon une redirection vers une IP interne
+    // ferait fuiter une requete vers le reseau prive).
+    for (let hop = 0; ; hop++) {
+      try {
+        await assertSafePublicUrl(url);
+      } catch (err: any) {
+        return { isUp: false, httpCode: null, responseMs: Date.now() - start, error: 'URL refusee : ' + err.message };
+      }
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), HTTP_TIMEOUT_MS);
+      try {
+        const r = await fetch(url, {
+          method: monitor.method,
+          signal: ctrl.signal,
+          redirect: 'manual',
+          headers: { 'User-Agent': 'CRM-MDO-Uptime/1.0' },
+        });
+
+        // Redirection : on suit la cible (re-validee au tour suivant).
+        if (r.status >= 300 && r.status < 400) {
+          const loc = r.headers.get('location');
+          if (loc && hop < MAX_REDIRECTS) {
+            url = new URL(loc, url).toString();
+            continue; // le `finally` libere le timer avant le tour suivant
+          }
+        }
+
+        const responseMs = Date.now() - start;
+        // UP si : statut attendu exact (cas expectedStatus personnalise), OU
+        // toute reponse 2xx/3xx (le serveur repond). 4xx/5xx = DOWN.
+        const isUp =
+          r.status === monitor.expectedStatus || (r.status >= 200 && r.status < 400);
+        return {
+          isUp,
+          httpCode: r.status,
+          responseMs,
+          error: isUp ? null : 'HTTP ' + r.status + ' (attendu : ' + monitor.expectedStatus + ')',
+        };
+      } catch (err: any) {
+        const responseMs = Date.now() - start;
+        const reason = err.name === 'AbortError' ? 'Timeout (' + HTTP_TIMEOUT_MS + 'ms)' : (err.message ?? 'Erreur reseau');
+        return { isUp: false, httpCode: null, responseMs, error: reason };
+      } finally {
+        clearTimeout(timer);
+      }
     }
   }
 
