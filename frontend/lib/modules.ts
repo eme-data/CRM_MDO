@@ -38,6 +38,9 @@ export const FEATURE_BY_PATH: { prefix: string; feature: string }[] = [
   { prefix: '/tasks', feature: 'outils.tasks' },
   { prefix: '/templates', feature: 'outils.templates' },
   { prefix: '/kb', feature: 'outils.kb' },
+  // Stock (l'ordre importe peu : featureForPath prend le prefixe le plus long)
+  { prefix: '/stock/commandes', feature: 'stock.purchasing' },
+  { prefix: '/stock', feature: 'stock.inventory' },
   // SIRH
   { prefix: '/sirh', feature: 'sirh.dashboard' },
   { prefix: '/conges', feature: 'sirh.leaves' },

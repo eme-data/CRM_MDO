@@ -33,6 +33,7 @@ export const GROUPS: GroupDef[] = [
   { code: 'support', label: 'Service & Support' },
   { code: 'infogerance', label: 'Infogerance' },
   { code: 'outils', label: 'Outils' },
+  { code: 'stock', label: 'Stock' },
   { code: 'sirh', label: 'SIRH' },
 ];
 
@@ -66,6 +67,10 @@ export const FEATURES: FeatureDef[] = [
   { code: 'outils.kb', label: 'Base de connaissances', group: 'outils', api: ['kb'] },
   { code: 'outils.templates', label: 'Templates de reponse', group: 'outils', api: ['response-templates'] },
 
+  // ----- Stock -----
+  { code: 'stock.inventory', label: 'Inventaire & mouvements', group: 'stock', api: ['stock/items', 'stock/movements', 'stock/transfer', 'stock/adjust', 'stock/locations', 'stock/serials', 'stock/dashboard'] },
+  { code: 'stock.purchasing', label: 'Approvisionnement (commandes fournisseurs)', group: 'stock', api: ['stock/purchase-orders', 'stock/suppliers'] },
+
   // ----- SIRH -----
   { code: 'sirh.dashboard', label: 'Tableau de bord RH', group: 'sirh', api: ['hr-dashboard'] },
   { code: 'sirh.leaves', label: 'Conges & absences', group: 'sirh', api: ['leaves'] },
@@ -96,8 +101,8 @@ export const OFFERS: OfferDef[] = [
   },
   {
     code: 'msp', label: 'MSP complet',
-    description: 'Offre infogerance complete : commercial, support, infogerance, outils, pilotage.',
-    features: featuresOfGroups('pilotage', 'commercial', 'support', 'infogerance', 'outils'),
+    description: 'Offre infogerance complete : commercial, support, infogerance, stock, outils, pilotage.',
+    features: featuresOfGroups('pilotage', 'commercial', 'support', 'infogerance', 'stock', 'outils'),
   },
   {
     code: 'rh', label: 'RH (SIRH)',

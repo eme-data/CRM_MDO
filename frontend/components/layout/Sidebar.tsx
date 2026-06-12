@@ -29,6 +29,8 @@ import {
   CalendarRange,
   MessagesSquare,
   Footprints,
+  Boxes,
+  ShoppingCart,
   User,
   ChevronDown,
   KeyRound,
@@ -122,6 +124,13 @@ const sections: NavSection[] = [
       { href: '/tasks', label: 'Taches', icon: CheckSquare },
       { href: '/templates', label: 'Templates', icon: ClipboardList },
       { href: '/kb', label: 'Knowledge base', icon: BookOpen },
+    ],
+  },
+  {
+    title: 'Stock',
+    items: [
+      { href: '/stock', label: 'Inventaire', icon: Boxes },
+      { href: '/stock/commandes', label: 'Commandes fournisseurs', icon: ShoppingCart },
     ],
   },
 ];

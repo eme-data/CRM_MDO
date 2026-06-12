@@ -140,6 +140,13 @@ model Tenant {
   objectives             Objective[]
   journeyTemplates       JourneyTemplate[]
   journeys               Journey[]
+  suppliers              Supplier[]
+  stockLocations         StockLocation[]
+  stockItems             StockItem[]
+  stockLevels            StockLevel[]
+  stockMovements         StockMovement[]
+  stockSerials           StockSerial[]
+  purchaseOrders         PurchaseOrder[]
 
   @@index([customDomain])
   @@index([slug])
@@ -262,6 +269,8 @@ model User {
   conductedReviews           Review[]                      @relation("ReviewManager")
   objectives                 Objective[]                   @relation("ObjectiveUser")
   journeys                   Journey[]                     @relation("JourneyEmployee")
+  stockMovements             StockMovement[]               @relation("StockMovementUser")
+  createdPurchaseOrders      PurchaseOrder[]               @relation("PurchaseOrderCreator")
 
   // Email unique PAR tenant : permet d'avoir le meme email dans 2 tenants
   // differents (ex: mathieu@mdoservices.fr peut exister dans tenant 'mdo'
@@ -1834,6 +1843,199 @@ model JourneyTask {
   @@index([journeyId])
 }
 
+// ============================================================================
+// GESTION DE STOCK (migration 0015) — interne (materiel/consommables) ET
+// revendable (lie au catalogue Produits). Multi-emplacements, mouvements
+// valorises (PMP), commandes fournisseurs + receptions, numeros de serie.
+// ============================================================================
+
+enum StockMovementType {
+  IN // entree : reception commande, achat, retour client
+  OUT // sortie : vente, consomme sur intervention, perte/casse
+  ADJUSTMENT // ajustement d'inventaire (ecart constate)
+  TRANSFER // transfert entre emplacements
+}
+
+enum PurchaseOrderStatus {
+  DRAFT // brouillon
+  ORDERED // commande envoyee au fournisseur
+  PARTIAL // partiellement recue
+  RECEIVED // entierement recue
+  CANCELLED
+}
+
+enum StockSerialStatus {
+  IN_STOCK // en stock
+  DEPLOYED // pose chez un client (lie a un Asset)
+  SOLD // vendu
+  DEFECTIVE // defectueux / SAV
+  RETURNED // retourne fournisseur
+}
+
+model Supplier {
+  id             String          @id @default(uuid())
+  tenantId       String?
+  tenant         Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  notes          String?
+  active         Boolean         @default(true)
+  items          StockItem[]
+  purchaseOrders PurchaseOrder[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([tenantId])
+}
+
+model StockLocation {
+  id             String          @id @default(uuid())
+  tenantId       String?
+  tenant         Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name           String
+  code           String?
+  address        String?
+  active         Boolean         @default(true)
+  levels         StockLevel[]
+  movements      StockMovement[]
+  serials        StockSerial[]
+  purchaseOrders PurchaseOrder[]
+  createdAt      DateTime        @default(now())
+
+  @@index([tenantId])
+}
+
+model StockItem {
+  id           String              @id @default(uuid())
+  tenantId     String?
+  tenant       Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sku          String // reference interne
+  name         String
+  description  String?
+  category     String?
+  unit         String              @default("piece") // piece, metre, licence...
+  // Lien optionnel au catalogue commercial (prix de vente, TVA...).
+  productId    String?
+  product      Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
+  supplierId   String?
+  supplier     Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  // Cout moyen pondere (PMP), recalcule a chaque entree valorisee.
+  avgCostHt    Decimal             @default(0) @db.Decimal(12, 2)
+  reorderPoint Decimal             @default(0) @db.Decimal(12, 2) // seuil de reappro
+  trackSerial  Boolean             @default(false)
+  active       Boolean             @default(true)
+  levels       StockLevel[]
+  movements    StockMovement[]
+  serials      StockSerial[]
+  poLines      PurchaseOrderLine[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@unique([tenantId, sku])
+  @@index([tenantId])
+  @@index([tenantId, active])
+}
+
+model StockLevel {
+  id         String        @id @default(uuid())
+  tenantId   String?
+  tenant     Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  itemId     String
+  item       StockItem     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  locationId String
+  location   StockLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  quantity   Decimal       @default(0) @db.Decimal(12, 2)
+  updatedAt  DateTime      @updatedAt
+
+  @@unique([itemId, locationId])
+  @@index([tenantId])
+  @@index([itemId])
+}
+
+model StockMovement {
+  id             String            @id @default(uuid())
+  tenantId       String?
+  tenant         Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  itemId         String
+  item           StockItem         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  locationId     String
+  location       StockLocation     @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  type           StockMovementType
+  quantity       Decimal           @db.Decimal(12, 2) // toujours positif ; le sens vient de `type`
+  unitCostHt     Decimal?          @db.Decimal(12, 2)
+  reason         String?
+  // Rattachement optionnel (ex: refType="Intervention"/"Invoice"/"PurchaseOrder").
+  refType        String?
+  refId          String?
+  // Pour TRANSFER : emplacement source (locationId = destination).
+  fromLocationId String?
+  performedById  String?
+  performedBy    User?             @relation("StockMovementUser", fields: [performedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime          @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
+  @@index([itemId])
+}
+
+model StockSerial {
+  id         String            @id @default(uuid())
+  tenantId   String?
+  tenant     Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  itemId     String
+  item       StockItem         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  serial     String
+  status     StockSerialStatus @default(IN_STOCK)
+  locationId String?
+  location   StockLocation?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  notes      String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@unique([tenantId, serial])
+  @@index([tenantId])
+  @@index([itemId])
+}
+
+model PurchaseOrder {
+  id           String              @id @default(uuid())
+  tenantId     String?
+  tenant       Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  reference    String
+  supplierId   String
+  supplier     Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  locationId   String
+  location     StockLocation       @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  status       PurchaseOrderStatus @default(DRAFT)
+  orderDate    DateTime?           @db.Date
+  expectedDate DateTime?           @db.Date
+  notes        String?
+  createdById  String?
+  createdBy    User?               @relation("PurchaseOrderCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  lines        PurchaseOrderLine[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@unique([tenantId, reference])
+  @@index([tenantId])
+  @@index([tenantId, status])
+}
+
+model PurchaseOrderLine {
+  id               String        @id @default(uuid())
+  poId             String
+  po               PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  itemId           String
+  item             StockItem     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  quantityOrdered  Decimal       @db.Decimal(12, 2)
+  quantityReceived Decimal       @default(0) @db.Decimal(12, 2)
+  unitCostHt       Decimal       @db.Decimal(12, 2)
+
+  @@index([poId])
+}
+
 model Invoice {
   id        String        @id @default(uuid())
   // Multi-tenant : nullable transitoire. number passe a unique par tenant.
@@ -2766,6 +2968,7 @@ model Product {
 
   quoteLines         QuoteLine[]
   quoteTemplateLines QuoteTemplateLine[]
+  stockItems         StockItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

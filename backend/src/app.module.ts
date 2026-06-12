@@ -54,6 +54,7 @@ import { HrDashboardModule } from './hr-dashboard/hr-dashboard.module';
 import { ModulesModule } from './modules/modules.module';
 import { ModuleGuard } from './modules/module.guard';
 import { DemoModule } from './demo/demo.module';
+import { StockModule } from './stock/stock.module';
 import { EmergencyPdfModule } from './emergency-pdf/emergency-pdf.module';
 import { RunbooksModule } from './runbooks/runbooks.module';
 import { MfaModule } from './mfa/mfa.module';
@@ -187,6 +188,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     HrDashboardModule,
     ModulesModule,
     DemoModule,
+    StockModule,
     EmergencyPdfModule,
     RunbooksModule,
     ImportsModule,
