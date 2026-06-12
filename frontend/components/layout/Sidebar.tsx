@@ -258,6 +258,7 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
         </div>
         <NavLink item={{ href: '/aide', label: 'Aide & documentation', icon: HelpCircle }} active={isActive('/aide')} />
         <NavLink item={{ href: '/conges', label: 'Conges & absences', icon: CalendarDays }} active={isActive('/conges')} />
+        <NavLink item={{ href: '/frais', label: 'Notes de frais', icon: Receipt }} active={isActive('/frais')} />
         <NavLink item={{ href: '/time', label: 'Mon temps', icon: Clock }} active={isActive('/time')} />
         <NavLink item={{ href: '/settings', label: 'Mon profil', icon: User }} active={isActive('/settings')} />
         <button

@@ -121,6 +121,8 @@ model Tenant {
   leaveTypes             LeaveType[]
   leaveRequests          LeaveRequest[]
   leaveBalances          LeaveBalance[]
+  expenseCategories      ExpenseCategory[]
+  expenseClaims          ExpenseClaim[]
 
   @@index([customDomain])
   @@index([slug])
@@ -231,6 +233,8 @@ model User {
   leaveRequests              LeaveRequest[]                @relation("LeaveRequestUser")
   approvedLeaves             LeaveRequest[]                @relation("LeaveRequestApprover")
   leaveBalances              LeaveBalance[]                @relation("LeaveBalanceUser")
+  expenseClaims              ExpenseClaim[]                @relation("ExpenseClaimUser")
+  approvedExpenses           ExpenseClaim[]                @relation("ExpenseClaimApprover")
 
   // Email unique PAR tenant : permet d'avoir le meme email dans 2 tenants
   // differents (ex: mathieu@mdoservices.fr peut exister dans tenant 'mdo'
@@ -1479,6 +1483,65 @@ model LeaveBalance {
 
   @@unique([tenantId, userId, typeId, year])
   @@index([tenantId])
+  @@index([userId])
+}
+
+// =====================================================================
+// SIRH - Notes de frais (brique RH, multi-tenant)
+// =====================================================================
+enum ExpenseStatus {
+  PENDING // en attente de validation
+  APPROVED // validee (a rembourser)
+  REJECTED // refusee
+  REIMBURSED // remboursee
+  CANCELLED // annulee
+}
+
+// Categorie de depense configurable par tenant (Repas, Transport, ...).
+model ExpenseCategory {
+  id        String   @id @default(uuid())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name      String
+  color     String   @default("#0ea5e9")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  claims ExpenseClaim[]
+
+  @@index([tenantId])
+}
+
+// Note de frais : depense engagee par un collaborateur, avec justificatif
+// (Attachment reference par receiptAttachmentId), workflow de validation puis
+// remboursement.
+model ExpenseClaim {
+  id                  String          @id @default(uuid())
+  tenantId            String?
+  tenant              Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId              String
+  user                User            @relation("ExpenseClaimUser", fields: [userId], references: [id], onDelete: Cascade)
+  categoryId          String
+  category            ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  date                DateTime        @db.Date
+  description         String
+  merchant            String?
+  amountTtc           Decimal         @db.Decimal(10, 2)
+  vatAmount           Decimal?        @db.Decimal(10, 2)
+  currency            String          @default("EUR")
+  // Justificatif : id d'un Attachment (stockage reutilise). Sert via /expenses/:id/receipt.
+  receiptAttachmentId String?
+  status              ExpenseStatus   @default(PENDING)
+  approverId          String?
+  approver            User?           @relation("ExpenseClaimApprover", fields: [approverId], references: [id], onDelete: SetNull)
+  decidedAt           DateTime?
+  decisionNote        String?
+  reimbursedAt        DateTime?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, status])
   @@index([userId])
 }
 
