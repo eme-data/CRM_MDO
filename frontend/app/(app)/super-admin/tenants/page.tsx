@@ -24,8 +24,15 @@ interface TenantRow {
   enableInvoices: boolean;
   enableOpportunities: boolean;
   enableQuotes: boolean;
+  enabledModules: string[];
   createdAt: string;
   _count: { users: number; portalUsers: number };
+}
+
+interface ModuleCatalog {
+  groups: { code: string; label: string }[];
+  features: { code: string; label: string; group: string }[];
+  offers: { code: string; label: string; description: string; features: string[] }[];
 }
 
 export default function SuperAdminTenantsPage() {
@@ -137,12 +144,13 @@ export default function SuperAdminTenantsPage() {
                     </a>
                   </td>
                   <td className="p-3 text-xs">
-                    <div className="flex flex-wrap gap-1">
-                      {t.enableContracts && <span className="badge bg-blue-100 text-blue-700">Contrats</span>}
-                      {t.enableInvoices && <span className="badge bg-emerald-100 text-emerald-700">Factures</span>}
-                      {t.enableOpportunities && <span className="badge bg-purple-100 text-purple-700">Opps</span>}
-                      {t.enableQuotes && <span className="badge bg-amber-100 text-amber-700">Devis</span>}
-                    </div>
+                    {(t.enabledModules?.length ?? 0) === 0 ? (
+                      <span className="badge bg-slate-800 text-white">Acces complet</span>
+                    ) : (
+                      <span className="badge bg-mdo-100 text-mdo-700" title={t.enabledModules.join(', ')}>
+                        {t.enabledModules.length} module{t.enabledModules.length > 1 ? 's' : ''}
+                      </span>
+                    )}
                   </td>
                   <td className="p-3 text-xs">
                     <div className="flex items-center gap-2 text-slate-600">
@@ -220,6 +228,22 @@ function TenantForm({
   });
   const [loading, setLoading] = useState(false);
 
+  // ----- Offre / modules (entitlements) -----
+  const [catalog, setCatalog] = useState<ModuleCatalog | null>(null);
+  const [enabledModules, setEnabledModules] = useState<string[]>(tenant?.enabledModules ?? []);
+  // Acces complet = enabledModules vide (cf backend). Nouveau tenant : complet par defaut.
+  const [fullAccess, setFullAccess] = useState<boolean>(tenant ? (tenant.enabledModules?.length ?? 0) === 0 : true);
+  useEffect(() => { api.get<ModuleCatalog>('/modules/catalog').then(setCatalog).catch(() => {}); }, []);
+
+  function toggleFeature(code: string) {
+    setEnabledModules((m) => (m.includes(code) ? m.filter((x) => x !== code) : [...m, code]));
+  }
+  function applyOffer(features: string[]) { setFullAccess(false); setEnabledModules(features); }
+  function setGroup(groupCode: string, on: boolean) {
+    const codes = (catalog?.features ?? []).filter((f) => f.group === groupCode).map((f) => f.code);
+    setEnabledModules((m) => (on ? Array.from(new Set([...m, ...codes])) : m.filter((c) => !codes.includes(c))));
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -233,6 +257,14 @@ function TenantForm({
       // slug n'est pas modifiable apres creation (il est utilise dans les
       // logs et l'identification interne — changer = drame).
       if (tenant) delete payload.slug;
+      // Entitlements : acces complet => [] (= illimite cote backend), sinon la
+      // liste cochee (au moins un module requis).
+      if (!fullAccess && enabledModules.length === 0) {
+        toast.error('Choisissez au moins un module, ou activez l\'acces complet');
+        setLoading(false);
+        return;
+      }
+      payload.enabledModules = fullAccess ? [] : enabledModules;
       if (tenant) {
         await api.patch('/tenants/' + tenant.id, payload);
         toast.success('Tenant mis a jour');
@@ -370,26 +402,60 @@ function TenantForm({
         </div>
       </div>
 
-      <div>
-        <h4 className="text-sm font-semibold mb-2">Modules actives</h4>
-        <p className="text-xs text-slate-500 mb-2">Decocher pour cacher les sections correspondantes (utile pour une DSI publique sans facturation).</p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          {[
-            { key: 'enableContracts' as const, label: 'Contrats' },
-            { key: 'enableInvoices' as const, label: 'Factures' },
-            { key: 'enableOpportunities' as const, label: 'Opportunites' },
-            { key: 'enableQuotes' as const, label: 'Devis' },
-          ].map((m) => (
-            <label key={m.key} className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={data[m.key]}
-                onChange={(e) => setData({ ...data, [m.key]: e.target.checked })}
-              />
-              {m.label}
-            </label>
-          ))}
-        </div>
+      <div className="border-t pt-4">
+        <h4 className="text-sm font-semibold mb-1">Offre & modules inclus</h4>
+        <p className="text-xs text-slate-500 mb-3">Definit ce que ce client voit (menu) et peut utiliser (API). Les modules non inclus sont masques et bloques.</p>
+
+        <label className="inline-flex items-center gap-2 text-sm font-medium mb-3">
+          <input type="checkbox" checked={fullAccess} onChange={(e) => setFullAccess(e.target.checked)} />
+          Acces complet (toutes les fonctionnalites, y compris les futures)
+        </label>
+
+        {!fullAccess && (
+          <div className="space-y-4">
+            {/* Offres pre-definies */}
+            {catalog && catalog.offers.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <span className="text-xs text-slate-500 self-center">Partir d'une offre :</span>
+                {catalog.offers.map((o) => (
+                  <button key={o.code} type="button" onClick={() => applyOffer(o.features)} title={o.description}
+                    className="text-xs px-2.5 py-1 rounded-full border border-mdo-300 text-mdo-700 hover:bg-mdo-50">
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Cases a cocher par groupe */}
+            {!catalog ? <p className="text-sm text-slate-400">Chargement du catalogue...</p> : (
+              <div className="grid sm:grid-cols-2 gap-4">
+                {catalog.groups.map((g) => {
+                  const feats = catalog.features.filter((f) => f.group === g.code);
+                  const allOn = feats.every((f) => enabledModules.includes(f.code));
+                  return (
+                    <fieldset key={g.code} className="border rounded-md p-3">
+                      <legend className="text-xs font-semibold px-1 flex items-center gap-2">
+                        {g.label}
+                        <button type="button" onClick={() => setGroup(g.code, !allOn)} className="text-[11px] text-mdo-600 hover:underline">
+                          {allOn ? 'tout retirer' : 'tout cocher'}
+                        </button>
+                      </legend>
+                      <div className="space-y-1 mt-1">
+                        {feats.map((f) => (
+                          <label key={f.code} className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={enabledModules.includes(f.code)} onChange={() => toggleFeature(f.code)} />
+                            {f.label}
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  );
+                })}
+              </div>
+            )}
+            <p className="text-xs text-slate-500">{enabledModules.length} module(s) selectionne(s).</p>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-2">

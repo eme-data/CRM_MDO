@@ -41,6 +41,7 @@ export class TenantsController {
     brandDpoEmail?: string;
     brandWebsiteUrl?: string;
     brandFooterText?: string;
+    enabledModules?: string[];
   }) {
     return this.service.create(body);
   }

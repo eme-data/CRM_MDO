@@ -56,6 +56,12 @@ model Tenant {
   enableOpportunities Boolean @default(true)
   enableQuotes        Boolean @default(true)
 
+  // Entitlements modulaires (offre du client). Liste de codes de features (cf
+  // backend/src/modules/module-catalog.ts). VIDE = acces complet (tout, y
+  // compris features futures) -> cas du tenant MDO interne. NON VIDE = acces
+  // exactement aux codes listes (UI masquee + API 403 via ModuleGuard).
+  enabledModules      String[] @default([])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

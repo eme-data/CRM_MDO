@@ -9,6 +9,8 @@ export interface User {
   // Multi-tenant
   tenantId?: string | null;
   isSuperAdmin?: boolean;
+  // Entitlements : codes de features effectifs du tenant (cf lib/modules).
+  modules?: string[];
 }
 
 export async function login(email: string, password: string, totpCode?: string) {

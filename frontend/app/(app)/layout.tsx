@@ -1,14 +1,16 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { CommandPalette } from '@/components/CommandPalette';
 import { TimerWidget } from '@/components/TimerWidget';
 import { me, User } from '@/lib/auth';
+import { featureForPath, hasFeature, homePathFor } from '@/lib/modules';
 import { bootstrapNativePush } from '@/lib/native';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -32,6 +34,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       .then((u) => { setUser(u); setLoading(false); })
       .catch(() => router.replace('/login'));
   }, [router]);
+
+  // Garde d'entitlements : si l'URL courante appartient a un module non inclus
+  // dans l'offre du tenant, on redirige vers une page autorisee. Le super-admin
+  // et les tenants sans restriction ont `modules` = tout le catalogue.
+  useEffect(() => {
+    if (!user || !pathname) return;
+    const feature = featureForPath(pathname);
+    if (feature && !hasFeature(user.modules, feature)) {
+      router.replace(homePathFor(user.modules));
+    }
+  }, [user, pathname, router]);
 
   if (loading) {
     return (

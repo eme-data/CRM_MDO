@@ -51,6 +51,8 @@ import { PlanningModule } from './planning/planning.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { JourneysModule } from './journeys/journeys.module';
 import { HrDashboardModule } from './hr-dashboard/hr-dashboard.module';
+import { ModulesModule } from './modules/modules.module';
+import { ModuleGuard } from './modules/module.guard';
 import { EmergencyPdfModule } from './emergency-pdf/emergency-pdf.module';
 import { RunbooksModule } from './runbooks/runbooks.module';
 import { MfaModule } from './mfa/mfa.module';
@@ -182,6 +184,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     ReviewsModule,
     JourneysModule,
     HrDashboardModule,
+    ModulesModule,
     EmergencyPdfModule,
     RunbooksModule,
     ImportsModule,
@@ -263,6 +266,13 @@ import { RolesGuard } from './common/guards/roles.guard';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    // Apres RolesGuard : entitlements par tenant. Bloque (403) l'acces aux
+    // routes d'un module non inclus dans l'offre du tenant. Super-admin et
+    // tenants sans restriction (enabledModules vide) passent. cf module-catalog.
+    {
+      provide: APP_GUARD,
+      useClass: ModuleGuard,
     },
   ],
 })

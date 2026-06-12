@@ -48,6 +48,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logout } from '@/lib/auth';
+import { featureForPath, hasFeature } from '@/lib/modules';
 import { useBranding } from '@/components/BrandingProvider';
 import { NotificationBell } from './NotificationBell';
 import { ThemeToggle } from '../ThemeToggle';
@@ -173,7 +174,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   );
 }
 
-export function Sidebar({ user }: { user?: { firstName: string; lastName: string; role: string; isSuperAdmin?: boolean } }) {
+export function Sidebar({ user }: { user?: { firstName: string; lastName: string; role: string; isSuperAdmin?: boolean; modules?: string[] } }) {
   const pathname = usePathname();
   const router = useRouter();
   const isAdmin = user?.role === 'ADMIN';
@@ -205,18 +206,24 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
       </div>
 
       <nav className="flex-1 px-3 py-4 overflow-y-auto sidebar-scroll">
-        {sections.map((section) => (
-          <div key={section.title} className="mb-4">
-            <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-              {section.title}
-            </p>
-            <div className="space-y-0.5 mt-1">
-              {section.items.map((item) => (
-                <NavLink key={item.href} item={item} active={isActive(item.href)} />
-              ))}
+        {sections.map((section) => {
+          // Entitlements : on ne garde que les entrees dont le module est inclus
+          // dans l'offre du tenant. Une section sans entree visible disparait.
+          const visible = section.items.filter((item) => hasFeature(user?.modules, featureForPath(item.href)));
+          if (visible.length === 0) return null;
+          return (
+            <div key={section.title} className="mb-4">
+              <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                {section.title}
+              </p>
+              <div className="space-y-0.5 mt-1">
+                {visible.map((item) => (
+                  <NavLink key={item.href} item={item} active={isActive(item.href)} />
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {isAdmin && <HealthBadge />}
 

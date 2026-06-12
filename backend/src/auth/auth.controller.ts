@@ -24,6 +24,9 @@ import { AllowMfaPending } from '../common/decorators/allow-mfa-pending.decorato
 import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { REFRESH_COOKIE, clearAuthCookies, setAuthCookies } from './auth-cookie.helper';
+import { OptionalTenant } from '../tenants/decorators/current-tenant.decorator';
+import { ALL_FEATURE_CODES, resolveFeatures } from '../modules/module-catalog';
+import type { Tenant } from '@prisma/client';
 
 @ApiTags('Auth')
 // AuthController doit rester accessible quand mfaPending = true : l'utilisateur
@@ -151,8 +154,13 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Get('me')
-  me(@CurrentUser() user: JwtUser) {
-    return user;
+  me(@CurrentUser() user: JwtUser, @OptionalTenant() tenant?: Tenant) {
+    // `modules` = features effectives pour le front (gating sidebar/pages).
+    // Super-admin ou tenant sans restriction => tout le catalogue.
+    const modules = user.isSuperAdmin
+      ? [...ALL_FEATURE_CODES]
+      : resolveFeatures(tenant?.enabledModules);
+    return { ...user, modules };
   }
 
   @UseGuards(JwtAuthGuard)

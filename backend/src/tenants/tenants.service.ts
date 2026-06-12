@@ -404,6 +404,7 @@ export class TenantsService implements OnModuleInit {
     brandDpoEmail?: string;
     brandWebsiteUrl?: string;
     brandFooterText?: string;
+    enabledModules?: string[];
   }) {
     if (!/^[a-z0-9][a-z0-9-]{1,30}$/.test(input.slug)) {
       throw new BadRequestException('slug doit etre lowercase, [a-z0-9-], 2-31 char');
@@ -437,6 +438,7 @@ export class TenantsService implements OnModuleInit {
     enableInvoices: boolean;
     enableOpportunities: boolean;
     enableQuotes: boolean;
+    enabledModules: string[];
   }>) {
     const before = await this.findOne(id);
     const t = await this.prisma.tenant.update({ where: { id }, data: input });
