@@ -295,7 +295,7 @@ model Company {
   tenantId      String?
   tenant        Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name          String
-  // Identifiants legaux (sources : Pappers / INSEE Sirene)
+  // Identifiants legaux (sources : annuaire entreprises API gouv / INSEE Sirene)
   // Unicite par tenant : 2 tenants differents peuvent referencer la meme
   // entreprise comme client (ex: SIRET 123 = client de mdo ET de seysses).
   siret         String?

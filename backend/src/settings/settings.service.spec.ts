@@ -46,7 +46,7 @@ describe('SettingsService — isolation tenant', () => {
         if (where.tenantId === 'tenant-A') return { value: 'val-A' };
         return null;
       });
-      const v = await service.get('lookup.pappersApiKey', 'tenant-A');
+      const v = await service.get('lookup.sireneApiKey', 'tenant-A');
       expect(v).toBe('val-A');
     });
 
@@ -111,10 +111,10 @@ describe('SettingsService — isolation tenant', () => {
   describe('update', () => {
     it('upsert sur la cle compound (tenantId, key) — un tenant ne peut pas ecraser un autre', async () => {
       prisma.setting.upsert.mockResolvedValue({});
-      await service.update('lookup.pappersApiKey', 'val', 'user-1', 'tenant-A');
+      await service.update('lookup.sireneApiKey', 'val', 'user-1', 'tenant-A');
       expect(prisma.setting.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { tenantId_key: { tenantId: 'tenant-A', key: 'lookup.pappersApiKey' } },
+          where: { tenantId_key: { tenantId: 'tenant-A', key: 'lookup.sireneApiKey' } },
           create: expect.objectContaining({ tenantId: 'tenant-A' }),
         }),
       );
@@ -122,9 +122,9 @@ describe('SettingsService — isolation tenant', () => {
 
     it('invalide les caches tenant ET global apres update', async () => {
       prisma.setting.upsert.mockResolvedValue({});
-      await service.update('lookup.pappersApiKey', 'val', 'user-1', 'tenant-A');
-      expect(cache.del).toHaveBeenCalledWith('settings:tenant-A:lookup.pappersApiKey');
-      expect(cache.del).toHaveBeenCalledWith('settings:global:lookup.pappersApiKey');
+      await service.update('lookup.sireneApiKey', 'val', 'user-1', 'tenant-A');
+      expect(cache.del).toHaveBeenCalledWith('settings:tenant-A:lookup.sireneApiKey');
+      expect(cache.del).toHaveBeenCalledWith('settings:global:lookup.sireneApiKey');
     });
 
     it('rejette une cle inconnue (non listee dans SETTINGS_DEFS)', async () => {

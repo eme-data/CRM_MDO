@@ -33,14 +33,9 @@ export const SETTINGS_DEFS: SettingDef[] = [
   },
 
   // ---------- Annuaire entreprises ----------
-  {
-    key: 'lookup.pappersApiKey',
-    category: 'lookup',
-    label: 'Cle API Pappers',
-    description: 'Cle obtenue sur https://www.pappers.fr/api (recherche entreprise enrichie)',
-    isSecret: true,
-    envVar: 'PAPPERS_API_KEY',
-  },
+  // La recherche fonctionne par defaut GRATUITEMENT via l'API gouv
+  // "Recherche d'entreprises" (sans cle, cf RechercheEntreprisesProvider).
+  // La cle INSEE Sirene ci-dessous est OPTIONNELLE (fallback).
   {
     key: 'lookup.sireneApiKey',
     category: 'lookup',

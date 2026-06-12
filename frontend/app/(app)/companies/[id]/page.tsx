@@ -130,7 +130,7 @@ export default function CompanyDetailPage() {
         </div>
         <div className="flex gap-2">
           {(company.siren || company.siret) && (
-            <button onClick={handleRefreshFromRegistry} className="btn btn-secondary" title="Synchroniser depuis Pappers / INSEE Sirene">
+            <button onClick={handleRefreshFromRegistry} className="btn btn-secondary" title="Synchroniser depuis l'annuaire des entreprises (API gouv / INSEE)">
               <RefreshCw size={16} className="mr-1" /> Synchroniser
             </button>
           )}

@@ -162,19 +162,14 @@ export class SystemHealthService {
       checks.push({ category: 'Integrations', key: 'm365', label: 'M365 Graph', status: 'ok', message: 'Configure' });
     }
 
-    // ----- Pappers / Sirene -----
-    const pappersKey = await this.settings.get('lookup.pappersApiKey');
+    // ----- Annuaire entreprises -----
+    // recherche-entreprises (API gouv) est toujours disponible, gratuit, sans
+    // cle -> l'auto-completion SIREN fonctionne en permanence.
     const sireneKey = await this.settings.get('lookup.sireneApiKey');
-    if (!pappersKey && !sireneKey) {
-      checks.push({
-        category: 'Annuaire', key: 'lookup', label: 'Aucun annuaire entreprises',
-        status: 'info',
-        message: 'Saisie manuelle uniquement (pas d\'auto-completion SIREN).',
-        fixUrl: '/admin/settings',
-      });
-    } else {
-      checks.push({ category: 'Annuaire', key: 'lookup', label: 'Annuaire', status: 'ok', message: (pappersKey ? 'Pappers ' : '') + (sireneKey ? 'Sirene ' : '') });
-    }
+    checks.push({
+      category: 'Annuaire', key: 'lookup', label: 'Annuaire', status: 'ok',
+      message: 'Recherche d\'entreprises (API gouv, gratuit)' + (sireneKey ? ' + INSEE Sirene' : ''),
+    });
 
     // ----- Backups : verif qu'on a au moins 1 backup recent -----
     const lastBackup = await this.prisma.systemBackup.findFirst({

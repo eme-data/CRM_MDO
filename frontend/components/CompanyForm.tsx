@@ -28,7 +28,7 @@ interface Company {
 }
 
 interface LookupItem {
-  source: 'pappers' | 'sirene';
+  source: 'sirene' | 'recherche-entreprises';
   name: string;
   siren: string;
   siret?: string | null;
@@ -166,7 +166,7 @@ export function CompanyForm({ company }: { company?: Company }) {
         <div className="border border-mdo-200 bg-mdo-50 rounded-md p-4 space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-sm flex items-center gap-2">
-              <Search size={14} /> Rechercher dans l'annuaire (Pappers / INSEE Sirene)
+              <Search size={14} /> Rechercher dans l'annuaire des entreprises
             </h3>
             <button
               type="button"
@@ -184,7 +184,7 @@ export function CompanyForm({ company }: { company?: Company }) {
           />
           {!providersAvailable && (
             <p className="text-xs text-amber-700">
-              Pas de provider configure (PAPPERS_API_KEY / SIRENE_API_KEY). Saisie manuelle uniquement.
+              Annuaire momentanement indisponible. Saisie manuelle uniquement.
             </p>
           )}
           {lookupLoading && <p className="text-xs text-slate-500">Recherche...</p>}
@@ -218,7 +218,7 @@ export function CompanyForm({ company }: { company?: Company }) {
           className="text-xs text-mdo-600 hover:underline self-start"
         >
           <Search size={12} className="inline mr-1" />
-          Rechercher dans l'annuaire (Pappers / INSEE)
+          Rechercher dans l'annuaire des entreprises
         </button>
       )}
 

@@ -3,7 +3,7 @@ import { CompanySector } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { TenantScope } from '../common/tenant/tenant-scope.helper';
 import { JwtUser } from '../common/decorators/current-user.decorator';
-import { PappersProvider, CompanyLookupResult } from './pappers.provider';
+import { CompanyLookupResult } from './company-lookup.types';
 import { SireneProvider } from './sirene.provider';
 import { RechercheEntreprisesProvider } from './recherche-entreprises.provider';
 
@@ -12,10 +12,9 @@ export class CompanyLookupService {
   private readonly logger = new Logger(CompanyLookupService.name);
 
   constructor(
-    private readonly pappers: PappersProvider,
-    private readonly sirene: SireneProvider,
     // API gouv gratuite et sans cle : toujours disponible, sert de defaut.
     private readonly rechercheEntreprises: RechercheEntreprisesProvider,
+    private readonly sirene: SireneProvider,
     private readonly prisma: PrismaService,
     private readonly scope: TenantScope,
   ) {}
@@ -29,15 +28,10 @@ export class CompanyLookupService {
   async search(query: string, tenantId: string | null = null): Promise<CompanyLookupResult[]> {
     if (!query || query.trim().length < 3) return [];
     const q = query.trim();
-    // 1. Pappers (payant, le plus riche) si une cle est configuree.
-    if (await this.pappers.isEnabled(tenantId)) {
-      const results = await this.pappers.search(q, 10, tenantId);
-      if (results.length > 0) return results;
-    }
-    // 2. Recherche d'entreprises (API gouv gratuite, sans cle) : defaut.
+    // 1. Recherche d'entreprises (API gouv gratuite, sans cle) : source par defaut.
     const gouv = await this.rechercheEntreprises.search(q, 10, tenantId);
     if (gouv.length > 0) return gouv;
-    // 3. INSEE Sirene (gratuit, avec cle) en dernier recours si configure.
+    // 2. INSEE Sirene (gratuit, avec cle) en dernier recours si configure.
     if (await this.sirene.isEnabled(tenantId)) {
       return this.sirene.search(q, 10, tenantId);
     }
@@ -48,10 +42,6 @@ export class CompanyLookupService {
     const cleaned = siren.replace(/\s/g, '');
     if (!/^\d{9}$/.test(cleaned)) {
       throw new NotFoundException('SIREN invalide (9 chiffres attendus)');
-    }
-    if (await this.pappers.isEnabled(tenantId)) {
-      const r = await this.pappers.getBySiren(cleaned, tenantId);
-      if (r) return r;
     }
     const gouv = await this.rechercheEntreprises.getBySiren(cleaned, tenantId);
     if (gouv) return gouv;

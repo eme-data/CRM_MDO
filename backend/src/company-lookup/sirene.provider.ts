@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SettingsService } from '../settings/settings.service';
-import { CompanyLookupResult } from './pappers.provider';
+import { CompanyLookupResult } from './company-lookup.types';
 
 @Injectable()
 export class SireneProvider {

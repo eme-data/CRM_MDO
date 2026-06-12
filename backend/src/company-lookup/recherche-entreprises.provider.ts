@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { CompanyLookupResult } from './pappers.provider';
+import { CompanyLookupResult } from './company-lookup.types';
 
 // Provider "Recherche d'entreprises" — API officielle gratuite de l'Etat
 // (DINUM / api.gouv.fr), celle qui alimente l'Annuaire des Entreprises.
@@ -7,12 +7,12 @@ import { CompanyLookupResult } from './pappers.provider';
 //   - GRATUITE et SANS CLE API (aucune inscription, aucun quota payant).
 //   - Donnees : denomination, SIREN/SIRET, adresse siege, NAF, forme juridique,
 //     tranche d'effectif, date de creation, dirigeants.
-//   - Alternative gratuite a Pappers pour un usage CRM (pre-remplissage fiche).
+//   - Source par defaut gratuite pour le pre-remplissage d'une fiche societe.
 //
 // Doc : https://recherche-entreprises.api.gouv.fr/docs/
 //
-// Toujours "enabled" : c'est le filet par defaut quand aucune cle Pappers/Sirene
-// n'est configuree -> le lookup societe fonctionne sans aucune config.
+// Toujours "enabled" : c'est le filet par defaut quand aucune cle Sirene n'est
+// configuree -> le lookup societe fonctionne sans aucune config.
 
 @Injectable()
 export class RechercheEntreprisesProvider {
@@ -78,7 +78,7 @@ export class RechercheEntreprisesProvider {
   }
 
   // Adresse = voie uniquement (CP + ville sont des champs separes), aligne sur
-  // les providers Pappers/Sirene.
+  // le provider Sirene.
   private formatAddress(siege: any): string | null {
     if (!siege) return null;
     const parts = [siege.numero_voie, siege.type_voie, siege.libelle_voie].filter(Boolean);

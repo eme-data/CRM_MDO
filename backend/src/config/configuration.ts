@@ -40,7 +40,6 @@ export default () => ({
     dir: process.env.SYSTEM_BACKUP_DIR ?? '/app/backups',
   },
   lookup: {
-    pappersKey: process.env.PAPPERS_API_KEY,
     sireneKey: process.env.SIRENE_API_KEY,
   },
   inbound: {

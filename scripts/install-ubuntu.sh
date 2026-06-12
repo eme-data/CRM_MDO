@@ -458,8 +458,7 @@ IMAP_PASSWORD=
 IMAP_FOLDER=INBOX
 IMAP_PROCESSED_FOLDER=Processed
 
-# --- Lookup annuaire entreprises ---
-PAPPERS_API_KEY=
+# --- Lookup annuaire entreprises (gratuit par defaut via API gouv ; cle INSEE optionnelle) ---
 SIRENE_API_KEY=
 
 # --- Timezone ---

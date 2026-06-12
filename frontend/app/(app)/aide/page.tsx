@@ -30,7 +30,7 @@ const USER_SECTIONS: DocSection[] = [
     id: 'commercial', title: 'Commercial', icon: Building2,
     blurb: 'Le cycle de vente complet : du prospect au contrat facture.',
     items: [
-      { name: 'Societes', href: '/companies', desc: 'Fiches entreprises (PME/TPE/Collectivite/Sante/Industrie), statut Lead/Prospect/Client. Recherche enrichie via Pappers/INSEE.' },
+      { name: 'Societes', href: '/companies', desc: 'Fiches entreprises (PME/TPE/Collectivite/Sante/Industrie), statut Lead/Prospect/Client. Recherche/pre-remplissage via l\'annuaire officiel des entreprises (API gouv, gratuit, sans cle).' },
       { name: 'Contacts', href: '/contacts', desc: 'Interlocuteurs rattaches aux societes, avec contact principal.' },
       { name: 'Opportunites', href: '/opportunities', desc: 'Pipeline kanban : Qualification -> Proposition -> Negociation -> Gagne/Perdu.' },
       { name: 'Devis', href: '/quotes', desc: 'Creation de devis a partir du catalogue produits, conversion en contrat.' },
@@ -89,7 +89,7 @@ const ADMIN_SECTIONS: DocSection[] = [
     id: 'config', title: 'Configuration', icon: Settings2,
     blurb: 'Parametrage de l\'instance. Reserve aux administrateurs.',
     items: [
-      { name: 'API, SMTP, IMAP', href: '/admin/settings', role: 'ADMIN', desc: 'Cles API (Pappers/INSEE), SMTP sortant (ou Microsoft Graph), IMAP entrant, SLA par offre, Qonto, et SSO. Bouton "Tester" pour valider l\'envoi.' },
+      { name: 'API, SMTP, IMAP', href: '/admin/settings', role: 'ADMIN', desc: 'Annuaire entreprises (gratuit par defaut, cle INSEE optionnelle), SMTP sortant (ou Microsoft Graph), IMAP entrant, SLA par offre, Qonto, et SSO. Bouton "Tester" pour valider l\'envoi.' },
       { name: 'Utilisateurs', href: '/users', role: 'ADMIN', desc: 'Creation/desactivation des comptes, roles (ADMIN/MANAGER/SALES/READONLY), reset de mot de passe.' },
       { name: 'Imports CSV', href: '/imports', role: 'ADMIN', desc: 'Import en masse de societes/contacts depuis un fichier CSV.' },
       { name: 'Catalogue produits', href: '/admin/products', role: 'ADMIN', desc: 'Produits/services facturables utilises dans les devis et contrats.' },

@@ -246,8 +246,7 @@ IMAP_PASSWORD=
 IMAP_FOLDER=INBOX
 IMAP_PROCESSED_FOLDER=
 
-# -------- Lookup INSEE / Pappers (optionnel) --------
-PAPPERS_API_KEY=
+# -------- Lookup annuaire entreprises (gratuit via API gouv ; cle INSEE optionnelle) --------
 SIRENE_API_KEY=
 
 # -------- Securite --------
