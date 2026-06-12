@@ -13,7 +13,7 @@
     }
 }
 
-{$DOMAIN} {
+{$DOMAIN}, demo.mdoservices.fr {
     encode zstd gzip
 
     # Access log JSON pour CrowdSec (parser caddy).
