@@ -18,6 +18,7 @@ export default function StockItemPage() {
   const { id } = useParams<{ id: string }>();
   const [item, setItem] = useState<any>(null);
   const [movements, setMovements] = useState<any[]>([]);
+  const [assets, setAssets] = useState<any[]>([]);
   const [newSerial, setNewSerial] = useState('');
 
   async function reload() {
@@ -25,10 +26,15 @@ export default function StockItemPage() {
     try { setMovements(await api.get(`/stock/movements?itemId=${id}`)); } catch { /* */ }
   }
   useEffect(() => { if (id) reload(); }, [id]);
+  useEffect(() => { api.get('/assets').then((d: any) => setAssets(Array.isArray(d) ? d : (d?.items ?? []))).catch(() => {}); }, []);
 
   async function addSerial() {
     if (!newSerial.trim()) return;
     try { await api.post('/stock/serials', { itemId: id, serial: newSerial.trim() }); setNewSerial(''); reload(); }
+    catch (e: any) { toast.error(e.message); }
+  }
+  async function updateSerial(sid: string, patch: any) {
+    try { await api.patch(`/stock/serials/${sid}`, patch); reload(); }
     catch (e: any) { toast.error(e.message); }
   }
 
@@ -69,11 +75,21 @@ export default function StockItemPage() {
           <div className="p-3 border-b font-semibold flex items-center gap-2"><Hash size={16} /> Numéros de série</div>
           <div className="p-3 space-y-2">
             <div className="flex gap-2"><input className="input" placeholder="Ajouter un n° de série" value={newSerial} onChange={(e) => setNewSerial(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addSerial()} /><button onClick={addSerial} className="btn btn-secondary">Ajouter</button></div>
-            <div className="flex flex-wrap gap-2">
-              {(item.serials ?? []).map((s: any) => (
-                <span key={s.id} className="text-xs px-2 py-1 rounded bg-slate-100 font-mono">{s.serial} <span className="text-slate-400">· {SERIAL[s.status] ?? s.status}</span></span>
-              ))}
+            <div className="divide-y">
               {(item.serials ?? []).length === 0 && <span className="text-sm text-slate-400">Aucun.</span>}
+              {(item.serials ?? []).map((s: any) => (
+                <div key={s.id} className="flex items-center gap-2 py-2 flex-wrap">
+                  <span className="font-mono text-xs flex-1 min-w-[8rem]">{s.serial}</span>
+                  <select className="input w-auto py-1 text-xs" value={s.status} onChange={(e) => updateSerial(s.id, { status: e.target.value })}>
+                    {Object.entries(SERIAL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                  <select className="input w-auto py-1 text-xs max-w-[14rem]" value={s.assetId ?? ''} onChange={(e) => updateSerial(s.id, { assetId: e.target.value || null, status: e.target.value ? 'DEPLOYED' : s.status })}>
+                    <option value="">— Asset client —</option>
+                    {assets.map((a) => <option key={a.id} value={a.id}>{a.company?.name ? a.company.name + ' · ' : ''}{a.name}</option>)}
+                  </select>
+                  {s.asset && <span className="text-[11px] text-emerald-600">→ {s.asset.company?.name} / {s.asset.name}</span>}
+                </div>
+              ))}
             </div>
           </div>
         </div>

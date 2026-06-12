@@ -68,7 +68,7 @@ export const FEATURES: FeatureDef[] = [
   { code: 'outils.templates', label: 'Templates de reponse', group: 'outils', api: ['response-templates'] },
 
   // ----- Stock -----
-  { code: 'stock.inventory', label: 'Inventaire & mouvements', group: 'stock', api: ['stock/items', 'stock/movements', 'stock/transfer', 'stock/adjust', 'stock/locations', 'stock/serials', 'stock/dashboard'] },
+  { code: 'stock.inventory', label: 'Inventaire & mouvements', group: 'stock', api: ['stock/items', 'stock/movements', 'stock/transfer', 'stock/adjust', 'stock/locations', 'stock/serials', 'stock/dashboard', 'stock/consume', 'stock/consumptions'] },
   { code: 'stock.purchasing', label: 'Approvisionnement (commandes fournisseurs)', group: 'stock', api: ['stock/purchase-orders', 'stock/suppliers'] },
 
   // ----- SIRH -----

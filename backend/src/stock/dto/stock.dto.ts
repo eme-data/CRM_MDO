@@ -96,5 +96,14 @@ export class CreateSerialDto {
 export class UpdateSerialDto {
   @IsOptional() @IsEnum(StockSerialStatus) status?: StockSerialStatus;
   @IsOptional() @IsUUID() locationId?: string | null;
+  @IsOptional() @IsUUID() assetId?: string | null; // lien vers l'asset client
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
+}
+
+// Consommation de matiere sur une intervention (decrement de stock).
+export class ConsumeDto {
+  @IsUUID() interventionId!: string;
+  @IsUUID() itemId!: string;
+  @IsUUID() locationId!: string;
+  @IsNumber() @Min(0.01) quantity!: number;
 }

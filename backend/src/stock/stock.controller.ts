@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { StockService } from './stock.service';
 import {
   CreateItemDto, UpdateItemDto, MovementDto, TransferDto, AdjustDto,
   CreateSupplierDto, UpdateSupplierDto, CreateLocationDto, UpdateLocationDto,
-  CreateSerialDto, UpdateSerialDto,
+  CreateSerialDto, UpdateSerialDto, ConsumeDto,
 } from './dto/stock.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
@@ -44,6 +44,14 @@ export class StockController {
   transfer(@Body() dto: TransferDto, @CurrentUser() u: JwtUser) { return this.service.transfer(u, dto); }
   @Post('adjust')
   adjust(@Body() dto: AdjustDto, @CurrentUser() u: JwtUser) { return this.service.adjust(u, dto); }
+
+  // ----- Consommation sur intervention (decrement de stock) -----
+  @Get('consumptions')
+  consumptions(@Query('interventionId') interventionId: string, @CurrentUser() u: JwtUser) { return this.service.listConsumptions(u, interventionId); }
+  @Post('consume')
+  consume(@Body() dto: ConsumeDto, @CurrentUser() u: JwtUser) { return this.service.consume(u, dto); }
+  @Delete('consumptions/:id')
+  deleteConsumption(@Param('id') id: string, @CurrentUser() u: JwtUser) { return this.service.deleteConsumption(u, id); }
 
   // ----- Numeros de serie -----
   @Post('serials')

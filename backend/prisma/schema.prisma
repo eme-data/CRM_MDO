@@ -147,6 +147,7 @@ model Tenant {
   stockMovements         StockMovement[]
   stockSerials           StockSerial[]
   purchaseOrders         PurchaseOrder[]
+  stockConsumptions      StockConsumption[]
 
   @@index([customDomain])
   @@index([slug])
@@ -271,6 +272,7 @@ model User {
   journeys                   Journey[]                     @relation("JourneyEmployee")
   stockMovements             StockMovement[]               @relation("StockMovementUser")
   createdPurchaseOrders      PurchaseOrder[]               @relation("PurchaseOrderCreator")
+  stockConsumptions          StockConsumption[]            @relation("StockConsumptionUser")
 
   // Email unique PAR tenant : permet d'avoir le meme email dans 2 tenants
   // differents (ex: mathieu@mdoservices.fr peut exister dans tenant 'mdo'
@@ -696,7 +698,8 @@ model Intervention {
   technicianId String?
   technician   User?   @relation("InterventionTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
 
-  timeEntries TimeEntry[]
+  timeEntries       TimeEntry[]
+  stockConsumptions StockConsumption[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1274,6 +1277,8 @@ model Asset {
   company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   contractId String?
   contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
+
+  stockSerials StockSerial[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1902,6 +1907,7 @@ model StockLocation {
   movements      StockMovement[]
   serials        StockSerial[]
   purchaseOrders PurchaseOrder[]
+  consumptions   StockConsumption[]
   createdAt      DateTime        @default(now())
 
   @@index([tenantId])
@@ -1930,6 +1936,7 @@ model StockItem {
   movements    StockMovement[]
   serials      StockSerial[]
   poLines      PurchaseOrderLine[]
+  consumptions StockConsumption[]
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 
@@ -1990,6 +1997,9 @@ model StockSerial {
   status     StockSerialStatus @default(IN_STOCK)
   locationId String?
   location   StockLocation?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  // Lien vers l'asset client une fois deploye (tracabilite de bout en bout).
+  assetId    String?
+  asset      Asset?            @relation(fields: [assetId], references: [id], onDelete: SetNull)
   notes      String?
   createdAt  DateTime          @default(now())
   updatedAt  DateTime          @updatedAt
@@ -1997,6 +2007,7 @@ model StockSerial {
   @@unique([tenantId, serial])
   @@index([tenantId])
   @@index([itemId])
+  @@index([assetId])
 }
 
 model PurchaseOrder {
@@ -2034,6 +2045,30 @@ model PurchaseOrderLine {
   unitCostHt       Decimal       @db.Decimal(12, 2)
 
   @@index([poId])
+}
+
+// Consommation de stock sur une intervention : decremente le stock (mouvement
+// OUT rattache) et trace ce qui a ete pose chez le client. Suppression =
+// restitution du stock (mouvement IN).
+model StockConsumption {
+  id             String        @id @default(uuid())
+  tenantId       String?
+  tenant         Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  interventionId String
+  intervention   Intervention  @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  itemId         String
+  item           StockItem     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  locationId     String
+  location       StockLocation @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  quantity       Decimal       @db.Decimal(12, 2)
+  unitCostHt     Decimal       @db.Decimal(12, 2)
+  createdById    String?
+  createdBy      User?         @relation("StockConsumptionUser", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+
+  @@index([tenantId])
+  @@index([interventionId])
+  @@index([itemId])
 }
 
 model Invoice {

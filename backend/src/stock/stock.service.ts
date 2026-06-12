@@ -6,7 +6,7 @@ import { JwtUser } from '../common/decorators/current-user.decorator';
 import {
   CreateItemDto, UpdateItemDto, MovementDto, TransferDto, AdjustDto,
   CreateSupplierDto, UpdateSupplierDto, CreateLocationDto, UpdateLocationDto,
-  CreateSerialDto, UpdateSerialDto,
+  CreateSerialDto, UpdateSerialDto, ConsumeDto,
 } from './dto/stock.dto';
 
 // Gestion de stock : articles, niveaux par emplacement, mouvements valorises
@@ -76,7 +76,7 @@ export class StockService {
         levels: { include: { location: { select: { id: true, name: true } } } },
         supplier: { select: { id: true, name: true } },
         product: { select: { id: true, name: true } },
-        serials: { orderBy: { createdAt: 'desc' } },
+        serials: { include: { asset: { select: { id: true, name: true, company: { select: { name: true } } } } }, orderBy: { createdAt: 'desc' } },
       },
     });
     if (!it) throw new NotFoundException('Article introuvable');
@@ -248,7 +248,68 @@ export class StockService {
   async updateSerial(me: JwtUser, id: string, dto: UpdateSerialDto) {
     this.assertManager(me);
     await this.assertOwned('stockSerial', id, me);
+    if (dto.assetId) await this.assertOwned('asset', dto.assetId, me);
     return this.prisma.stockSerial.update({ where: { id }, data: dto as any });
+  }
+
+  // ---------------- Consommation sur intervention (decrement) ----------------
+  // Decremente le stock a un emplacement et trace la pose chez le client via
+  // un mouvement OUT rattache a l'intervention. Accessible a tout utilisateur
+  // du tenant (le technicien qui pose le materiel).
+  async consume(me: JwtUser, dto: ConsumeDto) {
+    const item = await this.assertOwned('stockItem', dto.itemId, me);
+    await this.assertOwned('stockLocation', dto.locationId, me);
+    await this.assertOwned('intervention', dto.interventionId, me);
+
+    return this.prisma.$transaction(async (tx) => {
+      const level = await tx.stockLevel.findUnique({ where: { itemId_locationId: { itemId: dto.itemId, locationId: dto.locationId } } });
+      const current = n(level?.quantity);
+      if (current < dto.quantity) throw new BadRequestException(`Stock insuffisant (${current} dispo sur cet emplacement)`);
+      const unitCost = n(item.avgCostHt);
+      await this.setLevel(tx, me, dto.itemId, dto.locationId, current - dto.quantity);
+      await tx.stockMovement.create({
+        data: {
+          tenantId: me.tenantId, itemId: dto.itemId, locationId: dto.locationId, type: 'OUT',
+          quantity: dto.quantity, unitCostHt: unitCost, reason: 'Consomme sur intervention',
+          refType: 'Intervention', refId: dto.interventionId, performedById: me.id,
+        },
+      });
+      return tx.stockConsumption.create({
+        data: {
+          tenantId: me.tenantId, interventionId: dto.interventionId, itemId: dto.itemId,
+          locationId: dto.locationId, quantity: dto.quantity, unitCostHt: unitCost, createdById: me.id,
+        },
+        include: { item: { select: { id: true, sku: true, name: true, unit: true } }, location: { select: { id: true, name: true } } },
+      });
+    });
+  }
+
+  async listConsumptions(me: JwtUser, interventionId: string) {
+    const rows = await this.prisma.stockConsumption.findMany({
+      where: this.scope.scopedWhere(me, { interventionId }),
+      include: { item: { select: { id: true, sku: true, name: true, unit: true } }, location: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map((r) => ({ ...r, quantity: n(r.quantity), unitCostHt: n(r.unitCostHt), totalHt: n(r.quantity) * n(r.unitCostHt) }));
+  }
+
+  // Suppression d'une consommation = restitution du stock (mouvement IN).
+  async deleteConsumption(me: JwtUser, id: string) {
+    const c = await this.prisma.stockConsumption.findFirst({ where: this.scope.scopedWhere(me, { id }) });
+    if (!c) throw new NotFoundException('Consommation introuvable');
+    return this.prisma.$transaction(async (tx) => {
+      const level = await tx.stockLevel.findUnique({ where: { itemId_locationId: { itemId: c.itemId, locationId: c.locationId } } });
+      await this.setLevel(tx, me, c.itemId, c.locationId, n(level?.quantity) + n(c.quantity));
+      await tx.stockMovement.create({
+        data: {
+          tenantId: me.tenantId, itemId: c.itemId, locationId: c.locationId, type: 'IN',
+          quantity: n(c.quantity), unitCostHt: n(c.unitCostHt), reason: 'Annulation consommation intervention',
+          refType: 'Intervention', refId: c.interventionId, performedById: me.id,
+        },
+      });
+      await tx.stockConsumption.delete({ where: { id } });
+      return { ok: true };
+    });
   }
 
   // ---------------- Dashboard / alertes ----------------
@@ -275,7 +336,7 @@ export class StockService {
   }
 
   // Verifie l'appartenance au tenant d'une entite et la renvoie.
-  private async assertOwned(model: 'stockItem' | 'stockLocation' | 'supplier' | 'stockSerial' | 'product', id: string, me: JwtUser): Promise<any> {
+  private async assertOwned(model: 'stockItem' | 'stockLocation' | 'supplier' | 'stockSerial' | 'product' | 'asset' | 'intervention', id: string, me: JwtUser): Promise<any> {
     const where = this.scope.scopedWhere(me, { id });
     const e = await (this.prisma as any)[model].findFirst({ where });
     if (!e) throw new NotFoundException('Element introuvable dans ce tenant');
