@@ -25,7 +25,10 @@ function kindLabel(k: JourneyKind): string {
 }
 
 const employeePick = { select: { id: true, firstName: true, lastName: true } };
+// JourneyTask (avec echeance) : tri ordre puis date.
 const tasksOrder = { orderBy: [{ order: 'asc' as const }, { dueDate: 'asc' as const }] };
+// JourneyTemplateTask : pas de champ dueDate -> tri sur l'ordre uniquement.
+const tplTasksOrder = { orderBy: { order: 'asc' as const } };
 
 @Injectable()
 export class JourneysService {
@@ -43,7 +46,7 @@ export class JourneysService {
     if (kind) extra.kind = kind;
     return this.prisma.journeyTemplate.findMany({
       where: this.scope.scopedWhere(me, extra),
-      include: { tasks: tasksOrder, _count: { select: { journeys: true } } },
+      include: { tasks: tplTasksOrder, _count: { select: { journeys: true } } },
       orderBy: [{ kind: 'asc' }, { name: 'asc' }],
     });
   }
@@ -62,7 +65,7 @@ export class JourneysService {
           })),
         },
       },
-      include: { tasks: tasksOrder },
+      include: { tasks: tplTasksOrder },
     });
   }
 
@@ -115,7 +118,7 @@ export class JourneysService {
     if (dto.templateId) {
       template = await this.prisma.journeyTemplate.findFirst({
         where: this.scope.scopedWhere(me, { id: dto.templateId }),
-        include: { tasks: tasksOrder },
+        include: { tasks: tplTasksOrder },
       });
       if (!template) throw new NotFoundException('Modele introuvable');
     }
