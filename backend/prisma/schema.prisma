@@ -128,6 +128,8 @@ model Tenant {
   timesheets             Timesheet[]
   reviews                Review[]
   objectives             Objective[]
+  journeyTemplates       JourneyTemplate[]
+  journeys               Journey[]
 
   @@index([customDomain])
   @@index([slug])
@@ -249,6 +251,7 @@ model User {
   reviews                    Review[]                      @relation("ReviewEmployee")
   conductedReviews           Review[]                      @relation("ReviewManager")
   objectives                 Objective[]                   @relation("ObjectiveUser")
+  journeys                   Journey[]                     @relation("JourneyEmployee")
 
   // Email unique PAR tenant : permet d'avoir le meme email dans 2 tenants
   // differents (ex: mathieu@mdoservices.fr peut exister dans tenant 'mdo'
@@ -1738,6 +1741,87 @@ model Objective {
   @@index([tenantId])
   @@index([userId])
   @@index([reviewId])
+}
+
+// SIRH - Parcours collaborateur (onboarding / offboarding RH). Distinct du
+// module Onboarding CLIENT (qui demarre depuis un contrat). Checklists d'arrivee
+// et de depart, materialisees par collaborateur.
+enum JourneyKind {
+  ONBOARDING // arrivee
+  OFFBOARDING // depart
+}
+
+enum JourneyStatus {
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// Modele reutilisable de checklist (ex: "Arrivee technicien", "Depart").
+model JourneyTemplate {
+  id        String                @id @default(uuid())
+  tenantId  String?
+  tenant    Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name      String
+  kind      JourneyKind           @default(ONBOARDING)
+  active    Boolean               @default(true)
+  tasks     JourneyTemplateTask[]
+  journeys  Journey[]
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, kind])
+}
+
+model JourneyTemplateTask {
+  id          String          @id @default(uuid())
+  templateId  String
+  template    JourneyTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  label       String
+  description String?
+  responsible String? // qui s'en charge : RH / IT / Manager... (libre)
+  offsetDays  Int? // echeance relative a la date de debut (J+/-n)
+  order       Int             @default(0)
+
+  @@index([templateId])
+}
+
+// Parcours concret rattache a un collaborateur.
+model Journey {
+  id         String           @id @default(uuid())
+  tenantId   String?
+  tenant     Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  employeeId String
+  employee   User             @relation("JourneyEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  templateId String?
+  template   JourneyTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  kind       JourneyKind      @default(ONBOARDING)
+  title      String
+  startDate  DateTime?        @db.Date // date d'arrivee ou de depart
+  status     JourneyStatus    @default(IN_PROGRESS)
+  tasks      JourneyTask[]
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([employeeId])
+}
+
+model JourneyTask {
+  id          String   @id @default(uuid())
+  journeyId   String
+  journey     Journey  @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  label       String
+  description String?
+  responsible String?
+  dueDate     DateTime? @db.Date
+  done        Boolean  @default(false)
+  doneAt      DateTime?
+  order       Int      @default(0)
+
+  @@index([journeyId])
 }
 
 model Invoice {
