@@ -6,10 +6,14 @@
 //     evite de servir de la donnee perimee.
 //   - une page /offline.html est servie en fallback HTML si le reseau est down.
 //
-// Cache versionne pour invalider proprement : bump CACHE_NAME a chaque deploy
-// majeur (mecanisme manuel, suffit a notre echelle).
+// Mises a jour : CACHE_NAME contient le placeholder __SW_BUILD__ remplace au build
+// (cf frontend/Dockerfile) par un identifiant unique -> chaque deploiement produit
+// un sw.js different, ce qui declenche cote client le flux "Nouvelle version
+// disponible" (cf components/SwUpdater.tsx). On ne fait PLUS skipWaiting() a
+// l'install : le nouveau SW reste en attente jusqu'a ce que l'utilisateur clique
+// "Recharger" (postMessage SKIP_WAITING) -> pas de reload surprise / perte de saisie.
 
-const CACHE_NAME = 'crm-mdo-v1';
+const CACHE_NAME = 'crm-mdo-__SW_BUILD__';
 const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('install', (event) => {
@@ -23,7 +27,14 @@ self.addEventListener('install', (event) => {
       }
     })(),
   );
-  self.skipWaiting();
+  // Pas de skipWaiting() ici : le nouveau SW attend l'aval de l'utilisateur.
+});
+
+// L'app demande l'activation immediate du SW en attente (clic "Recharger").
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', (event) => {
@@ -44,7 +55,7 @@ self.addEventListener('fetch', (event) => {
   // 1. Pas de cache pour /api/* : fraicheur garantie.
   if (url.pathname.startsWith('/api/')) return;
 
-  // 2. Assets statiques Next.js : stale-while-revalidate.
+  // 2. Assets statiques Next.js (URLs hashees, immuables) : stale-while-revalidate.
   if (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/icons/')) {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
@@ -61,7 +72,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Pages HTML : reseau d'abord, fallback offline.html.
+  // 3. Pages HTML : reseau d'abord (toujours frais), fallback offline.html.
   if (req.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
       fetch(req).catch(async () => {

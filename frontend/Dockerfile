@@ -9,6 +9,12 @@ ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Estampille le service worker avec un identifiant de build unique : chaque
+# deploiement produit un sw.js different -> le navigateur detecte la nouvelle
+# version et l'app propose "Recharger" (cf public/sw.js + components/SwUpdater).
+# La couche `COPY . .` change a chaque commit, ce RUN se re-execute donc a chaque
+# build applicatif (et reste cache pour un rebuild du meme commit).
+RUN sed -i "s/__SW_BUILD__/$(date +%Y%m%d%H%M%S)/" public/sw.js
 RUN npm run build
 
 FROM node:20-alpine AS runner
