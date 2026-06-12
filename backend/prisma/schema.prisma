@@ -126,6 +126,8 @@ model Tenant {
   employeeProfiles       EmployeeProfile[]
   employeeDocuments      EmployeeDocument[]
   timesheets             Timesheet[]
+  reviews                Review[]
+  objectives             Objective[]
 
   @@index([customDomain])
   @@index([slug])
@@ -244,6 +246,9 @@ model User {
   uploadedEmployeeDocuments  EmployeeDocument[]            @relation("EmployeeDocumentUploader")
   timesheets                 Timesheet[]                   @relation("TimesheetUser")
   approvedTimesheets         Timesheet[]                   @relation("TimesheetApprover")
+  reviews                    Review[]                      @relation("ReviewEmployee")
+  conductedReviews           Review[]                      @relation("ReviewManager")
+  objectives                 Objective[]                   @relation("ObjectiveUser")
 
   // Email unique PAR tenant : permet d'avoir le meme email dans 2 tenants
   // differents (ex: mathieu@mdoservices.fr peut exister dans tenant 'mdo'
@@ -1661,6 +1666,78 @@ model Timesheet {
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([userId])
+}
+
+// SIRH - Entretiens & objectifs.
+enum ReviewType {
+  ANNUAL // entretien annuel d'evaluation
+  PROFESSIONAL // entretien professionnel (obligatoire tous les 2 ans)
+  PROBATION // fin de periode d'essai
+  ONE_ON_ONE // point individuel
+}
+
+enum ReviewStatus {
+  SCHEDULED // planifie
+  IN_PROGRESS // en cours de preparation (notes en saisie)
+  COMPLETED // realise
+  CANCELLED // annule
+}
+
+// Entretien entre un collaborateur (employee) et son manager.
+// Notes separees : preparation collaborateur / manager + compte-rendu partage.
+model Review {
+  id           String       @id @default(uuid())
+  tenantId     String?
+  tenant       Tenant?      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  employeeId   String
+  employee     User         @relation("ReviewEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  managerId    String
+  manager      User         @relation("ReviewManager", fields: [managerId], references: [id], onDelete: Cascade)
+  type         ReviewType   @default(ANNUAL)
+  status       ReviewStatus @default(SCHEDULED)
+  scheduledAt  DateTime?
+  completedAt  DateTime?
+  employeeNotes String? // preparation cote collaborateur
+  managerNotes String? // preparation cote manager
+  summary      String? // compte-rendu partage
+  rating       Int? // note globale 1-5 (optionnel)
+  objectives   Objective[]  @relation("ObjectiveReview")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([employeeId])
+  @@index([managerId])
+}
+
+enum ObjectiveStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+// Objectif individuel (SMART). Rattachable a un entretien.
+model Objective {
+  id          String          @id @default(uuid())
+  tenantId    String?
+  tenant      Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId      String
+  user        User            @relation("ObjectiveUser", fields: [userId], references: [id], onDelete: Cascade)
+  reviewId    String?
+  review      Review?         @relation("ObjectiveReview", fields: [reviewId], references: [id], onDelete: SetNull)
+  title       String
+  description String?
+  status      ObjectiveStatus @default(TODO)
+  progress    Int             @default(0) // 0-100
+  dueDate     DateTime?       @db.Date
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([reviewId])
 }
 
 model Invoice {

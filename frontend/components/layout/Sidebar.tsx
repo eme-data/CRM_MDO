@@ -27,6 +27,7 @@ import {
   Clock,
   Timer,
   CalendarRange,
+  MessagesSquare,
   User,
   ChevronDown,
   KeyRound,
@@ -264,6 +265,7 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
         <NavLink item={{ href: '/planning', label: 'Planning equipe', icon: CalendarRange }} active={isActive('/planning')} />
         <NavLink item={{ href: '/frais', label: 'Notes de frais', icon: Receipt }} active={isActive('/frais')} />
         <NavLink item={{ href: '/rh', label: 'Dossier RH', icon: IdCard }} active={isActive('/rh')} />
+        <NavLink item={{ href: '/entretiens', label: 'Entretiens', icon: MessagesSquare }} active={isActive('/entretiens')} />
         <NavLink item={{ href: '/time', label: 'Mon temps', icon: Clock }} active={isActive('/time')} />
         <NavLink item={{ href: '/feuilles', label: 'Feuilles de temps', icon: Timer }} active={isActive('/feuilles')} />
         <NavLink item={{ href: '/settings', label: 'Mon profil', icon: User }} active={isActive('/settings')} />

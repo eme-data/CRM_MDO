@@ -48,6 +48,7 @@ import { ExpensesModule } from './expenses/expenses.module';
 import { EmployeesModule } from './employees/employees.module';
 import { TimesheetsModule } from './timesheets/timesheets.module';
 import { PlanningModule } from './planning/planning.module';
+import { ReviewsModule } from './reviews/reviews.module';
 import { EmergencyPdfModule } from './emergency-pdf/emergency-pdf.module';
 import { RunbooksModule } from './runbooks/runbooks.module';
 import { MfaModule } from './mfa/mfa.module';
@@ -176,6 +177,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     EmployeesModule,
     TimesheetsModule,
     PlanningModule,
+    ReviewsModule,
     EmergencyPdfModule,
     RunbooksModule,
     ImportsModule,
