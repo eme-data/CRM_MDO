@@ -184,7 +184,10 @@ export class CaddyProvisioningService implements OnModuleInit {
     try {
       const r = await fetch(`${this.adminUrl}/load`, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/caddyfile' },
+        // Origin explicite : Caddy verifie l'en-tete Origin contre la liste
+        // `origins` de l'admin (cf adminOrigins). Le fetch serveur-a-serveur
+        // n'en envoie pas par defaut -> 403 "origin ''". On force l'URL admin.
+        headers: { 'Content-Type': 'text/caddyfile', Origin: this.adminUrl },
         body: caddyfile,
         signal: AbortSignal.timeout(10_000),
       });
