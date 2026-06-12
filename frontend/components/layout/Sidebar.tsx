@@ -38,6 +38,7 @@ import {
   HardDrive,
   Award,
   Database,
+  HelpCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logout } from '@/lib/auth';
@@ -254,6 +255,7 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
           <NotificationBell />
           <ThemeToggle />
         </div>
+        <NavLink item={{ href: '/aide', label: 'Aide & documentation', icon: HelpCircle }} active={isActive('/aide')} />
         <NavLink item={{ href: '/time', label: 'Mon temps', icon: Clock }} active={isActive('/time')} />
         <NavLink item={{ href: '/settings', label: 'Mon profil', icon: User }} active={isActive('/settings')} />
         <button
