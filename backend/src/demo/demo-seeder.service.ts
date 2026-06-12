@@ -33,7 +33,10 @@ export class DemoSeederService {
   ) {}
 
   private get password(): string {
-    return this.config.get<string>('DEMO_PASSWORD') ?? 'DemoMDO2026!';
+    // `|| ` (pas `?? `) : DEMO_PASSWORD peut arriver comme chaine vide via
+    // docker-compose (${DEMO_PASSWORD:-}) -> on retombe sur le defaut.
+    const p = this.config.get<string>('DEMO_PASSWORD');
+    return p && p.trim() ? p : 'DemoMDO2026!';
   }
   private get enabled(): boolean {
     return this.config.get<string>('DEMO_RESET_ENABLED') === 'true';
