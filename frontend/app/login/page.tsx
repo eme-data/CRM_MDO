@@ -2,7 +2,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { ShieldCheck, KeyRound, Mail, ArrowLeft, Loader2 } from 'lucide-react';
+import { ShieldCheck, KeyRound, Mail, ArrowLeft, Loader2, Sparkles, ShieldAlert } from 'lucide-react';
 import { login } from '@/lib/auth';
 import { useBranding } from '@/components/BrandingProvider';
 import { getSsoStatus, ssoStartUrl, SsoStatus } from '@/lib/sso';
@@ -124,6 +124,32 @@ function LoginPageInner() {
                 {needTotp ? 'Verification a deux facteurs' : 'Connexion a votre espace'}
               </p>
             </div>
+
+            {/* Bandeau demo : visible uniquement sur un tenant de demonstration. */}
+            {!needTotp && branding.isDemo && (
+              <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+                <p className="flex items-center gap-1.5 font-semibold text-amber-100">
+                  <Sparkles size={14} /> Environnement de demonstration
+                </p>
+                <p className="text-amber-200/80">
+                  Donnees fictives, reinitialisees chaque jour.
+                </p>
+                <p className="flex items-start gap-1.5 text-amber-200/80">
+                  <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+                  MFA optionnel ici ; en production il est obligatoire pour les roles Admin et Manager.
+                </p>
+                <div className="rounded bg-slate-950/50 p-2 font-mono text-[11px] text-slate-300">
+                  admin@demo.mdoservices.fr · DemoMDO2026!
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setEmail('admin@demo.mdoservices.fr'); setPassword('DemoMDO2026!'); }}
+                  className="w-full rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 font-medium text-amber-100 transition hover:bg-amber-500/20"
+                >
+                  Remplir les identifiants de demo
+                </button>
+              </div>
+            )}
 
             {!needTotp && sso.enabled && sso.tenantSlug && (
               <div className="space-y-3">
