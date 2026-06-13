@@ -17,6 +17,8 @@ import {
   Inbox,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { me as fetchMe } from '@/lib/auth';
+import { hasFeature } from '@/lib/modules';
 import { formatEuro, formatDate, contractOfferLabel } from '@/lib/utils';
 import { StatCardSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -155,11 +157,18 @@ export default function DashboardPage() {
   const [uptime, setUptime] = useState<UptimeWidget | null>(null);
   const [loadingSurv, setLoadingSurv] = useState(true);
   const [loadingUp, setLoadingUp] = useState(true);
+  // Widgets metier IT (surveillance certs/domaines + uptime) : affiches uniquement
+  // si la specialite Infogerance (infra.monitoring) est activee pour le tenant.
+  const [showInfra, setShowInfra] = useState(false);
 
   useEffect(() => {
     api.get('/dashboard').then(setData).catch(console.error);
-    api.get('/monitoring/overview').then(setSurveillance).catch(console.error).finally(() => setLoadingSurv(false));
-    api.get('/uptime/overview').then(setUptime).catch(console.error).finally(() => setLoadingUp(false));
+    fetchMe().then((u) => {
+      if (!hasFeature(u.modules, 'infra.monitoring')) { setLoadingSurv(false); setLoadingUp(false); return; }
+      setShowInfra(true);
+      api.get('/monitoring/overview').then(setSurveillance).catch(console.error).finally(() => setLoadingSurv(false));
+      api.get('/uptime/overview').then(setUptime).catch(console.error).finally(() => setLoadingUp(false));
+    }).catch(() => { setLoadingSurv(false); setLoadingUp(false); });
   }, []);
 
   return (
@@ -252,6 +261,8 @@ export default function DashboardPage() {
         </>
       )}
 
+      {showInfra && (
+      <>
       <div className="card p-6">
         <SectionTitle
           icon={Shield}
@@ -384,6 +395,8 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+      </>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 card p-6">
