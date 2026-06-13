@@ -273,9 +273,11 @@ export function Sidebar({ user }: { user?: { firstName: string; lastName: string
             </button>
             {adminOpen && (
               <div className="space-y-0.5 mt-1">
-                {adminItems.map((item) => (
-                  <NavLink key={item.href} item={item} active={isActive(item.href)} />
-                ))}
+                {adminItems
+                  .filter((item) => hasFeature(user?.modules, featureForPath(item.href)))
+                  .map((item) => (
+                    <NavLink key={item.href} item={item} active={isActive(item.href)} />
+                  ))}
               </div>
             )}
           </div>

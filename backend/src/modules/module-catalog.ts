@@ -48,7 +48,7 @@ export const FEATURES: FeatureDef[] = [
   // ----- Pilotage (generique) -----
   { code: 'pilotage.dashboard', label: 'Tableau de bord', group: 'pilotage', api: ['dashboard'] },
   { code: 'pilotage.qbr', label: 'Revues clients (QBR)', group: 'pilotage', api: ['customer-success'] },
-  { code: 'pilotage.reporting', label: 'Reporting', group: 'pilotage', api: ['reports', 'client-reports', 'executive', 'profitability'] },
+  { code: 'pilotage.reporting', label: 'Reporting & marges', group: 'pilotage', api: ['reports', 'profitability'] },
 
   // ----- Commercial -----
   { code: 'commercial.crm', label: 'Societes & contacts', group: 'commercial', api: ['companies', 'contacts'] },
@@ -64,7 +64,9 @@ export const FEATURES: FeatureDef[] = [
 
   // ----- Infogerance (specialite metier IT : visible seulement si activee) -----
   { code: 'infra.health', label: 'Sante clients (scoring IT)', group: 'infogerance', api: ['health-score'] },
-  { code: 'infra.assets', label: 'Assets & inventaire', group: 'infogerance', api: ['assets', 'flexible-assets', 'asset-lifecycle', 'locations', 'networks'] },
+  { code: 'infra.reporting', label: 'Reporting MSP (exec, rapports clients)', group: 'infogerance', api: ['executive', 'client-reports'] },
+  { code: 'infra.assets', label: 'Assets & inventaire', group: 'infogerance', api: ['assets', 'flexible-assets', 'flexible-asset-types', 'asset-lifecycle', 'locations', 'networks'] },
+  { code: 'infra.runbooks', label: 'Runbooks & procedures', group: 'infogerance', api: ['runbooks', 'runbook-runs'] },
   { code: 'infra.patch', label: 'Patch management', group: 'infogerance', api: ['patch-management'] },
   { code: 'infra.backup', label: 'Backup verification', group: 'infogerance', api: ['backups', 'backup'] },
   { code: 'infra.monitoring', label: 'Surveillance & uptime', group: 'infogerance', api: ['surveillance', 'uptime', 'monitoring'] },

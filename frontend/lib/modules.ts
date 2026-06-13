@@ -12,6 +12,11 @@ export const FEATURE_BY_PATH: { prefix: string; feature: string }[] = [
   { prefix: '/reports', feature: 'pilotage.reporting' },
   // Sante clients = specialite IT (cf Infogerance)
   { prefix: '/health-overview', feature: 'infra.health' },
+  // Outils admin "metier IT" (caches pour un tenant non-IT)
+  { prefix: '/admin/executive', feature: 'infra.reporting' },
+  { prefix: '/admin/client-reports', feature: 'infra.reporting' },
+  { prefix: '/admin/flexible-asset-types', feature: 'infra.assets' },
+  { prefix: '/admin/runbooks', feature: 'infra.runbooks' },
   // Commercial
   { prefix: '/companies', feature: 'commercial.crm' },
   { prefix: '/contacts', feature: 'commercial.crm' },
