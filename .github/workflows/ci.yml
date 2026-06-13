@@ -25,6 +25,10 @@ jobs:
   backend:
     name: Backend (lint, prisma, build, audit)
     runs-on: ubuntu-latest
+    env:
+      # `prisma validate`/`generate` exigent que DATABASE_URL (referencee par le
+      # datasource) soit definie, meme sans BDD reelle (commande hors-ligne).
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
     defaults:
       run:
         working-directory: backend
@@ -77,10 +81,13 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          # Pas de package-lock.json commite cote frontend (le Dockerfile fait
+          # `npm install` en l'absence de lock). On cle le cache sur package.json
+          # et on installe via `npm install` pour rester aligne avec le build prod.
+          cache-dependency-path: frontend/package.json
 
       - name: Install dependencies
-        run: npm ci --prefer-offline --no-audit
+        run: npm install --prefer-offline --no-audit
 
       - name: Lint
         run: npm run lint
