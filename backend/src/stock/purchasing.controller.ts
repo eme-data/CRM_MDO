@@ -18,6 +18,11 @@ export class PurchasingController {
   @Post()
   create(@Body() dto: CreatePoDto, @CurrentUser() u: JwtUser) { return this.service.create(u, dto); }
 
+  // Genere des brouillons de commande (1 par fournisseur) depuis les suggestions
+  // de reappro (articles sous seuil). Route statique avant ':id'.
+  @Post('reorder')
+  generateReorder(@CurrentUser() u: JwtUser) { return this.service.generateReorderDrafts(u); }
+
   @Get(':id')
   get(@Param('id') id: string, @CurrentUser() u: JwtUser) { return this.service.get(u, id); }
 

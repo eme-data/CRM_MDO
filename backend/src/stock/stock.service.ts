@@ -20,6 +20,15 @@ function isManager(me: JwtUser): boolean {
   return me.isSuperAdmin || me.role === 'ADMIN' || me.role === 'MANAGER';
 }
 
+// Echappement CSV (separateur ';', BOM UTF-8 ajoute par l'appelant) — meme
+// convention que les autres exports du CRM (Excel FR).
+function csvEscape(s: string): string {
+  if (s.includes(';') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
 @Injectable()
 export class StockService {
   constructor(
@@ -373,15 +382,71 @@ export class StockService {
     });
   }
 
+  // ---------------- Reappro ----------------
+  // Suggestions de reappro : articles sous leur seuil, groupes par fournisseur,
+  // avec une quantite suggeree pour repasser au-dessus du seuil (cible = 2x le
+  // seuil par defaut). Utilise par l'UI et la generation de brouillons de commande.
+  async reorderSuggestions(me: JwtUser) {
+    const items = await this.listItems(me);
+    const low = items.filter((i) => i.lowStock);
+    const bySupplier = new Map<string | null, { supplierId: string | null; supplierName: string | null; lines: any[] }>();
+    for (const i of low) {
+      const sid = i.supplierId ?? null;
+      const target = Math.max(2 * i.reorderPoint, i.reorderPoint + 1);
+      const suggestedQty = Math.max(Math.ceil(target - i.totalQty), 1);
+      if (!bySupplier.has(sid)) bySupplier.set(sid, { supplierId: sid, supplierName: i.supplier?.name ?? null, lines: [] });
+      bySupplier.get(sid)!.lines.push({
+        itemId: i.id, sku: i.sku, name: i.name, unit: i.unit,
+        totalQty: i.totalQty, reorderPoint: i.reorderPoint, suggestedQty, unitCostHt: i.avgCostHt,
+      });
+    }
+    return Array.from(bySupplier.values());
+  }
+
+  // Articles sous seuil pour un tenant donne (usage cron, sans JwtUser).
+  async lowStockForTenant(tenantId: string) {
+    const items = await this.prisma.stockItem.findMany({
+      where: { tenantId, active: true },
+      include: { levels: true, supplier: { select: { id: true, name: true } } },
+    });
+    return items.map((it) => this.decorate(it)).filter((i) => i.lowStock);
+  }
+
+  // Commandes fournisseurs en retard (date de livraison attendue depassee).
+  overduePos(where: Prisma.PurchaseOrderWhereInput) {
+    return this.prisma.purchaseOrder.findMany({
+      where: { ...where, status: { in: ['ORDERED', 'PARTIAL'] }, expectedDate: { not: null, lt: new Date() } },
+      include: { supplier: { select: { name: true } } },
+      orderBy: { expectedDate: 'asc' },
+    });
+  }
+
+  // ---------------- Export ----------------
+  // Inventaire valorise (1 ligne par article, agrege tous emplacements). CSV
+  // avec BOM UTF-8 + separateur ';' (Excel FR).
+  async exportInventoryCsv(me: JwtUser): Promise<string> {
+    const items = await this.listItems(me);
+    const out = ['SKU;Nom;Categorie;Fournisseur;Quantite;Unite;PMP HT;Valeur HT'];
+    for (const i of items) {
+      out.push([
+        csvEscape(i.sku), csvEscape(i.name), csvEscape(i.category ?? ''),
+        csvEscape(i.supplier?.name ?? ''), String(i.totalQty), csvEscape(i.unit ?? ''),
+        i.avgCostHt.toFixed(2), i.stockValue.toFixed(2),
+      ].join(';'));
+    }
+    return '﻿' + out.join('\n');
+  }
+
   // ---------------- Dashboard / alertes ----------------
   async dashboard(me: JwtUser) {
     const items = await this.listItems(me);
     const lowStock = items.filter((i) => i.lowStock);
     const stockValue = items.reduce((s, i) => s + i.stockValue, 0);
-    const [locations, suppliers, openPo, recentMovements] = await Promise.all([
+    const [locations, suppliers, openPo, overduePo, recentMovements] = await Promise.all([
       this.prisma.stockLocation.count({ where: this.scope.scopedWhere(me, { active: true }) }),
       this.prisma.supplier.count({ where: this.scope.scopedWhere(me, { active: true }) }),
       this.prisma.purchaseOrder.count({ where: this.scope.scopedWhere(me, { status: { in: ['ORDERED', 'PARTIAL'] } }) }),
+      this.overduePos(this.scope.scopedWhere(me)),
       this.listMovements(me, undefined, 8),
     ]);
     return {
@@ -391,6 +456,11 @@ export class StockService {
       locationCount: locations,
       supplierCount: suppliers,
       openPoCount: openPo,
+      overduePoCount: overduePo.length,
+      overduePos: overduePo.slice(0, 20).map((p) => ({
+        id: p.id, reference: p.reference, supplierName: p.supplier?.name ?? null,
+        expectedDate: p.expectedDate, status: p.status,
+      })),
       lowStock: lowStock.slice(0, 20).map((i) => ({ id: i.id, sku: i.sku, name: i.name, totalQty: i.totalQty, reorderPoint: i.reorderPoint, unit: i.unit })),
       recentMovements,
     };

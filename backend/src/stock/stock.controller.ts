@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { StockService } from './stock.service';
 import {
@@ -18,6 +19,19 @@ export class StockController {
 
   @Get('dashboard')
   dashboard(@CurrentUser() u: JwtUser) { return this.service.dashboard(u); }
+
+  // ----- Reappro -----
+  @Get('reorder/suggestions')
+  reorderSuggestions(@CurrentUser() u: JwtUser) { return this.service.reorderSuggestions(u); }
+
+  // ----- Export inventaire (CSV) -----
+  @Get('inventory.csv')
+  async inventoryCsv(@CurrentUser() u: JwtUser, @Res() res: Response) {
+    const csv = await this.service.exportInventoryCsv(u);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="inventaire-stock.csv"');
+    res.send(csv);
+  }
 
   // ----- Emplacements -----
   @Get('locations')

@@ -124,6 +124,40 @@ export class PurchasingService {
     return this.get(me, id);
   }
 
+  // Genere des brouillons de commande (DRAFT) a partir des suggestions de
+  // reappro : un PO par fournisseur, pre-rempli avec les quantites suggerees.
+  // Les articles sans fournisseur sont ignores (PO impossible) et remontes.
+  async generateReorderDrafts(me: JwtUser) {
+    this.assertManager(me);
+    const groups = await this.stock.reorderSuggestions(me);
+    const withSupplier = groups.filter((g) => g.supplierId);
+    const skippedNoSupplier = groups
+      .filter((g) => !g.supplierId)
+      .flatMap((g) => g.lines.map((l: any) => l.sku as string));
+    if (withSupplier.length === 0) {
+      return { created: 0, purchaseOrders: [], skippedNoSupplier };
+    }
+    // Emplacement de livraison par defaut = premier emplacement actif.
+    const loc = await this.prisma.stockLocation.findFirst({
+      where: this.scope.scopedWhere(me, { active: true }),
+      orderBy: { name: 'asc' },
+    });
+    if (!loc) {
+      throw new BadRequestException('Aucun emplacement actif : creez-en un avant de generer des commandes de reappro.');
+    }
+    const created: any[] = [];
+    for (const g of withSupplier) {
+      const po = await this.create(me, {
+        supplierId: g.supplierId!,
+        locationId: loc.id,
+        notes: 'Brouillon genere automatiquement (reappro seuil bas)',
+        lines: g.lines.map((l: any) => ({ itemId: l.itemId, quantityOrdered: l.suggestedQty, unitCostHt: l.unitCostHt })),
+      });
+      created.push(po);
+    }
+    return { created: created.length, purchaseOrders: created, skippedNoSupplier };
+  }
+
   private async assertOwned(model: 'supplier' | 'stockLocation' | 'stockItem' | 'purchaseOrder', id: string, me: JwtUser): Promise<any> {
     const e = await (this.prisma as any)[model].findFirst({ where: this.scope.scopedWhere(me, { id }) });
     if (!e) throw new NotFoundException('Element introuvable dans ce tenant');

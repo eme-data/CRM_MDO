@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { StockService } from './stock.service';
 import { PurchasingService } from './purchasing.service';
+import { StockAlertsProcessor } from './stock-alerts.processor';
 import { StockController } from './stock.controller';
 import { PurchasingController } from './purchasing.controller';
 
 @Module({
-  providers: [StockService, PurchasingService],
+  providers: [StockService, PurchasingService, StockAlertsProcessor],
   controllers: [StockController, PurchasingController],
   exports: [StockService],
 })

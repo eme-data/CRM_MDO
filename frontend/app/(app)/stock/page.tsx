@@ -4,9 +4,9 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import {
   Boxes, Plus, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
-  ClipboardCheck, Settings2, Package, ShoppingCart, History,
+  ClipboardCheck, Settings2, Package, ShoppingCart, History, Download, RefreshCw, Clock,
 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, authedFetch } from '@/lib/api';
 import { ProductAutocomplete } from '@/components/ProductAutocomplete';
 
 interface Loc { id: string; name: string; code?: string | null; active?: boolean }
@@ -16,9 +16,15 @@ interface Item {
   avgCostHt: number; reorderPoint: number; totalQty: number; stockValue: number; lowStock: boolean;
   supplier?: { id: string; name: string } | null;
 }
+interface OverduePo { id: string; reference: string; supplierName: string | null; expectedDate: string | null; status: string }
 interface Dash {
   itemCount: number; lowStockCount: number; stockValueHt: number; locationCount: number;
   supplierCount: number; openPoCount: number;
+  overduePoCount: number; overduePos: OverduePo[];
+}
+interface ReorderGroup {
+  supplierId: string | null; supplierName: string | null;
+  lines: { itemId: string; sku: string; name: string; unit: string; totalQty: number; reorderPoint: number; suggestedQty: number; unitCostHt: number }[];
 }
 type Kind = 'IN' | 'OUT' | 'TRANSFER' | 'ADJUST';
 
@@ -31,6 +37,7 @@ export default function StockPage() {
   const [suppliers, setSuppliers] = useState<Sup[]>([]);
   const [showItem, setShowItem] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  const [showReorder, setShowReorder] = useState(false);
   const [mv, setMv] = useState<{ item: Item; kind: Kind } | null>(null);
 
   async function reload() {
@@ -41,11 +48,26 @@ export default function StockPage() {
   }
   useEffect(() => { reload(); }, []);
 
+  async function downloadInventory() {
+    try {
+      const res = await authedFetch('/api/stock/inventory.csv');
+      if (!res.ok) throw new Error('Export indisponible');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'inventaire-stock.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) { toast.error(e.message); }
+  }
+
   return (
     <div className="space-y-6 max-w-6xl">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-3xl font-bold flex items-center gap-3"><Boxes size={28} className="text-mdo-600" /> Stock</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setShowReorder(true)} className="btn btn-secondary"><RefreshCw size={14} className="mr-1" /> Réappro</button>
+          <button onClick={downloadInventory} className="btn btn-secondary"><Download size={14} className="mr-1" /> Exporter</button>
           <Link href="/stock/commandes" className="btn btn-secondary"><ShoppingCart size={14} className="mr-1" /> Commandes</Link>
           <button onClick={() => setShowConfig((v) => !v)} className="btn btn-secondary"><Settings2 size={14} className="mr-1" /> Fournisseurs & emplacements</button>
           <button onClick={() => setShowItem(true)} className="btn btn-primary"><Plus size={14} className="mr-1" /> Nouvel article</button>
@@ -54,11 +76,29 @@ export default function StockPage() {
 
       {/* KPIs */}
       {dash && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <Kpi icon={Package} label="Articles" value={dash.itemCount} />
           <Kpi icon={AlertTriangle} label="En stock bas" value={dash.lowStockCount} accent={dash.lowStockCount > 0} />
           <Kpi icon={Boxes} label="Valeur du stock (HT)" value={eur(dash.stockValueHt)} />
           <Kpi icon={ShoppingCart} label="Commandes en cours" value={dash.openPoCount} />
+          <Kpi icon={Clock} label="Cmd. en retard" value={dash.overduePoCount ?? 0} accent={(dash.overduePoCount ?? 0) > 0} />
+        </div>
+      )}
+
+      {/* Bandeau commandes fournisseurs en retard */}
+      {dash && dash.overduePos && dash.overduePos.length > 0 && (
+        <div className="card p-4 border-l-4 border-amber-400 bg-amber-50/50">
+          <div className="font-semibold text-sm flex items-center gap-2 text-amber-800 mb-2">
+            <Clock size={16} /> {dash.overduePos.length} commande(s) fournisseur en retard
+          </div>
+          <ul className="text-sm space-y-1">
+            {dash.overduePos.map((p) => (
+              <li key={p.id} className="flex items-center justify-between gap-3">
+                <span><Link href="/stock/commandes" className="font-medium hover:text-mdo-600">{p.reference}</Link>{p.supplierName && <span className="text-slate-500"> — {p.supplierName}</span>}</span>
+                <span className="text-xs text-amber-700">attendue le {p.expectedDate ? new Date(p.expectedDate).toLocaleDateString('fr-FR') : '—'}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -107,7 +147,72 @@ export default function StockPage() {
 
       {showItem && <ItemModal suppliers={suppliers} onClose={() => setShowItem(false)} onSaved={() => { setShowItem(false); reload(); }} />}
       {mv && <MovementModal item={mv.item} kind={mv.kind} locations={locations} onClose={() => setMv(null)} onSaved={() => { setMv(null); reload(); }} />}
+      {showReorder && <ReorderModal onClose={() => setShowReorder(false)} onDone={() => { setShowReorder(false); reload(); }} />}
     </div>
+  );
+}
+
+function ReorderModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [groups, setGroups] = useState<ReorderGroup[] | null>(null);
+  const [generating, setGenerating] = useState(false);
+
+  useEffect(() => { api.get('/stock/reorder/suggestions').then(setGroups).catch(() => setGroups([])); }, []);
+
+  const withSupplier = (groups ?? []).filter((g) => g.supplierId);
+  const noSupplier = (groups ?? []).filter((g) => !g.supplierId).flatMap((g) => g.lines);
+
+  async function generate() {
+    setGenerating(true);
+    try {
+      const r: any = await api.post('/stock/purchase-orders/reorder', {});
+      if (r.created > 0) toast.success(r.created + ' brouillon(s) de commande créé(s)');
+      else toast.info('Aucune commande générée');
+      if (r.skippedNoSupplier?.length) toast.warning(r.skippedNoSupplier.length + ' article(s) sans fournisseur ignoré(s)');
+      onDone();
+    } catch (e: any) { toast.error(e.message); } finally { setGenerating(false); }
+  }
+
+  return (
+    <Modal title="Réapprovisionnement" onClose={onClose}>
+      {groups === null ? (
+        <p className="text-sm text-slate-400">Chargement…</p>
+      ) : groups.length === 0 ? (
+        <p className="text-sm text-slate-500">Aucun article sous son seuil de réappro. 👍</p>
+      ) : (
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500">Articles sous leur seuil, regroupés par fournisseur. La génération crée un brouillon de commande par fournisseur (quantités modifiables ensuite).</p>
+          {withSupplier.map((g) => (
+            <div key={g.supplierId} className="border rounded-lg overflow-hidden">
+              <div className="bg-slate-50 px-3 py-2 text-sm font-semibold flex items-center gap-2"><ShoppingCart size={14} /> {g.supplierName}</div>
+              <table className="w-full text-sm">
+                <thead className="text-xs uppercase text-slate-400"><tr><th className="px-3 py-1 text-left">Article</th><th className="px-3 py-1 text-right">Stock</th><th className="px-3 py-1 text-right">Seuil</th><th className="px-3 py-1 text-right">À commander</th></tr></thead>
+                <tbody>
+                  {g.lines.map((l) => (
+                    <tr key={l.itemId} className="border-t">
+                      <td className="px-3 py-1"><span className="font-mono text-xs text-slate-400">{l.sku}</span> {l.name}</td>
+                      <td className="px-3 py-1 text-right text-red-600">{l.totalQty} {l.unit}</td>
+                      <td className="px-3 py-1 text-right text-slate-500">{l.reorderPoint}</td>
+                      <td className="px-3 py-1 text-right font-semibold">{l.suggestedQty}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+          {noSupplier.length > 0 && (
+            <p className="text-xs text-amber-700 bg-amber-50 rounded p-2">
+              {noSupplier.length} article(s) sous le seuil sans fournisseur défini ({noSupplier.map((l) => l.sku).join(', ')}) — assignez-leur un fournisseur pour générer une commande.
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} className="btn btn-secondary">Fermer</button>
+            <button onClick={generate} disabled={generating || withSupplier.length === 0} className="btn btn-primary">
+              {generating ? 'Génération…' : 'Générer les brouillons'}
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
 
