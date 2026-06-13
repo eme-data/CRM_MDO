@@ -64,7 +64,6 @@ const sections: NavSection[] = [
     title: 'Pilotage',
     items: [
       { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
-      { href: '/health-overview', label: 'Sante clients', icon: Activity },
       { href: '/customer-success', label: 'QBR / Customer Success', icon: Calendar },
       { href: '/reports', label: 'Reporting', icon: BarChart3 },
     ],
@@ -93,6 +92,7 @@ const sections: NavSection[] = [
   {
     title: 'Infogerance',
     items: [
+      { href: '/health-overview', label: 'Sante clients', icon: Activity },
       { href: '/assets', label: 'Assets clients', icon: Server },
       { href: '/asset-lifecycle', label: 'Lifecycle materiel', icon: Server },
       { href: '/patch-management', label: 'Patch management', icon: Cpu },

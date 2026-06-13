@@ -27,21 +27,28 @@ export interface FeatureDef {
 export interface GroupDef { code: string; label: string }
 export interface OfferDef { code: string; label: string; description: string; features: string[] }
 
+// Philosophie : l'application est GENERIQUE par defaut (Pilotage, Commercial,
+// Service & Support, Outils, Stock, SIRH conviennent a n'importe quelle
+// entreprise). Le groupe "Infogerance" est une SPECIALITE METIER (IT/MSP) :
+// ses features (sante clients/scoring, surveillance certificats & domaines,
+// assets, patch, backup, SOC, phishing...) ne s'affichent que pour les tenants
+// qui l'activent. Pour ajouter une autre specialite metier plus tard, creer un
+// nouveau groupe sur ce modele.
 export const GROUPS: GroupDef[] = [
   { code: 'pilotage', label: 'Pilotage' },
   { code: 'commercial', label: 'Commercial' },
   { code: 'support', label: 'Service & Support' },
-  { code: 'infogerance', label: 'Infogerance' },
+  { code: 'infogerance', label: 'Infogerance (specialite IT)' },
   { code: 'outils', label: 'Outils' },
   { code: 'stock', label: 'Stock' },
   { code: 'sirh', label: 'SIRH' },
 ];
 
 export const FEATURES: FeatureDef[] = [
-  // ----- Pilotage -----
+  // ----- Pilotage (generique) -----
   { code: 'pilotage.dashboard', label: 'Tableau de bord', group: 'pilotage', api: ['dashboard'] },
-  { code: 'pilotage.health', label: 'Sante clients & QBR', group: 'pilotage', api: ['health-score', 'customer-success'] },
-  { code: 'pilotage.reporting', label: 'Reporting & exec', group: 'pilotage', api: ['reports', 'client-reports', 'executive', 'profitability'] },
+  { code: 'pilotage.qbr', label: 'Revues clients (QBR)', group: 'pilotage', api: ['customer-success'] },
+  { code: 'pilotage.reporting', label: 'Reporting', group: 'pilotage', api: ['reports', 'client-reports', 'executive', 'profitability'] },
 
   // ----- Commercial -----
   { code: 'commercial.crm', label: 'Societes & contacts', group: 'commercial', api: ['companies', 'contacts'] },
@@ -55,7 +62,8 @@ export const FEATURES: FeatureDef[] = [
   { code: 'support.interventions', label: 'Interventions', group: 'support', api: ['interventions'] },
   { code: 'support.calls', label: 'Appels', group: 'support', api: ['calls'] },
 
-  // ----- Infogerance -----
+  // ----- Infogerance (specialite metier IT : visible seulement si activee) -----
+  { code: 'infra.health', label: 'Sante clients (scoring IT)', group: 'infogerance', api: ['health-score'] },
   { code: 'infra.assets', label: 'Assets & inventaire', group: 'infogerance', api: ['assets', 'flexible-assets', 'asset-lifecycle', 'locations', 'networks'] },
   { code: 'infra.patch', label: 'Patch management', group: 'infogerance', api: ['patch-management'] },
   { code: 'infra.backup', label: 'Backup verification', group: 'infogerance', api: ['backups', 'backup'] },

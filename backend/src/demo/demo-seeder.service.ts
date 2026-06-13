@@ -17,7 +17,7 @@ const SLUG = 'demo';
 const DOMAIN = 'demo.mdoservices.fr';
 const YEAR = 2026;
 const MODULES = [
-  'pilotage.dashboard', 'pilotage.health', 'pilotage.reporting',
+  'pilotage.dashboard', 'pilotage.qbr', 'pilotage.reporting',
   'commercial.crm', 'commercial.opportunities', 'commercial.quotes', 'commercial.contracts', 'commercial.invoices',
   'support.tickets', 'support.interventions', 'support.calls',
   'stock.inventory', 'stock.purchasing',

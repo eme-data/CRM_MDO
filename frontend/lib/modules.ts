@@ -6,11 +6,12 @@
 // rester alignee avec backend/src/modules/module-catalog.ts (memes codes).
 
 export const FEATURE_BY_PATH: { prefix: string; feature: string }[] = [
-  // Pilotage
+  // Pilotage (generique)
   { prefix: '/dashboard', feature: 'pilotage.dashboard' },
-  { prefix: '/health-overview', feature: 'pilotage.health' },
-  { prefix: '/customer-success', feature: 'pilotage.health' },
+  { prefix: '/customer-success', feature: 'pilotage.qbr' },
   { prefix: '/reports', feature: 'pilotage.reporting' },
+  // Sante clients = specialite IT (cf Infogerance)
+  { prefix: '/health-overview', feature: 'infra.health' },
   // Commercial
   { prefix: '/companies', feature: 'commercial.crm' },
   { prefix: '/contacts', feature: 'commercial.crm' },
