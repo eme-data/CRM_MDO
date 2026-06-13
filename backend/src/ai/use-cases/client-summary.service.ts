@@ -84,6 +84,7 @@ export class ClientSummaryService {
 
     const text = await this.ai.invoke({
       capability: 'CLIENT_SUMMARY',
+      tenantId,
       systemPrompt: SUMMARY_SYSTEM_PROMPT,
       userMessage,
       maxTokens: 700,

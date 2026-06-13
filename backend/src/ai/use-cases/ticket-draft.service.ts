@@ -200,6 +200,7 @@ export class TicketDraftService {
 
     const text = await this.ai.invoke({
       capability: 'TICKET_DRAFT',
+      tenantId,
       systemPrompt: DRAFT_SYSTEM_PROMPT,
       userMessage,
       maxTokens: 800,

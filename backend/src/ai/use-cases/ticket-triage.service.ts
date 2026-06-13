@@ -66,6 +66,7 @@ export class TicketTriageService {
 
     const text = await this.ai.invoke({
       capability: 'TICKET_TRIAGE',
+      tenantId,
       systemPrompt: TRIAGE_SYSTEM_PROMPT,
       userMessage,
       maxTokens: 400,

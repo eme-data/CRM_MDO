@@ -82,6 +82,7 @@ export class TicketSummaryService {
 
     const text = await this.ai.invoke({
       capability: 'TICKET_SUMMARY',
+      tenantId,
       systemPrompt: SUMMARY_SYSTEM_PROMPT,
       userMessage,
       maxTokens: 600,

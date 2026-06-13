@@ -191,6 +191,7 @@ export class DocumentExtractService {
 
     const text = await this.ai.invoke({
       capability: 'DOCUMENT_EXTRACT',
+      tenantId,
       systemPrompt: EXTRACT_SYSTEM_PROMPT,
       userMessage,
       // Pas de cache : chaque document est unique, le cache du system prompt
