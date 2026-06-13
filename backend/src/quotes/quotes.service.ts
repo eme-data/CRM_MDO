@@ -7,6 +7,7 @@ import { UpdateQuoteDto } from './dto/update-quote.dto';
 import { ConvertQuoteDto } from './dto/convert-quote.dto';
 import { QuoteLineDto } from './dto/quote-line.dto';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { StockService } from '../stock/stock.service';
 
 interface ComputedLine {
   position: number;
@@ -17,6 +18,7 @@ interface ComputedLine {
   lineTotalHt: number;
   productId?: string | null;
   purchasePriceHtSnapshot?: number | null;
+  stockItemId?: string | null;
 }
 
 @Injectable()
@@ -26,6 +28,7 @@ export class QuotesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly webhooks: WebhooksService,
+    private readonly stock: StockService,
   ) {}
 
   // ============================================================
@@ -77,6 +80,7 @@ export class QuotesService {
         lineTotalHt: lineTotal,
         productId: l.productId ?? null,
         purchasePriceHtSnapshot: l.productId ? purchaseMap.get(l.productId) ?? null : null,
+        stockItemId: l.stockItemId ?? null,
       };
     });
   }
@@ -306,6 +310,10 @@ export class QuotesService {
       id: updated.id, reference: updated.reference, totalTtc: Number(updated.totalTtc),
       companyId: updated.companyId,
     }, { companyId: updated.companyId, tenantId: updated.tenantId }).catch((err) => this.logger.warn('Webhook fail : ' + err.message));
+    // Reserve le stock des lignes liees a un article (best-effort, ne bloque pas
+    // l'acceptation si le stock est indisponible : c'est un hold indicatif).
+    await this.stock.reserveForQuote(updated.tenantId, updated.id)
+      .catch((err) => this.logger.warn('Reservation stock devis ' + updated.reference + ' : ' + err.message));
     return updated;
   }
 
@@ -335,6 +343,9 @@ export class QuotesService {
       id: updated.id, reference: updated.reference, reason: reason ?? null,
       companyId: updated.companyId,
     }, { companyId: updated.companyId, tenantId: updated.tenantId }).catch((err) => this.logger.warn('Webhook fail : ' + err.message));
+    // Libere les eventuelles reservations de stock du devis.
+    await this.stock.releaseForQuote(updated.tenantId, updated.id)
+      .catch((err) => this.logger.warn('Liberation stock devis ' + updated.reference + ' : ' + err.message));
     return updated;
   }
 
@@ -389,7 +400,7 @@ export class QuotesService {
     }
     const reference = `${prefix}${String(nextNum).padStart(4, '0')}`;
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const contract = await tx.contract.create({
         data: {
           // Heriter du tenantId du quote, sinon le Contract serait global
@@ -433,6 +444,11 @@ export class QuotesService {
       });
       return { quoteId: q.id, contract };
     });
+    // Le hold commercial est leve a la conversion : le suivi passe au contrat /
+    // a la facturation (qui decrementera le stock physique reel).
+    await this.stock.releaseForQuote(q.tenantId, q.id)
+      .catch((err) => this.logger.warn('Liberation stock devis ' + q.reference + ' : ' + err.message));
+    return result;
   }
 
   // ============================================================

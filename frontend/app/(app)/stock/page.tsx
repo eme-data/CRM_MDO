@@ -14,6 +14,7 @@ interface Sup { id: string; name: string; active?: boolean }
 interface Item {
   id: string; sku: string; name: string; category: string | null; unit: string;
   avgCostHt: number; reorderPoint: number; totalQty: number; stockValue: number; lowStock: boolean;
+  reservedQty?: number; availableQty?: number;
   supplier?: { id: string; name: string } | null;
 }
 interface OverduePo { id: string; reference: string; supplierName: string | null; expectedDate: string | null; status: string }
@@ -128,6 +129,7 @@ export default function StockPage() {
                     <span className={it.lowStock ? 'text-red-600 font-semibold' : 'font-medium'}>{it.totalQty}</span>
                     <span className="text-xs text-slate-400"> {it.unit}</span>
                     {it.lowStock && <AlertTriangle size={12} className="inline ml-1 text-red-500" />}
+                    {(it.reservedQty ?? 0) > 0 && <div className="text-[11px] text-amber-600">dispo {it.availableQty} · {it.reservedQty} réservé</div>}
                   </td>
                   <td className="p-3 text-right text-slate-600">{eur(it.avgCostHt)}</td>
                   <td className="p-3 text-right text-slate-600">{eur(it.stockValue)}</td>

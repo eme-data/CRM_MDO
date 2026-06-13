@@ -13,6 +13,7 @@ interface Line {
   unitPriceHt: number;
   discountPct: number;
   productId?: string;
+  stockItemId?: string;
 }
 
 const DEFAULT_VALIDITY_DAYS = 30;
@@ -28,6 +29,7 @@ export default function NewQuotePage() {
   const [contacts, setContacts] = useState<any[]>([]);
   const [opps, setOpps] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [stockItems, setStockItems] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [data, setData] = useState<any>({
     title: '',
@@ -47,6 +49,7 @@ export default function NewQuotePage() {
     api.get('/companies?pageSize=500').then((r) => setCompanies(r.items));
     api.get('/opportunities').then(setOpps);
     api.get('/products').then(setProducts).catch(() => setProducts([]));
+    api.get('/stock/items').then((d) => setStockItems(Array.isArray(d) ? d : [])).catch(() => setStockItems([]));
     api.get('/quote-templates').then(setTemplates).catch(() => setTemplates([]));
   }, []);
 
@@ -127,6 +130,7 @@ export default function NewQuotePage() {
           unitPriceHt: Number(l.unitPriceHt),
           discountPct: Number(l.discountPct ?? 0),
           productId: l.productId,
+          stockItemId: l.stockItemId,
         })),
       };
       const q = await api.post('/quotes', payload);
@@ -212,6 +216,20 @@ export default function NewQuotePage() {
                     initialLabel={(() => { const p = products.find((x: any) => x.id === l.productId); return p ? (p.code ? `[${p.code}] ${p.name}` : p.name) : ''; })()}
                     onSelect={(p) => applyProduct(i, p.id)}
                   />
+                )}
+                {stockItems.length > 0 && (
+                  <div className="flex items-center gap-2 max-w-md">
+                    <select className="input text-xs py-1" value={l.stockItemId ?? ''} onChange={(e) => setLine(i, 'stockItemId', e.target.value || undefined)}>
+                      <option value="">Lier un article de stock (réservé à l'acceptation)…</option>
+                      {stockItems.map((s: any) => <option key={s.id} value={s.id}>{s.sku} — {s.name} · {s.availableQty} dispo</option>)}
+                    </select>
+                    {l.stockItemId && (() => {
+                      const s = stockItems.find((x: any) => x.id === l.stockItemId);
+                      if (!s) return null;
+                      const ok = s.availableQty >= l.quantity;
+                      return <span className={'text-xs whitespace-nowrap ' + (ok ? 'text-emerald-600' : 'text-amber-600')}>{s.availableQty} dispo{ok ? '' : ' ⚠'}</span>;
+                    })()}
+                  </div>
                 )}
                 <div className="grid grid-cols-12 gap-2 items-start">
                   <textarea

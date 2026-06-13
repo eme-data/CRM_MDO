@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { ArrowLeft, Package, MapPin, Hash, History } from 'lucide-react';
+import { ArrowLeft, Package, MapPin, Hash, History, CalendarClock } from 'lucide-react';
 import { api } from '@/lib/api';
 
 const eur = (n: number) => (n ?? 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
@@ -51,6 +51,7 @@ export default function StockItemPage() {
         <div className="text-right">
           <div className="text-2xl font-bold">{item.totalQty} <span className="text-sm font-normal text-slate-400">{item.unit}</span></div>
           <div className="text-xs text-slate-500">PMP {eur(item.avgCostHt)} · valeur {eur(item.stockValue)}</div>
+          {(item.reservedQty ?? 0) > 0 && <div className="text-xs text-amber-600 font-medium">Disponible {item.availableQty} · {item.reservedQty} réservé</div>}
           {item.lowStock && <div className="text-xs text-red-600 font-medium">Sous le seuil ({item.reorderPoint})</div>}
         </div>
       </div>
@@ -68,6 +69,23 @@ export default function StockItemPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Reservations sur devis acceptes */}
+      {(item.reservations ?? []).length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="p-3 border-b font-semibold flex items-center gap-2 text-amber-800"><CalendarClock size={16} /> Réservations (devis acceptés)</div>
+          <table className="w-full text-sm">
+            <tbody>
+              {item.reservations.map((r: any) => (
+                <tr key={r.id} className="border-t">
+                  <td className="p-3"><Link href={`/quotes/${r.quote?.id}`} className="font-medium hover:text-mdo-600">{r.quote?.reference ?? '—'}</Link></td>
+                  <td className="p-3 text-right font-medium text-amber-600">{Number(r.quantity)} {item.unit}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Numeros de serie */}
       {item.trackSerial && (

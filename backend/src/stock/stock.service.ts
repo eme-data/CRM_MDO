@@ -75,7 +75,8 @@ export class StockService {
       include: { levels: true, supplier: { select: { id: true, name: true } }, product: { select: { id: true, name: true } } },
       orderBy: { name: 'asc' },
     });
-    return items.map((it) => this.decorate(it));
+    const reserved = await this.reservedByItem(this.scope.scopedWhere(me, { status: 'ACTIVE' }));
+    return items.map((it) => this.decorate(it, reserved.get(it.id) ?? 0));
   }
 
   async getItem(me: JwtUser, id: string) {
@@ -86,13 +87,30 @@ export class StockService {
         supplier: { select: { id: true, name: true } },
         product: { select: { id: true, name: true } },
         serials: { include: { asset: { select: { id: true, name: true, company: { select: { name: true } } } } }, orderBy: { createdAt: 'desc' } },
+        reservations: {
+          where: { status: 'ACTIVE' },
+          include: { quote: { select: { id: true, reference: true } } },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
     if (!it) throw new NotFoundException('Article introuvable');
-    return this.decorate(it);
+    const reservedQty = (it.reservations ?? []).reduce((s: number, r: any) => s + n(r.quantity), 0);
+    return this.decorate(it, reservedQty);
   }
 
-  private decorate(it: any) {
+  // Somme des quantites reservees (ACTIVE) par article, pour calculer le stock
+  // disponible (= physique - reserve). `where` doit deja scoper le tenant.
+  private async reservedByItem(where: Prisma.StockReservationWhereInput): Promise<Map<string, number>> {
+    const rows = await this.prisma.stockReservation.groupBy({
+      by: ['itemId'],
+      where,
+      _sum: { quantity: true },
+    });
+    return new Map(rows.map((r) => [r.itemId, n(r._sum.quantity)]));
+  }
+
+  private decorate(it: any, reservedQty = 0) {
     const totalQty = (it.levels ?? []).reduce((s: number, l: any) => s + n(l.quantity), 0);
     const reorderPoint = n(it.reorderPoint);
     return {
@@ -100,6 +118,8 @@ export class StockService {
       avgCostHt: n(it.avgCostHt),
       reorderPoint,
       totalQty,
+      reservedQty,
+      availableQty: totalQty - reservedQty,
       stockValue: totalQty * n(it.avgCostHt),
       lowStock: reorderPoint > 0 && totalQty <= reorderPoint,
     };
@@ -299,6 +319,37 @@ export class StockService {
       });
     }
     return { restored: outs.length };
+  }
+
+  // ---------------- Reservation sur devis ----------------
+  // Cree des reservations ACTIVE pour les lignes du devis liees a un article de
+  // stock. Reduit le stock DISPONIBLE (= physique - reserve) sans toucher au
+  // physique. Idempotent (ne re-reserve pas si des reservations ACTIVE existent).
+  async reserveForQuote(tenantId: string | null, quoteId: string) {
+    const active = await this.prisma.stockReservation.count({ where: { tenantId, quoteId, status: 'ACTIVE' } });
+    if (active > 0) return { skipped: 'already' };
+    const lines = await this.prisma.quoteLine.findMany({
+      where: { quoteId, stockItemId: { not: null } },
+      select: { stockItemId: true, quantity: true },
+    });
+    if (lines.length === 0) return { reserved: 0 };
+    await this.prisma.stockReservation.createMany({
+      data: lines.map((l) => ({
+        tenantId, itemId: l.stockItemId as string, quoteId, quantity: l.quantity, status: 'ACTIVE' as const,
+      })),
+    });
+    return { reserved: lines.length };
+  }
+
+  // Libere (RELEASED) les reservations ACTIVE d'un devis : refus, expiration,
+  // conversion en contrat (le decrement physique reel se fera a la facturation).
+  // Idempotent.
+  async releaseForQuote(tenantId: string | null, quoteId: string) {
+    const r = await this.prisma.stockReservation.updateMany({
+      where: { tenantId, quoteId, status: 'ACTIVE' },
+      data: { status: 'RELEASED', releasedAt: new Date() },
+    });
+    return { released: r.count };
   }
 
   // ---------------- Numeros de serie ----------------

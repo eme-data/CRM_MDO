@@ -146,6 +146,7 @@ model Tenant {
   stockLevels            StockLevel[]
   stockMovements         StockMovement[]
   stockSerials           StockSerial[]
+  stockReservations      StockReservation[]
   purchaseOrders         PurchaseOrder[]
   stockConsumptions      StockConsumption[]
 
@@ -1938,6 +1939,8 @@ model StockItem {
   poLines      PurchaseOrderLine[]
   consumptions StockConsumption[]
   invoiceLines InvoiceLine[]
+  quoteLines   QuoteLine[]
+  reservations StockReservation[]
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 
@@ -2918,7 +2921,8 @@ model Quote {
   convertedToContract   Contract? @relation("ContractFromQuote", fields: [convertedToContractId], references: [id], onDelete: SetNull)
   convertedAt           DateTime?
 
-  lines QuoteLine[]
+  lines        QuoteLine[]
+  reservations StockReservation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2956,8 +2960,41 @@ model QuoteLine {
   // on veut que la marge historique reste calculee correctement).
   purchasePriceHtSnapshot Decimal? @db.Decimal(10, 2)
 
+  // Lien optionnel vers un article de stock : permet de reserver la quantite
+  // quand le devis est accepte (cf StockReservation).
+  stockItemId String?
+  stockItem   StockItem? @relation(fields: [stockItemId], references: [id], onDelete: SetNull)
+
   @@index([quoteId])
   @@index([productId])
+  @@index([stockItemId])
+}
+
+// Reservation de stock liee a un devis : "hold" temporaire qui reduit le stock
+// DISPONIBLE (= physique - reserve actif) sans toucher au physique. Cree quand
+// un devis est accepte, libere si le devis est refuse/expire ou converti en
+// contrat (le decrement physique reel se fait ensuite a la facturation).
+enum StockReservationStatus {
+  ACTIVE
+  RELEASED
+}
+
+model StockReservation {
+  id        String                 @id @default(uuid())
+  tenantId  String?
+  tenant    Tenant?                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  itemId    String
+  item      StockItem              @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  quoteId   String
+  quote     Quote                  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quantity  Decimal                @db.Decimal(12, 2)
+  status    StockReservationStatus @default(ACTIVE)
+  createdAt DateTime               @default(now())
+  releasedAt DateTime?
+
+  @@index([tenantId])
+  @@index([itemId, status])
+  @@index([quoteId])
 }
 
 // =================== CATALOGUE PRODUITS ===================

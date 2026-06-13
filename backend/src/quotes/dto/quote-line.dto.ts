@@ -34,4 +34,10 @@ export class QuoteLineDto {
   @IsOptional()
   @IsString()
   productId?: string;
+
+  // Lien optionnel vers un article de stock : la quantite sera reservee quand
+  // le devis est accepte (cf StockReservation).
+  @IsOptional()
+  @IsString()
+  stockItemId?: string;
 }
