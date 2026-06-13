@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Sparkles, Send, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { AiUsageBadge } from '@/components/ai/AiUsageBadge';
 
 interface Turn { role: 'user' | 'assistant'; text: string }
 
@@ -45,9 +46,10 @@ export default function AssistantPage() {
       <h1 className="text-2xl font-bold flex items-center gap-2 mb-2">
         <Sparkles size={24} className="text-purple-600" /> Assistant CRM
       </h1>
-      <p className="text-sm text-slate-500 mb-4">
+      <p className="text-sm text-slate-500 mb-3">
         Pose une question sur tes données (clients, tickets, contrats, revenus). L'assistant interroge le CRM en lecture seule.
       </p>
+      <div className="mb-4"><AiUsageBadge /></div>
 
       {enabled === false && (
         <div className="card p-4 bg-amber-50 border-amber-200 text-sm text-amber-800">

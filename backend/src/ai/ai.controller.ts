@@ -47,8 +47,9 @@ export class AiController {
 
   @Get('usage')
   @Roles('ADMIN', 'MANAGER')
-  usage() {
-    return this.ai.usageStats();
+  usage(@CurrentUser() user: JwtUser) {
+    // Scope tenant : un admin ne voit que la conso IA de SON tenant.
+    return this.ai.usageStats(user.tenantId);
   }
 
   // ---------- Triage ticket ----------
