@@ -26,14 +26,14 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  list() {
-    return this.usersService.list();
+  list(@CurrentUser() user: JwtUser) {
+    return this.usersService.list(user.tenantId);
   }
 
   // Profil de l'utilisateur connecte (signature, prenom, nom)
   @Get('me/profile')
   myProfile(@CurrentUser() user: JwtUser) {
-    return this.usersService.findById(user.id);
+    return this.usersService.findById(user.id, user.tenantId);
   }
 
   @Patch('me/profile')
@@ -45,8 +45,8 @@ export class UsersController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.usersService.findById(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.usersService.findById(id, user.tenantId);
   }
 
   @Roles('ADMIN')
@@ -60,14 +60,14 @@ export class UsersController {
 
   @Roles('ADMIN')
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
-    return this.usersService.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateUserDto, @CurrentUser() user: JwtUser) {
+    return this.usersService.update(id, dto, user.tenantId);
   }
 
   @Roles('ADMIN')
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.usersService.remove(id, user.id);
+    return this.usersService.remove(id, user.id, user.tenantId);
   }
 
   // Rate limit serre : 5 reset/5min/IP. Sans cette limite, un ADMIN compromis
@@ -77,7 +77,11 @@ export class UsersController {
   @Throttle({ auth: { limit: 5, ttl: 300_000 } })
   @Roles('ADMIN')
   @Post(':id/reset-password')
-  resetPassword(@Param('id') id: string, @Body() body: { newPassword: string }) {
-    return this.usersService.resetPassword(id, body.newPassword);
+  resetPassword(
+    @Param('id') id: string,
+    @Body() body: { newPassword: string },
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.usersService.resetPassword(id, body.newPassword, user.tenantId);
   }
 }

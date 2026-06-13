@@ -21,9 +21,15 @@ export class NpsService {
    * Envoie une demande NPS au contact du ticket. Si une demande existe deja
    * pour ce ticket, on la reutilise (idempotent) sauf si force=true.
    */
-  async sendForTicket(ticketId: string, options: { force?: boolean; overrideTo?: string } = {}) {
-    const ticket = await this.prisma.ticket.findUnique({
-      where: { id: ticketId },
+  async sendForTicket(
+    ticketId: string,
+    options: { force?: boolean; overrideTo?: string } = {},
+    tenantId: string | null = null,
+  ) {
+    // Scope tenant : empeche un admin d'envoyer une demande NPS sur un ticket
+    // d'un autre tenant. tenantId null = appel systeme (hook onTicketResolved).
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id: ticketId, ...(tenantId ? { tenantId } : {}) },
       include: {
         company: { select: { name: true, email: true } },
         contact: { select: { firstName: true, lastName: true, email: true } },
@@ -232,10 +238,10 @@ export class NpsService {
     }
   }
 
-  /** Liste des NPS d'un ticket donne (admin). */
-  async getForTicket(ticketId: string) {
-    return this.prisma.ticketSatisfaction.findUnique({
-      where: { ticketId },
+  /** Liste des NPS d'un ticket donne (admin). Scope tenant via la relation ticket. */
+  async getForTicket(ticketId: string, tenantId: string | null) {
+    return this.prisma.ticketSatisfaction.findFirst({
+      where: { ticketId, ...(tenantId ? { ticket: { tenantId } } : {}) },
     });
   }
 }

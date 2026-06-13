@@ -83,12 +83,12 @@ export class TimeEntriesController {
     @Body() dto: UpdateTimeEntryDto,
     @CurrentUser() user: JwtUser,
   ) {
-    return this.service.update(id, user.id, dto);
+    return this.service.update(id, user.id, dto, user.tenantId);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.remove(id, user.id, user.role);
+    return this.service.remove(id, user.id, user.role, user.tenantId);
   }
 
   // ============================================================

@@ -54,8 +54,8 @@ export class NpsController {
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('tickets/:ticketId/nps')
-  getForTicket(@Param('ticketId') ticketId: string) {
-    return this.service.getForTicket(ticketId);
+  getForTicket(@Param('ticketId') ticketId: string, @CurrentUser() user: JwtUser) {
+    return this.service.getForTicket(ticketId, user.tenantId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -64,12 +64,14 @@ export class NpsController {
   @Post('tickets/:ticketId/nps/send')
   sendForTicket(
     @Param('ticketId') ticketId: string,
+    @CurrentUser() user: JwtUser,
     @Body() body: { force?: boolean; to?: string } = {},
   ) {
-    return this.service.sendForTicket(ticketId, {
-      force: body.force === true,
-      overrideTo: body.to,
-    });
+    return this.service.sendForTicket(
+      ticketId,
+      { force: body.force === true, overrideTo: body.to },
+      user.tenantId,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

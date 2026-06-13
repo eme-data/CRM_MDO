@@ -126,8 +126,11 @@ export class TimeEntriesService {
     });
   }
 
-  async update(id: string, userId: string, dto: UpdateTimeEntryDto) {
-    const existing = await this.prisma.timeEntry.findUnique({ where: { id } });
+  async update(id: string, userId: string, dto: UpdateTimeEntryDto, tenantId: string | null) {
+    // Scope tenant (defense en profondeur, en plus du check d'appartenance userId).
+    const existing = await this.prisma.timeEntry.findFirst({
+      where: { id, ...(tenantId ? { tenantId } : {}) },
+    });
     if (!existing) throw new NotFoundException();
     if (existing.userId !== userId) {
       throw new BadRequestException('Vous ne pouvez modifier que vos propres entrees');
@@ -141,8 +144,12 @@ export class TimeEntriesService {
     return this.prisma.timeEntry.update({ where: { id }, data });
   }
 
-  async remove(id: string, userId: string, userRole: string) {
-    const existing = await this.prisma.timeEntry.findUnique({ where: { id } });
+  async remove(id: string, userId: string, userRole: string, tenantId: string | null) {
+    // Scope tenant : un ADMIN/MANAGER ne peut supprimer que dans son propre tenant
+    // (sans ce filtre, le role suffisait a supprimer une saisie d'un autre tenant).
+    const existing = await this.prisma.timeEntry.findFirst({
+      where: { id, ...(tenantId ? { tenantId } : {}) },
+    });
     if (!existing) throw new NotFoundException();
     if (existing.userId !== userId && userRole !== 'ADMIN' && userRole !== 'MANAGER') {
       throw new BadRequestException('Suppression non autorisee');

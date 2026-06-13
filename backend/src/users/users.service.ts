@@ -17,8 +17,11 @@ export class UsersService {
     return parseInt((await this.settings.get('auth.passwordMinLength')) ?? '12', 10);
   }
 
-  async list() {
+  async list(tenantId: string | null) {
+    // Scope tenant : un admin ne liste que les users de son tenant.
+    // Super-admin (tenantId null) voit tout le monde.
     return this.prisma.user.findMany({
+      where: tenantId ? { tenantId } : {},
       select: {
         id: true,
         email: true,
@@ -34,9 +37,11 @@ export class UsersService {
     });
   }
 
-  async findById(id: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
+  async findById(id: string, tenantId: string | null) {
+    // findFirst (et non findUnique) pour pouvoir scoper par tenantId : empeche
+    // de lire/modifier/reset un user d'un autre tenant via son id (IDOR).
+    const user = await this.prisma.user.findFirst({
+      where: { id, ...(tenantId ? { tenantId } : {}) },
       select: {
         id: true,
         email: true,
@@ -102,8 +107,8 @@ export class UsersService {
     return user;
   }
 
-  async update(id: string, dto: UpdateUserDto) {
-    await this.findById(id);
+  async update(id: string, dto: UpdateUserDto, tenantId: string | null) {
+    await this.findById(id, tenantId); // assert tenant ownership (404 si hors tenant)
     return this.prisma.user.update({
       where: { id },
       data: dto,
@@ -119,7 +124,7 @@ export class UsersService {
     });
   }
 
-  async remove(id: string, currentUserId?: string) {
+  async remove(id: string, currentUserId: string | undefined, tenantId: string | null) {
     // Soft delete : on desactive plutot que supprimer physiquement.
     // Raison : User est relie a TimeEntry, ownedCompanies, ownedContracts,
     // assignedTickets, etc. via Cascade. Un DELETE physique ferait perdre
@@ -129,10 +134,12 @@ export class UsersService {
     if (currentUserId && currentUserId === id) {
       throw new BadRequestException('Vous ne pouvez pas vous desactiver vous-meme.');
     }
-    const target = await this.findById(id);
+    const target = await this.findById(id, tenantId); // assert tenant ownership
     if (target.role === 'ADMIN') {
+      // Garde-fou scope par tenant : on protege le dernier ADMIN actif DU TENANT
+      // (et non un compte global, qui masquerait la realite par tenant).
       const activeAdmins = await this.prisma.user.count({
-        where: { role: 'ADMIN', isActive: true, id: { not: id } },
+        where: { role: 'ADMIN', isActive: true, id: { not: id }, ...(tenantId ? { tenantId } : {}) },
       });
       if (activeAdmins === 0) {
         throw new BadRequestException('Impossible de desactiver le dernier ADMIN actif.');
@@ -148,8 +155,8 @@ export class UsersService {
     return { success: true };
   }
 
-  async resetPassword(id: string, newPassword: string) {
-    await this.findById(id);
+  async resetPassword(id: string, newPassword: string, tenantId: string | null) {
+    await this.findById(id, tenantId); // assert tenant ownership : pas de reset cross-tenant
     assertStrongPassword(newPassword, await this.getMinPasswordLength());
     const hash = await bcrypt.hash(newPassword, 12);
     await this.prisma.user.update({
