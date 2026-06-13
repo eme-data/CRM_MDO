@@ -23,7 +23,13 @@ describe('TimeEntriesService — tenant isolation', () => {
 
   beforeEach(() => {
     prisma = {
-      timeEntry: { findMany: jest.fn().mockResolvedValue([]) },
+      timeEntry: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
       company: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
     };
     scope = new TenantScope(prisma);
@@ -73,6 +79,54 @@ describe('TimeEntriesService — tenant isolation', () => {
       );
       const where = prisma.timeEntry.findMany.mock.calls[0][0].where;
       expect(where.tenantId).toBe('tenant-A');
+    });
+  });
+
+  // Anti-regression du fix 2026-06-13 (mutations par id sans scope).
+  describe('remove', () => {
+    it('scope le findFirst par id ET tenantId', async () => {
+      prisma.timeEntry.findFirst.mockResolvedValue({ id: 't-1', userId: 'me' });
+      prisma.timeEntry.delete.mockResolvedValue({});
+      await service.remove('t-1', 'me', 'SALES', 'tenant-A');
+      expect(prisma.timeEntry.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 't-1', tenantId: 'tenant-A' }),
+        }),
+      );
+    });
+
+    it('refuse (404) une saisie d\'un autre tenant, meme pour un ADMIN', async () => {
+      prisma.timeEntry.findFirst.mockResolvedValue(null);
+      await expect(service.remove('t-X', 'me', 'ADMIN', 'tenant-A')).rejects.toThrow();
+      expect(prisma.timeEntry.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('update', () => {
+    it('refuse (404) une saisie d\'un autre tenant', async () => {
+      prisma.timeEntry.findFirst.mockResolvedValue(null);
+      await expect(service.update('t-X', 'me', {} as any, 'tenant-A')).rejects.toThrow();
+      expect(prisma.timeEntry.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('markInvoiced / unmarkInvoiced', () => {
+    it('markInvoiced scope l\'updateMany par tenantId', async () => {
+      await service.markInvoiced(['t-1', 't-2'], 'invoicer', 'tenant-A', 'INV-1');
+      expect(prisma.timeEntry.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: { in: ['t-1', 't-2'] }, tenantId: 'tenant-A' }),
+        }),
+      );
+    });
+
+    it('unmarkInvoiced scope l\'updateMany par tenantId', async () => {
+      await service.unmarkInvoiced(['t-1'], 'tenant-A');
+      expect(prisma.timeEntry.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: { in: ['t-1'] }, tenantId: 'tenant-A' }),
+        }),
+      );
     });
   });
 });

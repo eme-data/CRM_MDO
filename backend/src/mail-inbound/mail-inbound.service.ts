@@ -92,6 +92,11 @@ export class MailInboundService {
       secure: config.secure,
       auth: { user: config.user, pass: config.password },
       logger: false,
+      // Timeouts explicites : un serveur IMAP injoignable/lent ne doit pas faire
+      // trainer le polling (le cron itere les tenants en serie). greetingTimeout
+      // borne la phase de connexion, socketTimeout l'inactivite socket.
+      greetingTimeout: 15_000,
+      socketTimeout: 60_000,
     });
 
     await client.connect();
