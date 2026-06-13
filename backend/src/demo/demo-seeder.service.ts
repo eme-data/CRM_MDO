@@ -4,6 +4,7 @@ import { Cron } from '@nestjs/schedule';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../database/prisma.service';
 import { CaddyProvisioningService } from '../tenants/caddy-provisioning.service';
+import { TenantsService } from '../tenants/tenants.service';
 
 // Tenant de demonstration "demo" (Demo Solutions). Reinitialise un jeu de
 // donnees de presentation (collaborateurs + SIRH + commercial + support) :
@@ -31,6 +32,7 @@ export class DemoSeederService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly caddy: CaddyProvisioningService,
+    private readonly tenants: TenantsService,
   ) {}
 
   private get password(): string {
@@ -240,6 +242,9 @@ export class DemoSeederService {
 
     // Si le tenant vient d'etre cree, (re)genere la route Caddy.
     if (created) await this.caddy.triggerSilent('demo.reseed create');
+    // Invalide le cache tenant (resolveByDomain, TTL 5 min) pour que les
+    // modules/branding mis a jour soient pris en compte immediatement.
+    this.tenants.invalidateCache(DOMAIN);
     return { tenantId: tid };
   }
 
