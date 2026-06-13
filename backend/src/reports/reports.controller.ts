@@ -4,6 +4,7 @@ import { Role } from '@prisma/client';
 import { ReportsService } from './reports.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 // Donnees business agregees (MRR, pipeline, SLA, revenu). Reservees aux roles
 // de pilotage : ADMIN et MANAGER. Les SALES voient le pipeline via /opportunities,
@@ -17,20 +18,20 @@ export class ReportsController {
   constructor(private readonly service: ReportsService) {}
 
   @Get('mrr-trend')
-  mrrTrend() { return this.service.mrrTrend(); }
+  mrrTrend(@CurrentUser() u: JwtUser) { return this.service.mrrTrend(u.tenantId); }
 
   @Get('top-clients')
-  topClients() { return this.service.topClients(); }
+  topClients(@CurrentUser() u: JwtUser) { return this.service.topClients(u.tenantId); }
 
   @Get('sla-respect')
-  slaRespect() { return this.service.slaRespect(); }
+  slaRespect(@CurrentUser() u: JwtUser) { return this.service.slaRespect(u.tenantId); }
 
   @Get('pipeline')
-  pipeline() { return this.service.pipeline(); }
+  pipeline(@CurrentUser() u: JwtUser) { return this.service.pipeline(u.tenantId); }
 
   @Get('time-by-tech')
-  timeByTech() { return this.service.timeByTech(); }
+  timeByTech(@CurrentUser() u: JwtUser) { return this.service.timeByTech(u.tenantId); }
 
   @Get('revenue-trend')
-  revenueTrend() { return this.service.revenueTrend(); }
+  revenueTrend(@CurrentUser() u: JwtUser) { return this.service.revenueTrend(u.tenantId); }
 }

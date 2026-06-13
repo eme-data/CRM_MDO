@@ -2,60 +2,60 @@ import { Injectable } from '@nestjs/common';
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 import { PrismaService } from '../database/prisma.service';
 
+// Donnees business agregees. TOUTES les methodes sont scopees par tenantId :
+// un client ne doit jamais voir le MRR / pipeline / SLA d'un autre tenant.
 @Injectable()
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Evolution du MRR (montant mensuel recurrent) sur 12 mois
-  async mrrTrend() {
+  // Evolution du MRR (montant mensuel recurrent) sur 12 mois.
+  async mrrTrend(tenantId: string | null) {
     const months = 12;
     const today = new Date();
     const points: Array<{ month: string; mrrHt: number; activeContracts: number }> = [];
     for (let i = months - 1; i >= 0; i--) {
       const ref = startOfMonth(subMonths(today, i));
       const end = endOfMonth(ref);
+      // Contrats actifs pendant ce mois : commences avant la fin du mois et
+      // non termines avant le debut (endDate est non-nullable).
       const contracts = await this.prisma.contract.findMany({
         where: {
+          tenantId,
           startDate: { lte: end },
-          OR: [{ endDate: { gte: ref } }, { endDate: null as any }],
+          endDate: { gte: ref },
           status: { in: ['ACTIVE', 'EXPIRED', 'TERMINATED', 'RENEWED'] },
         },
-        select: { monthlyAmountHt: true, status: true, endDate: true },
+        select: { monthlyAmountHt: true },
       });
-      // Filtrer ceux qui etaient ACTIFS pendant ce mois (status au mois donne)
       let mrr = 0;
-      let count = 0;
-      for (const c of contracts) {
-        if (c.endDate && c.endDate < ref) continue;
-        mrr += Number(c.monthlyAmountHt);
-        count++;
-      }
+      for (const c of contracts) mrr += Number(c.monthlyAmountHt);
       points.push({
         month: format(ref, 'yyyy-MM'),
         mrrHt: Math.round(mrr * 100) / 100,
-        activeContracts: count,
+        activeContracts: contracts.length,
       });
     }
     return points;
   }
 
-  // Top clients par chiffre d'affaires recurrent + nb tickets
-  async topClients(limit = 10) {
+  // Top clients par chiffre d'affaires recurrent + nb tickets.
+  async topClients(tenantId: string | null, limit = 10) {
     const contracts = await this.prisma.contract.groupBy({
       by: ['companyId'],
-      where: { status: 'ACTIVE' },
+      where: { tenantId, status: 'ACTIVE' },
       _sum: { monthlyAmountHt: true },
       _count: true,
     });
     const tickets = await this.prisma.ticket.groupBy({
       by: ['companyId'],
+      where: { tenantId },
       _count: true,
     });
     const ticketMap = new Map(tickets.map((t) => [t.companyId, t._count]));
 
     const ids = contracts.map((c) => c.companyId);
     const companies = await this.prisma.company.findMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, tenantId },
       select: { id: true, name: true },
     });
     const cmap = new Map(companies.map((c) => [c.id, c.name]));
@@ -72,11 +72,12 @@ export class ReportsService {
       .slice(0, limit);
   }
 
-  // Taux de respect SLA sur N derniers jours
-  async slaRespect(days = 30) {
+  // Taux de respect SLA sur les ~30 derniers jours.
+  async slaRespect(tenantId: string | null) {
     const since = subMonths(new Date(), 1);
     const tickets = await this.prisma.ticket.findMany({
       where: {
+        tenantId,
         status: { in: ['RESOLVED', 'CLOSED'] },
         resolvedAt: { gte: since },
         dueDate: { not: null },
@@ -92,31 +93,26 @@ export class ReportsService {
     return { total, respected, breached: total - respected, ratePercent: rate };
   }
 
-  // Pipeline value par etape
-  async pipeline() {
+  // Pipeline value par etape.
+  async pipeline(tenantId: string | null) {
     const stages = ['QUALIFICATION', 'PROPOSITION', 'NEGOCIATION', 'GAGNE', 'PERDU'];
-    const data = await Promise.all(
+    return Promise.all(
       stages.map(async (stage) => {
         const agg = await this.prisma.opportunity.aggregate({
-          where: { stage: stage as any },
+          where: { tenantId, stage: stage as any },
           _sum: { amountHt: true },
           _count: true,
         });
-        return {
-          stage,
-          count: agg._count,
-          totalHt: Number(agg._sum.amountHt ?? 0),
-        };
+        return { stage, count: agg._count, totalHt: Number(agg._sum.amountHt ?? 0) };
       }),
     );
-    return data;
   }
 
-  // Temps facturable par technicien sur 30 derniers jours
-  async timeByTech(days = 30) {
+  // Temps facturable par technicien sur ~30 derniers jours.
+  async timeByTech(tenantId: string | null) {
     const since = subMonths(new Date(), 1);
     const entries = await this.prisma.timeEntry.findMany({
-      where: { startedAt: { gte: since }, endedAt: { not: null } },
+      where: { tenantId, startedAt: { gte: since }, endedAt: { not: null } },
       select: {
         durationMin: true,
         billable: true,
@@ -127,11 +123,7 @@ export class ReportsService {
     const map: Record<string, { name: string; totalMin: number; billableMin: number }> = {};
     for (const e of entries) {
       if (!map[e.userId]) {
-        map[e.userId] = {
-          name: e.user.firstName + ' ' + e.user.lastName,
-          totalMin: 0,
-          billableMin: 0,
-        };
+        map[e.userId] = { name: e.user.firstName + ' ' + e.user.lastName, totalMin: 0, billableMin: 0 };
       }
       map[e.userId].totalMin += e.durationMin ?? 0;
       if (e.billable) map[e.userId].billableMin += e.durationMin ?? 0;
@@ -139,8 +131,8 @@ export class ReportsService {
     return Object.values(map).sort((a, b) => b.totalMin - a.totalMin);
   }
 
-  // CA factures par mois sur 12 mois
-  async revenueTrend() {
+  // CA facture par mois sur 12 mois.
+  async revenueTrend(tenantId: string | null) {
     const months = 12;
     const today = new Date();
     const points: Array<{ month: string; ht: number; ttc: number; count: number }> = [];
@@ -148,10 +140,7 @@ export class ReportsService {
       const start = startOfMonth(subMonths(today, i));
       const end = endOfMonth(start);
       const agg = await this.prisma.invoice.aggregate({
-        where: {
-          issueDate: { gte: start, lte: end },
-          status: { in: ['ISSUED', 'PAID'] },
-        },
+        where: { tenantId, issueDate: { gte: start, lte: end }, status: { in: ['ISSUED', 'PAID'] } },
         _sum: { totalHt: true, totalTtc: true },
         _count: true,
       });
