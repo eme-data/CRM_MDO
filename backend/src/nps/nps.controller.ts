@@ -23,6 +23,16 @@ import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorato
 export class NpsController {
   constructor(private readonly service: NpsService) {}
 
+  // IMPORTANT : cette route STATIQUE doit etre declaree AVANT `nps/:token`,
+  // sinon Express route `nps/stats` vers getByToken('stats') -> 404.
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('nps/stats')
+  stats(@CurrentUser() user: JwtUser, @Query('days') days?: string) {
+    return this.service.stats(user.tenantId, days ? parseInt(days, 10) : 90);
+  }
+
   // ============================================================
   // Endpoints PUBLICS (token-based)
   // ============================================================
@@ -72,13 +82,5 @@ export class NpsController {
       { force: body.force === true, overrideTo: body.to },
       user.tenantId,
     );
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @Roles(Role.ADMIN, Role.MANAGER)
-  @Get('nps/stats')
-  stats(@CurrentUser() user: JwtUser, @Query('days') days?: string) {
-    return this.service.stats(user.tenantId, days ? parseInt(days, 10) : 90);
   }
 }

@@ -4,7 +4,13 @@ import { AuditChainService } from './audit-chain.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { SuperAdminGuard } from '../tenants/guards/super-admin.guard';
 
+// La chaine d'audit est GLOBALE (hash-chain append-only de toutes les activites
+// de l'instance, sequence continue, non scopable par tenant). stats reste lisible
+// par un ADMIN (2 compteurs, fuite negligeable) pour ne pas casser la page
+// admin/activity ; en revanche verify (parcourt toute la chaine, lourd) et seal
+// (action de scellement plateforme) sont des operations PLATEFORME -> super-admin.
 @ApiTags('Audit chain')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -18,15 +24,15 @@ export class AuditChainController {
     return this.service.stats();
   }
 
-  // Verify (slow) — reservee ADMIN car parcourt toute la chaine
-  @Roles('ADMIN')
+  // Verify (slow, parcourt toute la chaine globale) — super-admin uniquement.
+  @UseGuards(SuperAdminGuard)
   @Post('chain/verify')
   verify() {
     return this.service.verify();
   }
 
-  // Force le scellement immediat (utile pour debugger / tester apres edition manuelle)
-  @Roles('ADMIN')
+  // Scellement immediat de la chaine globale — super-admin uniquement.
+  @UseGuards(SuperAdminGuard)
   @Post('chain/seal')
   seal() {
     return this.service.sealPending();

@@ -372,10 +372,11 @@ export class TimeEntriesService {
   }
 
   /** Marque une liste d'entries comme facturees (ex. apres envoi vers Qonto). */
-  async markInvoiced(ids: string[], invoicerId: string, invoiceReference?: string) {
+  async markInvoiced(ids: string[], invoicerId: string, tenantId: string | null, invoiceReference?: string) {
     if (ids.length === 0) return { updated: 0 };
+    // Scope tenant : on ne marque comme facturees que des saisies de son tenant.
     const r = await this.prisma.timeEntry.updateMany({
-      where: { id: { in: ids }, invoicedAt: null },
+      where: { id: { in: ids }, invoicedAt: null, ...(tenantId ? { tenantId } : {}) },
       data: {
         invoicedAt: new Date(),
         invoicedById: invoicerId,
@@ -385,10 +386,11 @@ export class TimeEntriesService {
     return { updated: r.count };
   }
 
-  async unmarkInvoiced(ids: string[]) {
+  async unmarkInvoiced(ids: string[], tenantId: string | null) {
     if (ids.length === 0) return { updated: 0 };
+    // Scope tenant : pas de demarquage facturation cross-tenant.
     const r = await this.prisma.timeEntry.updateMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, ...(tenantId ? { tenantId } : {}) },
       data: { invoicedAt: null, invoicedById: null, invoiceReference: null },
     });
     return { updated: r.count };

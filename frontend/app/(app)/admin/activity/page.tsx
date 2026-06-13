@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Search, ChevronLeft, ChevronRight, Shield, ShieldCheck, ShieldAlert, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { me as fetchMe, User } from '@/lib/auth';
 import { formatDateTime } from '@/lib/utils';
 
 const ENTITIES = ['', 'Company', 'Contact', 'Opportunity', 'Contract', 'Ticket', 'User'];
@@ -28,6 +29,7 @@ export default function AdminActivityPage() {
   const [filters, setFilters] = useState({ entity: '', action: '', userId: '', from: '', to: '' });
   const [page, setPage] = useState(0);
   const [chainStats, setChainStats] = useState<any>(null);
+  const [me, setMe] = useState<User | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<{ ok: boolean; verified: number; breaks: any[] } | null>(null);
   const limit = 50;
@@ -59,6 +61,7 @@ export default function AdminActivityPage() {
   useEffect(() => {
     api.get('/users').then(setUsers).catch(() => {});
     loadChainStats();
+    fetchMe().then(setMe).catch(() => {});
   }, []);
 
   useEffect(() => { load(); }, [filters, page]);
@@ -114,14 +117,18 @@ export default function AdminActivityPage() {
                 </div>
               </div>
             </div>
-            <div className="flex gap-2">
-              <button onClick={forceSeal} className="btn btn-secondary text-xs">
-                <RefreshCw size={12} className="mr-1" /> Sceller maintenant
-              </button>
-              <button onClick={verify} disabled={verifying} className="btn btn-primary text-xs">
-                <ShieldCheck size={12} className="mr-1" /> {verifying ? 'Verification...' : 'Verifier l\'integrite'}
-              </button>
-            </div>
+            {/* Verifier/sceller agissent sur la chaine GLOBALE de l'instance
+                -> reserve au super-admin (backend : SuperAdminGuard). */}
+            {me?.isSuperAdmin && (
+              <div className="flex gap-2">
+                <button onClick={forceSeal} className="btn btn-secondary text-xs">
+                  <RefreshCw size={12} className="mr-1" /> Sceller maintenant
+                </button>
+                <button onClick={verify} disabled={verifying} className="btn btn-primary text-xs">
+                  <ShieldCheck size={12} className="mr-1" /> {verifying ? 'Verification...' : 'Verifier l\'integrite'}
+                </button>
+              </div>
+            )}
           </div>
           {verifyResult && verifyResult.breaks.length > 0 && (
             <div className="mt-3 pt-3 border-t border-red-200">

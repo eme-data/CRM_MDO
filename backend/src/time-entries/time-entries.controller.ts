@@ -144,12 +144,12 @@ export class TimeEntriesController {
     @Body() body: { ids: string[]; invoiceReference?: string },
     @CurrentUser() user: JwtUser,
   ) {
-    return this.service.markInvoiced(body.ids ?? [], user.id, body.invoiceReference);
+    return this.service.markInvoiced(body.ids ?? [], user.id, user.tenantId, body.invoiceReference);
   }
 
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('billing/unmark-invoiced')
-  unmarkInvoiced(@Body() body: { ids: string[] }) {
-    return this.service.unmarkInvoiced(body.ids ?? []);
+  unmarkInvoiced(@Body() body: { ids: string[] }, @CurrentUser() user: JwtUser) {
+    return this.service.unmarkInvoiced(body.ids ?? [], user.tenantId);
   }
 }
