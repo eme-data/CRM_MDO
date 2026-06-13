@@ -6,6 +6,38 @@ import { PrismaService } from '../database/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { CaddyProvisioningService } from './caddy-provisioning.service';
 
+// Modeles tenant-scopes effaces par purge()/remove() (enfants -> parents).
+// Maintenu en phase avec TenantsService.purge (incl. tables SIRH 0007-0012).
+const SCOPED_MODELS = [
+  'aiUsage', 'activity', 'notification', 'pushSubscription', 'callLog',
+  'signatureRequest', 'emailSecurityCheck', 'webhookEndpoint',
+  'customerSuccessReview', 'clientReport', 'bankTransaction',
+  'complianceAssessment', 'phishingCampaign', 'onboardingRun',
+  'onboardingTemplate', 'dripCampaign', 'backupJob', 'uptimeMonitor',
+  'apiKey', 'kbArticle', 'subprocessor', 'responseTemplate',
+  'emailTemplate', 'workflowRule', 'recurringTaskTemplate', 'task',
+  'note', 'quickNote', 'runbookRun', 'docPage', 'secretEntry',
+  'flexibleAsset', 'network', 'location', 'asset', 'companyDocument',
+  'attachment', 'timeEntry',
+  // SIRH (migrations 0007-0012)
+  'objective', 'review', 'timesheet', 'journey', 'journeyTemplate',
+  'leaveRequest', 'leaveBalance', 'leaveType', 'expenseClaim',
+  'expenseCategory', 'employeeDocument', 'employeeProfile',
+  'intervention', 'ticketMessage', 'ticket',
+  'invoiceLine', 'invoice', 'quoteLine', 'quote', 'contract',
+  'opportunity', 'contact', 'company', 'setting', 'clientPortalUser',
+  'refreshToken', 'userSkill',
+  'quoteTemplate', 'product', 'runbook', 'flexibleAssetType', 'team',
+];
+function stubScopedDeleteMany(prisma: any) {
+  for (const m of SCOPED_MODELS) {
+    prisma[m] = prisma[m] ?? {};
+    prisma[m].deleteMany = jest.fn().mockResolvedValue({ count: 0 });
+  }
+  prisma.user.deleteMany = prisma.user.deleteMany ?? jest.fn().mockResolvedValue({ count: 0 });
+  prisma.user.findMany = prisma.user.findMany ?? jest.fn().mockResolvedValue([]);
+}
+
 // Vague 10 : tests d'isolation tenant sur le TenantsService.
 // Couvre la resolution par domaine (cache, normalisation), le seed retro-compat,
 // et les protections sur le tenant 'mdo' (non-suppression).
@@ -135,22 +167,28 @@ describe('TenantsService — resolution domaine + cache + protections', () => {
   });
 
   describe('remove', () => {
+    // remove() delegue desormais a purge() (cascade applicative complete).
+    beforeEach(() => stubScopedDeleteMany(prisma));
+
     it('refuse de supprimer le tenant mdo', async () => {
       prisma.tenant.findUnique.mockResolvedValue(tenantMdo);
       await expect(service.remove('t-mdo')).rejects.toThrow(BadRequestException);
       expect(prisma.tenant.delete).not.toHaveBeenCalled();
     });
 
-    it('refuse si des users existent encore dans le tenant', async () => {
+    it('cascade : supprime les donnees (users inclus) ET le tenant', async () => {
       prisma.tenant.findUnique.mockResolvedValue(tenantSeysses);
-      prisma.user.count.mockResolvedValue(3);
-      await expect(service.remove('t-seysses')).rejects.toThrow(BadRequestException);
-      expect(prisma.tenant.delete).not.toHaveBeenCalled();
+      prisma.user.findMany.mockResolvedValue([{ id: 'u1' }]);
+      prisma.user.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.tenant.delete.mockResolvedValue(tenantSeysses);
+      const r = await service.remove('t-seysses');
+      expect(prisma.user.deleteMany).toHaveBeenCalled();
+      expect(prisma.tenant.delete).toHaveBeenCalledWith({ where: { id: 't-seysses' } });
+      expect(r.ok).toBe(true);
     });
 
-    it('supprime le tenant si aucun user', async () => {
+    it('supprime le tenant (aucun user)', async () => {
       prisma.tenant.findUnique.mockResolvedValue(tenantSeysses);
-      prisma.user.count.mockResolvedValue(0);
       prisma.tenant.delete.mockResolvedValue(tenantSeysses);
       await service.remove('t-seysses');
       expect(prisma.tenant.delete).toHaveBeenCalledWith({ where: { id: 't-seysses' } });
@@ -161,31 +199,7 @@ describe('TenantsService — resolution domaine + cache + protections', () => {
   // Vague 13b : RGPD purge (article 17 - droit a l'effacement)
   // ============================================================
   describe('purge (RGPD)', () => {
-    beforeEach(() => {
-      // Stubs pour tous les deleteMany appeles par purge() (ordre indifferent).
-      const models = [
-        'aiUsage', 'activity', 'notification', 'pushSubscription', 'callLog',
-        'signatureRequest', 'emailSecurityCheck', 'webhookEndpoint',
-        'customerSuccessReview', 'clientReport', 'bankTransaction',
-        'complianceAssessment', 'phishingCampaign', 'onboardingRun',
-        'onboardingTemplate', 'dripCampaign', 'backupJob', 'uptimeMonitor',
-        'apiKey', 'kbArticle', 'subprocessor', 'responseTemplate',
-        'emailTemplate', 'workflowRule', 'recurringTaskTemplate', 'task',
-        'note', 'quickNote', 'runbookRun', 'docPage', 'secretEntry',
-        'flexibleAsset', 'network', 'location', 'asset', 'companyDocument',
-        'attachment', 'timeEntry', 'intervention', 'ticketMessage', 'ticket',
-        'invoiceLine', 'invoice', 'quoteLine', 'quote', 'contract',
-        'opportunity', 'contact', 'company', 'setting', 'clientPortalUser',
-        'refreshToken', 'userSkill', 'user',
-        // Vague 9 (migration 0003) : nouveaux modeles racine multi-tenant
-        'quoteTemplate', 'product', 'runbook', 'flexibleAssetType', 'team',
-      ];
-      for (const m of models) {
-        prisma[m] = prisma[m] ?? {};
-        prisma[m].deleteMany = jest.fn().mockResolvedValue({ count: 0 });
-      }
-      prisma.user.findMany = jest.fn().mockResolvedValue([]);
-    });
+    beforeEach(() => stubScopedDeleteMany(prisma));
 
     it('refuse de purger le tenant mdo (instance root)', async () => {
       prisma.tenant.findUnique.mockResolvedValue(tenantMdo);

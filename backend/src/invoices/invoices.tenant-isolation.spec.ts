@@ -59,7 +59,9 @@ describe('InvoicesService — tenant isolation', () => {
       await service.setStatus('inv-1', 'PAID', 'tenant-A');
       expect(prisma.invoice.findFirst).toHaveBeenCalledWith({
         where: { id: 'inv-1', tenantId: 'tenant-A' },
-        select: { id: true },
+        // status est desormais selectionne pour detecter la transition
+        // DRAFT->ISSUED (hook decrement de stock).
+        select: { id: true, status: true },
       });
       expect(prisma.invoice.update).toHaveBeenCalled();
     });
