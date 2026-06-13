@@ -52,10 +52,11 @@ jobs:
         run: npx prisma generate
 
       - name: Lint
-        # Lint backend non encore cable (eslint absent des devDependencies + pas
-        # de config). Etape advisory tant que l'outillage n'est pas mis en place
-        # (cf TODO : ajouter eslint + @typescript-eslint + config). Ne bloque pas
-        # le pipeline pour ne pas masquer les vraies barrieres (build, tests).
+        # eslint + @typescript-eslint cables (cf backend/.eslintrc.js, config
+        # pragmatique non type-aware). Garde advisory volontairement : on remonte
+        # les vrais signaux (vars/imports inutilises, code mort) sans bloquer le
+        # pipeline (build + tests restent les barrieres dures). max-warnings borne
+        # la derive ; passer continue-on-error a false quand la base sera nettoyee.
         run: npm run lint -- --max-warnings 50
         continue-on-error: true
 

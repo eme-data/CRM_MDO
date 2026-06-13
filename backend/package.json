@@ -16,7 +16,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "lint": "eslint \"{src,test}/**/*.ts\" --fix"
+    "lint": "eslint \"src/**/*.ts\"",
+    "lint:fix": "eslint \"src/**/*.ts\" --fix"
   },
   "jest": {
     "moduleFileExtensions": [
@@ -84,6 +85,9 @@
     "@nestjs/cli": "^10.4.0",
     "@nestjs/schematics": "^10.1.0",
     "@nestjs/testing": "^10.4.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.12",
