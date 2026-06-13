@@ -120,6 +120,10 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./backend
+          # IMPORTANT : le Dockerfile backend a `development` comme DERNIER stage
+          # (start:dev/watch). Sans `target`, build-push-action construit ce stage
+          # par defaut -> image de dev en prod (OOM en watch). On force `production`.
+          target: production
           push: false
           load: true
           tags: crm-mdo-backend:ci
@@ -168,6 +172,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./backend
+          # cf job docker-build : on publie le stage `production` (et non le dernier
+          # stage `development` qui serait choisi par defaut).
+          target: production
           push: true
           platforms: linux/amd64
           tags: |

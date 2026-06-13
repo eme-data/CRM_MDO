@@ -1,5 +1,10 @@
 node_modules
 dist
+# Artefacts de build incrementaux tsc : si un *.tsbuildinfo cote hote entre dans
+# le contexte Docker, `incremental: true` fait croire a tsc que les fichiers sont
+# deja emis et il saute des emissions -> dist partiel (ex: sentry.js manquant) et
+# crash au demarrage. On ne les copie jamais dans le build.
+*.tsbuildinfo
 .env
 .env.*
 !.env.example
