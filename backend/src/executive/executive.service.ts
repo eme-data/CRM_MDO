@@ -42,16 +42,20 @@ export class ExecutiveService {
     private readonly cache: CacheService,
   ) {}
 
-  async snapshot(): Promise<ExecSnapshot> {
-    const cached = this.cache.get<ExecSnapshot>(CACHE_KEY);
+  async snapshot(tenantId: string | null): Promise<ExecSnapshot> {
+    // Cache par tenant : ne jamais servir le snapshot d'un tenant a un autre.
+    const cacheKey = `${CACHE_KEY}:${tenantId ?? 'all'}`;
+    const cached = this.cache.get<ExecSnapshot>(cacheKey);
     if (cached) return cached;
 
+    // Scope tenant applique a toutes les requetes ci-dessous (super-admin = tout).
+    const t = tenantId ? { tenantId } : {};
     const now = new Date();
     const d30 = new Date(now.getTime() - 30 * 86400_000);
 
     // ----- MRR actuel : tous les contrats ACTIVE -----
     const activeContracts = await this.prisma.contract.findMany({
-      where: { status: 'ACTIVE' },
+      where: { status: 'ACTIVE', ...t },
       select: {
         id: true, monthlyAmountHt: true, offer: true, signedAt: true, createdAt: true, startDate: true,
         company: { select: { id: true, name: true, status: true, createdAt: true } },
@@ -64,7 +68,7 @@ export class ExecutiveService {
     // 30 derniers jours, PLUS terminated 30 derniers jours.
     const startedBefore30 = activeContracts.filter((c) => c.startDate < d30);
     const terminatedLast30 = await this.prisma.contract.findMany({
-      where: { status: 'TERMINATED', terminatedAt: { gte: d30 } },
+      where: { status: 'TERMINATED', terminatedAt: { gte: d30 }, ...t },
       select: { monthlyAmountHt: true },
     });
     const mrrPrevHt = +(
@@ -74,9 +78,9 @@ export class ExecutiveService {
     const mrrGrowthPct = mrrPrevHt > 0 ? +(((mrrHt - mrrPrevHt) / mrrPrevHt) * 100).toFixed(1) : 0;
 
     // ----- Clients actifs -----
-    const activeCustomers = await this.prisma.company.count({ where: { status: 'CUSTOMER' } });
+    const activeCustomers = await this.prisma.company.count({ where: { status: 'CUSTOMER', ...t } });
     const newCustomers30d = await this.prisma.company.count({
-      where: { status: 'CUSTOMER', createdAt: { gte: d30 } },
+      where: { status: 'CUSTOMER', createdAt: { gte: d30 }, ...t },
     });
 
     // ----- Bookings -----
@@ -85,13 +89,13 @@ export class ExecutiveService {
 
     // ----- Pipeline -----
     const opps = await this.prisma.opportunity.findMany({
-      where: { stage: { in: ['QUALIFICATION', 'PROPOSITION', 'NEGOCIATION'] } },
+      where: { stage: { in: ['QUALIFICATION', 'PROPOSITION', 'NEGOCIATION'] }, ...t },
       select: { amountHt: true, probability: true },
     });
     const pipelineHt = +opps.reduce((s, o) => s + Number(o.amountHt) * (o.probability / 100), 0).toFixed(2);
 
     const sentQuotes = await this.prisma.quote.aggregate({
-      where: { status: 'SENT' },
+      where: { status: 'SENT', ...t },
       _sum: { totalTtc: true },
     });
     const quotesPipelineHt = Number(sentQuotes._sum.totalTtc ?? 0);
@@ -106,7 +110,7 @@ export class ExecutiveService {
 
     // ----- Anciennete moyenne client -----
     const customers = await this.prisma.company.findMany({
-      where: { status: 'CUSTOMER' },
+      where: { status: 'CUSTOMER', ...t },
       select: { createdAt: true },
     });
     const avgAgeDays = customers.length > 0
@@ -165,7 +169,7 @@ export class ExecutiveService {
       mrrByOffer,
     };
 
-    this.cache.set(CACHE_KEY, result, TTL_SECONDS);
+    this.cache.set(cacheKey, result, TTL_SECONDS);
     return result;
   }
 }

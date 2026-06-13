@@ -5,6 +5,7 @@ import { auditDns } from './dns-audit';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Monitoring')
 @ApiBearerAuth()
@@ -16,8 +17,8 @@ export class MonitoringController {
   // Vue consolidee : stats + buckets d'expiration + erreurs (page Surveillance)
   @Roles('ADMIN', 'MANAGER', 'SALES')
   @Get('overview')
-  overview() {
-    return this.service.overview();
+  overview(@CurrentUser() user: JwtUser) {
+    return this.service.overview(user.tenantId);
   }
 
   // Verification a la demande sur un asset (bouton "Verifier maintenant")

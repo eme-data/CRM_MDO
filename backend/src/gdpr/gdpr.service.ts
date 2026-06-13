@@ -30,9 +30,10 @@ export class GdprService {
   // contact (donnees brutes + relations directes : tickets, taches, notes,
   // activites le concernant). Format JSON destine a etre transmis au sujet
   // de donnees.
-  async exportContact(contactId: string) {
-    const contact = await this.prisma.contact.findUnique({
-      where: { id: contactId },
+  async exportContact(contactId: string, tenantId: string | null) {
+    // Scope tenant : un contact d'un autre tenant ne doit jamais etre exportable.
+    const contact = await this.prisma.contact.findFirst({
+      where: { id: contactId, ...(tenantId ? { tenantId } : {}) },
       include: {
         company: { select: { id: true, name: true, siren: true } },
         owner: { select: { id: true, firstName: true, lastName: true, email: true } },
@@ -96,8 +97,11 @@ export class GdprService {
   }
 
   // Article 17 : droit a l'effacement par ANONYMISATION en cascade.
-  async anonymizeContact(contactId: string, performedBy: string) {
-    const contact = await this.prisma.contact.findUnique({ where: { id: contactId } });
+  async anonymizeContact(contactId: string, performedBy: string, tenantId: string | null) {
+    // Scope tenant : empeche l'anonymisation (destructive) d'un contact d'un autre tenant.
+    const contact = await this.prisma.contact.findFirst({
+      where: { id: contactId, ...(tenantId ? { tenantId } : {}) },
+    });
     if (!contact) throw new NotFoundException('Contact introuvable');
     if (contact.email?.startsWith('anonymized+')) {
       return { alreadyAnonymized: true, contactId };

@@ -29,17 +29,20 @@ export class SocService {
   // ============================================================
   // Aggregation : tire les alertes "ouvertes" de chaque source et normalise
   // ============================================================
-  async listOpen(params: { companyId?: string; severity?: AlertSeverity; sources?: AlertSource[] } = {}): Promise<NormalizedAlert[]> {
+  async listOpen(
+    tenantId: string | null,
+    params: { companyId?: string; severity?: AlertSeverity; sources?: AlertSource[] } = {},
+  ): Promise<NormalizedAlert[]> {
     const sources = params.sources && params.sources.length > 0
       ? params.sources
       : (['M365_DEFENDER', 'UPTIME', 'EMAIL_SECURITY', 'COMPLIANCE', 'ASSET_LIFECYCLE'] as AlertSource[]);
 
     const tasks: Promise<NormalizedAlert[]>[] = [];
-    if (sources.includes('M365_DEFENDER')) tasks.push(this.fromM365(params.companyId));
-    if (sources.includes('UPTIME')) tasks.push(this.fromUptime(params.companyId));
-    if (sources.includes('EMAIL_SECURITY')) tasks.push(this.fromEmailSecurity(params.companyId));
-    if (sources.includes('COMPLIANCE')) tasks.push(this.fromCompliance(params.companyId));
-    if (sources.includes('ASSET_LIFECYCLE')) tasks.push(this.fromAssetLifecycle(params.companyId));
+    if (sources.includes('M365_DEFENDER')) tasks.push(this.fromM365(tenantId, params.companyId));
+    if (sources.includes('UPTIME')) tasks.push(this.fromUptime(tenantId, params.companyId));
+    if (sources.includes('EMAIL_SECURITY')) tasks.push(this.fromEmailSecurity(tenantId, params.companyId));
+    if (sources.includes('COMPLIANCE')) tasks.push(this.fromCompliance(tenantId, params.companyId));
+    if (sources.includes('ASSET_LIFECYCLE')) tasks.push(this.fromAssetLifecycle(tenantId, params.companyId));
 
     const all = (await Promise.all(tasks)).flat();
     let filtered = all;
@@ -55,8 +58,8 @@ export class SocService {
     return filtered.slice(0, 500);
   }
 
-  async stats() {
-    const all = await this.listOpen();
+  async stats(tenantId: string | null) {
+    const all = await this.listOpen(tenantId);
     const counts: Record<AlertSeverity, number> = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0 };
     const bySource: Record<AlertSource, number> = {
       M365_DEFENDER: 0, UPTIME: 0, EMAIL_SECURITY: 0, COMPLIANCE: 0, ASSET_LIFECYCLE: 0,
@@ -71,11 +74,14 @@ export class SocService {
   // ============================================================
   // Adaptateurs par source — chacun normalise vers NormalizedAlert
   // ============================================================
-  private async fromM365(companyId?: string): Promise<NormalizedAlert[]> {
+  private async fromM365(tenantId: string | null, companyId?: string): Promise<NormalizedAlert[]> {
     const rows = await this.prisma.m365SecurityAlert.findMany({
       where: {
         status: { in: ['newAlert', 'inProgress'] },
-        ...(companyId ? { m365Tenant: { companyId } } : {}),
+        // Scope tenant via la relation m365Tenant (porte le tenantId).
+        ...(tenantId || companyId
+          ? { m365Tenant: { ...(tenantId ? { tenantId } : {}), ...(companyId ? { companyId } : {}) } }
+          : {}),
       },
       include: { m365Tenant: { select: { companyId: true, company: { select: { name: true } } } } },
       orderBy: { createdDateTime: 'desc' },
@@ -95,11 +101,14 @@ export class SocService {
     }));
   }
 
-  private async fromUptime(companyId?: string): Promise<NormalizedAlert[]> {
+  private async fromUptime(tenantId: string | null, companyId?: string): Promise<NormalizedAlert[]> {
     const rows = await this.prisma.uptimeIncident.findMany({
       where: {
         endedAt: null,
-        ...(companyId ? { monitor: { companyId } } : {}),
+        // Scope tenant via la relation monitor (UptimeMonitor.tenantId).
+        ...(tenantId || companyId
+          ? { monitor: { ...(tenantId ? { tenantId } : {}), ...(companyId ? { companyId } : {}) } }
+          : {}),
       },
       include: { monitor: { select: { id: true, name: true, companyId: true, company: { select: { name: true } } } } },
       orderBy: { startedAt: 'desc' },
@@ -119,10 +128,12 @@ export class SocService {
     }));
   }
 
-  private async fromEmailSecurity(companyId?: string): Promise<NormalizedAlert[]> {
+  private async fromEmailSecurity(tenantId: string | null, companyId?: string): Promise<NormalizedAlert[]> {
     const rows = await this.prisma.emailSecurityCheck.findMany({
       where: {
         scorePct: { lt: 50 },
+        // EmailSecurityCheck porte tenantId directement.
+        ...(tenantId ? { tenantId } : {}),
         ...(companyId ? { companyId } : {}),
       },
       include: { company: { select: { id: true, name: true } } },
@@ -146,12 +157,15 @@ export class SocService {
     }));
   }
 
-  private async fromCompliance(companyId?: string): Promise<NormalizedAlert[]> {
+  private async fromCompliance(tenantId: string | null, companyId?: string): Promise<NormalizedAlert[]> {
     const rows = await this.prisma.complianceControlAssessment.findMany({
       where: {
         status: 'NON_COMPLIANT',
         control: { criticality: { in: ['CRITICAL', 'HIGH'] } },
-        ...(companyId ? { assessment: { companyId } } : {}),
+        // Scope tenant via la relation assessment (ComplianceAssessment.tenantId).
+        ...(tenantId || companyId
+          ? { assessment: { ...(tenantId ? { tenantId } : {}), ...(companyId ? { companyId } : {}) } }
+          : {}),
       },
       include: {
         control: { select: { code: true, title: true, criticality: true, framework: { select: { code: true } } } },
@@ -174,7 +188,7 @@ export class SocService {
     }));
   }
 
-  private async fromAssetLifecycle(companyId?: string): Promise<NormalizedAlert[]> {
+  private async fromAssetLifecycle(tenantId: string | null, companyId?: string): Promise<NormalizedAlert[]> {
     const now = new Date();
     const in30 = new Date(now.getTime() + 30 * 86400_000);
     // Assets EOSL (supportEndDate < now) ou warranty < 30j
@@ -186,6 +200,8 @@ export class SocService {
           { supportEndDate: { lt: now } },
           { warrantyUntil: { gte: now, lte: in30 } },
         ],
+        // Asset porte tenantId directement.
+        ...(tenantId ? { tenantId } : {}),
         ...(companyId ? { companyId } : {}),
       },
       include: { company: { select: { id: true, name: true } } },

@@ -78,10 +78,13 @@ export class CronDashboardService {
   // History : les triggers manuels + les CronJob d'execution metier
   // qui se sont logges via Activity (workflow runs, recurring tasks, etc.)
   // ============================================================
-  async history(name?: string, limit = 50) {
+  async history(tenantId: string | null, name?: string, limit = 50) {
     return this.prisma.activity.findMany({
       where: {
         action: { in: ['CRON_TRIGGER_MANUAL'] },
+        // Scope tenant : un ADMIN ne voit que l'historique de son tenant.
+        // Super-admin (tenantId null) voit tout.
+        ...(tenantId ? { tenantId } : {}),
         ...(name ? { entityId: name } : {}),
       },
       include: { user: { select: { firstName: true, lastName: true } } },

@@ -167,10 +167,13 @@ export class NpsService {
    * Statistiques NPS sur une periode (defaut 90 jours).
    * NPS = % promoteurs (9-10) - % detracteurs (0-6).
    */
-  async stats(periodDays = 90) {
+  async stats(tenantId: string | null, periodDays = 90) {
     const since = subDays(new Date(), periodDays);
+    // Scope tenant via la relation ticket (TicketSatisfaction n'a pas de tenantId direct).
+    // Super-admin (tenantId null) voit l'ensemble.
+    const ticketScope = tenantId ? { ticket: { tenantId } } : {};
     const submitted = await this.prisma.ticketSatisfaction.findMany({
-      where: { submittedAt: { gte: since }, score: { not: null } },
+      where: { submittedAt: { gte: since }, score: { not: null }, ...ticketScope },
       select: { score: true, comment: true, submittedAt: true, ticket: { select: { reference: true, title: true } } },
       orderBy: { submittedAt: 'desc' },
     });
@@ -196,7 +199,7 @@ export class NpsService {
 
     // Taux de reponse : combien d'envois ont recu une reponse sur la periode
     const sentInPeriod = await this.prisma.ticketSatisfaction.count({
-      where: { sentAt: { gte: since } },
+      where: { sentAt: { gte: since }, ...ticketScope },
     });
     const responseRate = sentInPeriod > 0 ? (total / sentInPeriod) * 100 : 0;
 

@@ -26,8 +26,12 @@ export class GdprController {
   @Roles('ADMIN', 'MANAGER')
   @Get('contacts/:id/export')
   @Header('Content-Type', 'application/json')
-  async exportContact(@Param('id') id: string, @Res() res: Response) {
-    const data = await this.gdpr.exportContact(id);
+  async exportContact(
+    @Param('id') id: string,
+    @Res() res: Response,
+    @CurrentUser() user: JwtUser,
+  ) {
+    const data = await this.gdpr.exportContact(id, user.tenantId);
     res.setHeader(
       'Content-Disposition',
       `attachment; filename="rgpd_contact_${id}.json"`,
@@ -39,6 +43,6 @@ export class GdprController {
   @Roles('ADMIN')
   @Post('contacts/:id/anonymize')
   anonymizeContact(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.gdpr.anonymizeContact(id, user.id);
+    return this.gdpr.anonymizeContact(id, user.id, user.tenantId);
   }
 }

@@ -85,9 +85,11 @@ export class SkillsService {
     return { ok: true };
   }
 
-  async listForUser(userId: string) {
+  async listForUser(userId: string, tenantId: string | null) {
     return this.prisma.userSkill.findMany({
-      where: { userId },
+      // Scope tenant via la relation user : on ne liste pas les certifs d'un
+      // utilisateur appartenant a un autre tenant.
+      where: { userId, user: tenantId ? { tenantId } : undefined },
       include: { skill: true },
       orderBy: { skill: { category: 'asc' } },
     });
@@ -96,10 +98,11 @@ export class SkillsService {
   // ============================================================
   // Matrice (vue pivot user × skill)
   // ============================================================
-  async matrix() {
+  async matrix(tenantId: string | null) {
+    const userWhere = { isActive: true, ...(tenantId ? { tenantId } : {}) };
     const [users, skills, userSkills] = await Promise.all([
       this.prisma.user.findMany({
-        where: { isActive: true },
+        where: userWhere,
         select: { id: true, firstName: true, lastName: true, role: true },
         orderBy: { firstName: 'asc' },
       }),
@@ -108,6 +111,8 @@ export class SkillsService {
         orderBy: [{ category: 'asc' }, { name: 'asc' }],
       }),
       this.prisma.userSkill.findMany({
+        // Scope tenant via la relation user (UserSkill n'a pas de tenantId direct).
+        where: tenantId ? { user: { tenantId } } : undefined,
         select: { userId: true, skillId: true, level: true, certifiedAt: true, expiresAt: true, certificateUrl: true },
       }),
     ]);
@@ -122,11 +127,13 @@ export class SkillsService {
   }
 
   // Certifs qui expirent bientot (J+90)
-  async expiringSoon(days = 90) {
+  async expiringSoon(tenantId: string | null, days = 90) {
     const limit = new Date(Date.now() + days * 86400_000);
     return this.prisma.userSkill.findMany({
       where: {
         expiresAt: { gte: new Date(), lte: limit },
+        // Scope tenant via la relation user.
+        ...(tenantId ? { user: { tenantId } } : {}),
       },
       include: {
         user: { select: { id: true, firstName: true, lastName: true } },

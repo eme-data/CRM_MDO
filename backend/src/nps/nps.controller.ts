@@ -16,6 +16,7 @@ import { NpsService } from './nps.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('NPS')
 @Controller()
@@ -75,7 +76,7 @@ export class NpsController {
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('nps/stats')
-  stats(@Query('days') days?: string) {
-    return this.service.stats(days ? parseInt(days, 10) : 90);
+  stats(@CurrentUser() user: JwtUser, @Query('days') days?: string) {
+    return this.service.stats(user.tenantId, days ? parseInt(days, 10) : 90);
   }
 }

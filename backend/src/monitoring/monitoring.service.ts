@@ -131,43 +131,28 @@ export class MonitoringService {
   // ----------- Vue consolidee -----------
   // Vue d'ensemble pour la page Surveillance : repartition par bucket
   // d'urgence + liste triee + erreurs de check.
-  async overview() {
+  async overview(tenantId: string | null) {
     const now = Date.now();
     const horizon90 = new Date(now + 90 * 86_400_000);
 
+    // Scope tenant : ne jamais agreger les certificats/domaines d'autres tenants.
+    // Super-admin (tenantId null) voit l'ensemble.
+    const base = {
+      ...(tenantId ? { tenantId } : {}),
+      type: { in: [AssetType.CERTIFICATE, AssetType.DOMAIN] },
+      status: 'ACTIVE' as const,
+    };
     const [tracked, untracked, items, errors] = await Promise.all([
-      this.prisma.asset.count({
-        where: {
-          type: { in: [AssetType.CERTIFICATE, AssetType.DOMAIN] },
-          status: 'ACTIVE',
-          monitoringEnabled: true,
-        },
-      }),
-      this.prisma.asset.count({
-        where: {
-          type: { in: [AssetType.CERTIFICATE, AssetType.DOMAIN] },
-          status: 'ACTIVE',
-          monitoringEnabled: false,
-        },
-      }),
+      this.prisma.asset.count({ where: { ...base, monitoringEnabled: true } }),
+      this.prisma.asset.count({ where: { ...base, monitoringEnabled: false } }),
       this.prisma.asset.findMany({
-        where: {
-          type: { in: [AssetType.CERTIFICATE, AssetType.DOMAIN] },
-          status: 'ACTIVE',
-          monitoringEnabled: true,
-          expiresAt: { not: null, lte: horizon90 },
-        },
+        where: { ...base, monitoringEnabled: true, expiresAt: { not: null, lte: horizon90 } },
         include: { company: { select: { id: true, name: true } } },
         orderBy: { expiresAt: 'asc' },
         take: 200,
       }),
       this.prisma.asset.findMany({
-        where: {
-          type: { in: [AssetType.CERTIFICATE, AssetType.DOMAIN] },
-          status: 'ACTIVE',
-          monitoringEnabled: true,
-          monitoringError: { not: null },
-        },
+        where: { ...base, monitoringEnabled: true, monitoringError: { not: null } },
         include: { company: { select: { id: true, name: true } } },
         orderBy: { lastMonitoredAt: 'desc' },
         take: 50,

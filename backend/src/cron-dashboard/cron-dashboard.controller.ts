@@ -21,8 +21,12 @@ export class CronDashboardController {
 
   @Roles('ADMIN', 'MANAGER')
   @Get('history')
-  history(@Query('name') name?: string, @Query('limit') limit?: string) {
-    return this.service.history(name, limit ? parseInt(limit, 10) : 50);
+  history(
+    @CurrentUser() user: JwtUser,
+    @Query('name') name?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.history(user.tenantId, name, limit ? parseInt(limit, 10) : 50);
   }
 
   @Roles('ADMIN')

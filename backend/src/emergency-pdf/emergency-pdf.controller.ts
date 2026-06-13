@@ -28,7 +28,7 @@ export class EmergencyPdfController {
     @Res() res: Response,
     @CurrentUser() user: JwtUser,
   ) {
-    const { buffer, filename } = await this.service.generateForCompany(id);
+    const { buffer, filename } = await this.service.generateForCompany(id, user.tenantId);
     // Audit : qui a sorti le dossier d'urgence
     await this.prisma.activity.create({
       data: { userId: user.id, tenantId: user.tenantId, action: 'EXPORT_EMERGENCY_PDF', entity: 'Company', entityId: id },

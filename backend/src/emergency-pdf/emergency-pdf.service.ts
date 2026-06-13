@@ -14,9 +14,14 @@ import { PrismaService } from '../database/prisma.service';
 export class EmergencyPdfService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async generateForCompany(companyId: string): Promise<{ buffer: Buffer; filename: string }> {
-    const c = await this.prisma.company.findUnique({
-      where: { id: companyId },
+  async generateForCompany(
+    companyId: string,
+    tenantId: string | null,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    // Scope tenant : empeche un utilisateur de generer le PDF urgence (qui agrege
+    // sites/reseaux/contrats/secrets) d'une societe appartenant a un autre tenant.
+    const c = await this.prisma.company.findFirst({
+      where: { id: companyId, ...(tenantId ? { tenantId } : {}) },
       include: {
         contacts: { orderBy: [{ isPrimary: 'desc' }, { lastName: 'asc' }] },
         contracts: {

@@ -14,6 +14,7 @@ import { SkillsService } from './skills.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Skills matrix')
 @ApiBearerAuth()
@@ -48,18 +49,18 @@ export class SkillsController {
 
   // ----- UserSkills -----
   @Get('matrix')
-  matrix() {
-    return this.service.matrix();
+  matrix(@CurrentUser() user: JwtUser) {
+    return this.service.matrix(user.tenantId);
   }
 
   @Get('expiring-soon')
-  expiringSoon(@Query('days') days?: string) {
-    return this.service.expiringSoon(days ? parseInt(days, 10) : 90);
+  expiringSoon(@CurrentUser() user: JwtUser, @Query('days') days?: string) {
+    return this.service.expiringSoon(user.tenantId, days ? parseInt(days, 10) : 90);
   }
 
   @Get('users/:userId')
-  forUser(@Param('userId') userId: string) {
-    return this.service.listForUser(userId);
+  forUser(@Param('userId') userId: string, @CurrentUser() user: JwtUser) {
+    return this.service.listForUser(userId, user.tenantId);
   }
 
   @Roles('ADMIN', 'MANAGER')

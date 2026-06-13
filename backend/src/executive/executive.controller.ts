@@ -4,6 +4,7 @@ import { ExecutiveService } from './executive.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser, JwtUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Executive')
 @ApiBearerAuth()
@@ -14,7 +15,7 @@ export class ExecutiveController {
 
   @Roles('ADMIN', 'MANAGER')
   @Get('snapshot')
-  snapshot() {
-    return this.service.snapshot();
+  snapshot(@CurrentUser() user: JwtUser) {
+    return this.service.snapshot(user.tenantId);
   }
 }
