@@ -7,6 +7,7 @@ import {
   ClipboardCheck, Settings2, Package, ShoppingCart, History,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { ProductAutocomplete } from '@/components/ProductAutocomplete';
 
 interface Loc { id: string; name: string; code?: string | null; active?: boolean }
 interface Sup { id: string; name: string; active?: boolean }
@@ -120,20 +121,40 @@ function Kpi({ icon: Icon, label, value, accent }: { icon: any; label: string; v
 }
 
 function ItemModal({ suppliers, onClose, onSaved }: { suppliers: Sup[]; onClose: () => void; onSaved: () => void }) {
-  const [f, setF] = useState({ sku: '', name: '', category: '', unit: 'piece', supplierId: '', reorderPoint: '', trackSerial: false });
+  const [f, setF] = useState({ sku: '', name: '', category: '', unit: 'piece', supplierId: '', reorderPoint: '', avgCostHt: '', trackSerial: false, productId: '' });
+  const [products, setProducts] = useState<any[]>([]);
+  useEffect(() => { api.get('/products').then((d: any) => setProducts(Array.isArray(d) ? d : (d?.items ?? []))).catch(() => {}); }, []);
+
+  function applyProduct(p: any) {
+    setF((prev) => ({
+      ...prev,
+      productId: p.id,
+      name: prev.name || p.name,
+      sku: prev.sku || p.code || '',
+      category: prev.category || p.category || '',
+      avgCostHt: prev.avgCostHt || (p.purchasePriceHt != null ? String(Number(p.purchasePriceHt)) : ''),
+    }));
+  }
   async function save() {
     if (!f.sku.trim() || !f.name.trim()) { toast.error('SKU et nom requis'); return; }
     try {
       await api.post('/stock/items', {
         sku: f.sku.trim(), name: f.name.trim(), category: f.category || undefined, unit: f.unit || 'piece',
         supplierId: f.supplierId || undefined, reorderPoint: f.reorderPoint ? Number(f.reorderPoint) : undefined,
-        trackSerial: f.trackSerial,
+        avgCostHt: f.avgCostHt ? Number(f.avgCostHt) : undefined,
+        trackSerial: f.trackSerial, productId: f.productId || undefined,
       });
       toast.success('Article créé'); onSaved();
     } catch (e: any) { toast.error(e.message); }
   }
   return (
     <Modal title="Nouvel article" onClose={onClose}>
+      {products.length > 0 && (
+        <div className="mb-3">
+          <label className="text-xs text-slate-500 mb-1 block">Pré-remplir depuis le catalogue produits (optionnel)</label>
+          <ProductAutocomplete products={products} onSelect={applyProduct} />
+        </div>
+      )}
       <div className="grid sm:grid-cols-2 gap-3">
         <input className="input" placeholder="SKU *" value={f.sku} onChange={(e) => setF({ ...f, sku: e.target.value })} />
         <input className="input" placeholder="Nom *" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />

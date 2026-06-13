@@ -5,6 +5,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { formatEuro } from '@/lib/utils';
+import { ProductAutocomplete } from '@/components/ProductAutocomplete';
 
 interface Line {
   description: string;
@@ -198,18 +199,12 @@ export default function NewQuotePage() {
               return (
                 <div key={i} className="space-y-1">
                 {products.length > 0 && (
-                  <select
-                    className="input text-xs py-1 max-w-md"
-                    value={l.productId ?? ''}
-                    onChange={(e) => e.target.value && applyProduct(i, e.target.value)}
-                  >
-                    <option value="">-- Selectionner depuis le catalogue (optionnel) --</option>
-                    {products.map((p: any) => (
-                      <option key={p.id} value={p.id}>
-                        [{p.code}] {p.name}{p.sellingPriceHt ? ' — ' + Number(p.sellingPriceHt) + ' EUR' : ''}
-                      </option>
-                    ))}
-                  </select>
+                  <ProductAutocomplete
+                    products={products}
+                    className="max-w-md"
+                    initialLabel={(() => { const p = products.find((x: any) => x.id === l.productId); return p ? (p.code ? `[${p.code}] ${p.name}` : p.name) : ''; })()}
+                    onSelect={(p) => applyProduct(i, p.id)}
+                  />
                 )}
                 <div className="grid grid-cols-12 gap-2 items-start">
                   <textarea

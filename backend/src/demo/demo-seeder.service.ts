@@ -212,8 +212,18 @@ export class DemoSeederService {
     const camion = await this.prisma.stockLocation.create({ data: { ...TID, name: 'Camion Karim', code: 'VAN' } });
     const ldlc = await this.prisma.supplier.create({ data: { ...TID, name: 'LDLC Pro', email: 'pro@ldlc.com' } });
     const rexel = await this.prisma.supplier.create({ data: { ...TID, name: 'Rexel', email: 'contact@rexel.fr' } });
-    const mkItem = async (sku: string, name: string, category: string, cost: number, reorder: number, supplierId: string, qDepot: number, qCamion: number, trackSerial = false) => {
-      const it = await this.prisma.stockItem.create({ data: { ...TID, sku, name, category, unit: 'piece', avgCostHt: cost, reorderPoint: reorder, supplierId, trackSerial } });
+
+    // Catalogue produits (autocompletion devis + lien stock).
+    const prod = (code: string, name: string, category: string, purchase: number, selling: number) =>
+      this.prisma.product.create({ data: { ...TID, code, name, category, type: 'HARDWARE', purchasePriceHt: purchase, sellingPriceHt: selling, vatRate: 20 } });
+    const pCab = await prod('CAB-RJ45-3', 'Cable RJ45 Cat6 (3m)', 'Cablage', 1.2, 4);
+    const pSw = await prod('SW-8G', 'Switch 8 ports Gigabit', 'Reseau', 45, 89);
+    const pOnd = await prod('OND-650', 'Onduleur 650VA', 'Energie', 95, 159);
+    const pAp = await prod('AP-U6', 'Borne WiFi UniFi U6', 'Reseau', 110, 179);
+    const pTon = await prod('TON-26A', 'Toner HP 26A', 'Consommable', 65, 99);
+
+    const mkItem = async (sku: string, name: string, category: string, cost: number, reorder: number, supplierId: string, productId: string, qDepot: number, qCamion: number, trackSerial = false) => {
+      const it = await this.prisma.stockItem.create({ data: { ...TID, sku, name, category, unit: 'piece', avgCostHt: cost, reorderPoint: reorder, supplierId, productId, trackSerial } });
       if (qDepot) {
         await this.prisma.stockLevel.create({ data: { ...TID, itemId: it.id, locationId: depot.id, quantity: qDepot } });
         await this.prisma.stockMovement.create({ data: { ...TID, itemId: it.id, locationId: depot.id, type: 'IN', quantity: qDepot, unitCostHt: cost, reason: 'Stock initial', performedById: sophie.id, createdAt: this.dt('2026-05-15T09:00:00Z') } });
@@ -221,11 +231,11 @@ export class DemoSeederService {
       if (qCamion) await this.prisma.stockLevel.create({ data: { ...TID, itemId: it.id, locationId: camion.id, quantity: qCamion } });
       return it;
     };
-    await mkItem('CAB-RJ45-3', 'Cable RJ45 Cat6 (3m)', 'Cablage', 1.2, 20, ldlc.id, 50, 10);
-    await mkItem('SW-8G', 'Switch 8 ports Gigabit', 'Reseau', 45, 3, ldlc.id, 6, 1);
-    const ond = await mkItem('OND-650', 'Onduleur 650VA', 'Energie', 95, 2, rexel.id, 4, 0);
-    const ap = await mkItem('AP-U6', 'Borne WiFi UniFi U6', 'Reseau', 110, 2, ldlc.id, 5, 0, true);
-    const ton = await mkItem('TON-26A', 'Toner HP 26A', 'Consommable', 65, 4, rexel.id, 3, 0); // stock bas (3 <= seuil 4)
+    await mkItem('CAB-RJ45-3', 'Cable RJ45 Cat6 (3m)', 'Cablage', 1.2, 20, ldlc.id, pCab.id, 50, 10);
+    await mkItem('SW-8G', 'Switch 8 ports Gigabit', 'Reseau', 45, 3, ldlc.id, pSw.id, 6, 1);
+    const ond = await mkItem('OND-650', 'Onduleur 650VA', 'Energie', 95, 2, rexel.id, pOnd.id, 4, 0);
+    const ap = await mkItem('AP-U6', 'Borne WiFi UniFi U6', 'Reseau', 110, 2, ldlc.id, pAp.id, 5, 0, true);
+    const ton = await mkItem('TON-26A', 'Toner HP 26A', 'Consommable', 65, 4, rexel.id, pTon.id, 3, 0); // stock bas (3 <= seuil 4)
     for (const sn of ['U6-2024-0001', 'U6-2024-0002', 'U6-2024-0003']) {
       await this.prisma.stockSerial.create({ data: { ...TID, itemId: ap.id, serial: sn, status: 'IN_STOCK', locationId: depot.id } });
     }
@@ -272,6 +282,7 @@ export class DemoSeederService {
       () => this.prisma.stockItem.deleteMany({ where }),
       () => this.prisma.stockLocation.deleteMany({ where }),
       () => this.prisma.supplier.deleteMany({ where }),
+      () => this.prisma.product.deleteMany({ where }),
       () => this.prisma.ticket.deleteMany({ where }),
       () => this.prisma.opportunity.deleteMany({ where }),
       () => this.prisma.contact.deleteMany({ where }),
