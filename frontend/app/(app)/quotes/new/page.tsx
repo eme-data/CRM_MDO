@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { formatEuro } from '@/lib/utils';
@@ -44,6 +44,28 @@ export default function NewQuotePage() {
   });
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
   const [submitting, setSubmitting] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+
+  async function generateWithAi() {
+    if (!aiPrompt.trim()) { toast.error('Décris le besoin à deviser'); return; }
+    setAiBusy(true);
+    try {
+      const r: any = await api.post('/ai/quote/assist', { description: aiPrompt });
+      const aiLines: Line[] = (r.lines ?? []).map((l: any) => ({
+        description: l.description, quantity: Number(l.quantity) || 1,
+        unitPriceHt: Number(l.unitPriceHt) || 0, discountPct: 0,
+        productId: l.productId ?? undefined,
+      }));
+      if (aiLines.length === 0) { toast.info('Aucune ligne générée — précise la demande'); return; }
+      // Remplace si le devis n'a qu'une ligne vide, sinon ajoute à la suite.
+      const isEmpty = lines.length === 1 && !lines[0].description && !lines[0].unitPriceHt;
+      setLines(isEmpty ? aiLines : [...lines, ...aiLines]);
+      toast.success(aiLines.length + ' ligne(s) générée(s)' + (r.note ? ' — ' + r.note : ''));
+    } catch (e: any) {
+      toast.error(e.message?.includes('IA') ? e.message : 'IA indisponible (à activer dans Réglages > IA)');
+    } finally { setAiBusy(false); }
+  }
 
   useEffect(() => {
     api.get('/companies?pageSize=500').then((r) => setCompanies(r.items));
@@ -195,6 +217,22 @@ export default function NewQuotePage() {
           <div><label className="label">Remise globale (%)</label>
             <input type="number" step="0.01" min={0} max={100} className="input" value={data.globalDiscountPct} onChange={(e) => set('globalDiscountPct', parseFloat(e.target.value) || 0)} />
           </div>
+        </div>
+
+        {/* Assistant IA : génère les lignes à partir d'une description */}
+        <div className="bg-mdo-50 border border-mdo-200 rounded-md p-3 space-y-2">
+          <label className="text-sm font-medium text-mdo-700 flex items-center gap-1">
+            <Sparkles size={14} /> Générer avec l'IA
+          </label>
+          <textarea
+            className="input min-h-[60px]"
+            placeholder="Ex : renouveler 8 postes bureautiques + un switch 8 ports + sauvegarde externalisée"
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+          />
+          <button type="button" onClick={generateWithAi} disabled={aiBusy} className="btn btn-secondary text-sm">
+            <Sparkles size={14} className="mr-1" /> {aiBusy ? 'Génération…' : 'Générer les lignes'}
+          </button>
         </div>
 
         <div>

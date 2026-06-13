@@ -15,6 +15,10 @@ interface InvokeParams {
   cacheSystem?: boolean;
   maxTokens?: number;
   temperature?: number;
+  // Force un modele specifique pour cette invocation (ex: Opus 4.8 pour les
+  // taches a forte valeur : devis assiste, QBR), au lieu du modele du tenant.
+  // Le tenant paie quand meme avec sa propre cle.
+  modelOverride?: string;
   entityType?: string;
   entityId?: string;
   userId?: string;
@@ -68,7 +72,9 @@ export class AiService {
   // Le system prompt final = "<companyContext>\n\n<systemPrompt>".
   // ============================================================
   async invoke(params: InvokeParams): Promise<string> {
-    const { apiKey, model, companyContext } = await this.loadConfig(params.tenantId ?? null);
+    const cfg = await this.loadConfig(params.tenantId ?? null);
+    const { apiKey, companyContext } = cfg;
+    const model = params.modelOverride ?? cfg.model;
     const fullSystem = (companyContext ? companyContext + '\n\n' : '') + params.systemPrompt;
     const start = Date.now();
     let result;

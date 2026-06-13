@@ -8,6 +8,8 @@ import { TicketDraftService } from './use-cases/ticket-draft.service';
 import { TicketSummaryService } from './use-cases/ticket-summary.service';
 import { ClientSummaryService } from './use-cases/client-summary.service';
 import { DocumentExtractService } from './use-cases/document-extract.service';
+import { QuoteAssistService } from './use-cases/quote-assist.service';
+import { ClientQbrService } from './use-cases/client-qbr.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -32,6 +34,8 @@ export class AiController {
     private readonly ticketSummary: TicketSummaryService,
     private readonly summary: ClientSummaryService,
     private readonly documentExtract: DocumentExtractService,
+    private readonly quoteAssist: QuoteAssistService,
+    private readonly clientQbr: ClientQbrService,
   ) {}
 
   @Get('status')
@@ -99,5 +103,25 @@ export class AiController {
   ) {
     const d = days ? Math.max(1, Math.min(180, parseInt(days, 10))) : 30;
     return this.summary.summarize(id, user.tenantId, d, user.id);
+  }
+
+  // ---------- Devis assiste (genere des lignes depuis une description) ----------
+  @Throttle(AI_THROTTLE)
+  @Post('quote/assist')
+  quoteAssistGenerate(@Body() body: { description: string }, @CurrentUser() user: JwtUser) {
+    return this.quoteAssist.assist(body?.description ?? '', user.tenantId, user.id);
+  }
+
+  // ---------- QBR / bilan client (markdown presentable) ----------
+  @Throttle(AI_THROTTLE)
+  @Roles('ADMIN', 'MANAGER', 'SALES')
+  @Post('qbr/company/:id')
+  qbrCompany(
+    @Param('id') id: string,
+    @Query('days') days: string | undefined,
+    @CurrentUser() user: JwtUser,
+  ) {
+    const d = days ? Math.max(30, Math.min(365, parseInt(days, 10))) : 90;
+    return this.clientQbr.generate(id, user.tenantId, d, user.id);
   }
 }

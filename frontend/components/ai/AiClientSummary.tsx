@@ -27,6 +27,17 @@ export function AiClientSummary({ companyId }: { companyId: string }) {
     finally { setBusy(false); }
   }
 
+  async function runQbr() {
+    setBusy(true);
+    setSummary(null);
+    try {
+      const d = Math.max(30, days); // le QBR couvre au moins 30 jours
+      const r = await api.post('/ai/qbr/company/' + companyId + '?days=' + d);
+      setSummary(r.qbr ?? '');
+    } catch (err: any) { toast.error(err.message); }
+    finally { setBusy(false); }
+  }
+
   return (
     <div className="card p-4 bg-purple-50/50 border-purple-200 space-y-3">
       <div className="flex items-center justify-between">
@@ -39,8 +50,11 @@ export function AiClientSummary({ companyId }: { companyId: string }) {
             <option value={30}>30 jours</option>
             <option value={90}>90 jours</option>
           </select>
-          <button onClick={run} disabled={busy} className="btn btn-primary text-xs py-1">
-            {busy ? 'Generation...' : 'Generer'}
+          <button onClick={run} disabled={busy} className="btn btn-secondary text-xs py-1">
+            {busy ? '...' : 'Synthèse'}
+          </button>
+          <button onClick={runQbr} disabled={busy} className="btn btn-primary text-xs py-1" title="Compte-rendu trimestriel présentable">
+            {busy ? '...' : 'QBR'}
           </button>
         </div>
       </div>

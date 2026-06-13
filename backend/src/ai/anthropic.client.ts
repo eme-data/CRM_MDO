@@ -126,12 +126,15 @@ export async function callAnthropic(params: AnthropicCallParams): Promise<Anthro
   };
 }
 
-// Tarifs USD / 1M tokens (2026 — Claude 4.X)
+// Tarifs USD / 1M tokens (Claude 4.x, a jour 2026-06).
+// cacheRead = 0.1x input ; cacheWrite (TTL 5 min) = 1.25x input.
 // A maintenir si Anthropic publie de nouveaux tarifs.
 const PRICING: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
-  'claude-opus-4-7':         { input: 15,  output: 75,  cacheRead: 1.5, cacheWrite: 18.75 },
-  'claude-sonnet-4-6':       { input: 3,   output: 15,  cacheRead: 0.3, cacheWrite: 3.75 },
-  'claude-haiku-4-5-20251001': { input: 1, output: 5,   cacheRead: 0.1, cacheWrite: 1.25 },
+  'claude-opus-4-8':           { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  'claude-opus-4-7':           { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  'claude-sonnet-4-6':         { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+  'claude-haiku-4-5':          { input: 1, output: 5,  cacheRead: 0.1, cacheWrite: 1.25 },
+  'claude-haiku-4-5-20251001': { input: 1, output: 5,  cacheRead: 0.1, cacheWrite: 1.25 },
 };
 
 export function estimateCostUsd(model: string, usage: AnthropicResponse['usage']): number {
