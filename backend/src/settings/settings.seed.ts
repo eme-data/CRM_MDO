@@ -285,6 +285,22 @@ export const SETTINGS_DEFS: SettingDef[] = [
   // billing.sellsy.* restent eventuellement en base (settings non purges)
   // mais ne sont plus seedees ni utilisees par le code.
   {
+    key: 'stock.deductOnInvoice',
+    category: 'billing',
+    label: 'Decrementer le stock a l\'emission des factures',
+    description:
+      'Si actif, passer une facture en ISSUED decremente le stock des articles lies a ses lignes (et la restitue si la facture est annulee). A activer si vous facturez la vente d\'articles sans passer par la consommation sur intervention.',
+    defaultValue: 'false',
+  },
+  {
+    key: 'stock.invoiceLocationId',
+    category: 'billing',
+    label: 'Emplacement de stock pour le decrement a la facturation',
+    description:
+      'Emplacement (id) depuis lequel le stock est decremente a l\'emission des factures. Laisser vide pour utiliser le premier emplacement actif.',
+    defaultValue: '',
+  },
+  {
     key: 'billing.provider',
     category: 'billing',
     label: 'Outil de facturation actif',

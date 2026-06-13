@@ -4,6 +4,7 @@ import { Prisma, InvoiceStatus } from '@prisma/client';
 import { addDays, startOfMonth, endOfMonth, format } from 'date-fns';
 import { PrismaService } from '../database/prisma.service';
 import { SettingsService } from '../settings/settings.service';
+import { StockService } from '../stock/stock.service';
 import { withUniqueRetry } from '../common/db/unique-retry';
 
 @Injectable()
@@ -13,6 +14,7 @@ export class InvoicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settings: SettingsService,
+    private readonly stock: StockService,
   ) {}
 
   async generateNumber(date: Date, tenantId: string | null): Promise<string> {
@@ -72,7 +74,7 @@ export class InvoicesService {
     issueDate?: Date;
     dueDate?: Date;
     vatRate?: number;
-    lines: Array<{ description: string; quantity: number; unitPriceHt: number }>;
+    lines: Array<{ description: string; quantity: number; unitPriceHt: number; stockItemId?: string }>;
     notes?: string;
   }, tenantId: string | null = null) {
     const issueDate = input.issueDate ?? new Date();
@@ -102,6 +104,7 @@ export class InvoicesService {
               quantity: l.quantity,
               unitPriceHt: l.unitPriceHt,
               totalHt: l.quantity * l.unitPriceHt,
+              stockItemId: l.stockItemId ?? null,
               tenantId: tenantId ?? undefined,
             })),
           },
@@ -211,12 +214,39 @@ export class InvoicesService {
     // l'existence de l'invoice dans un autre tenant).
     const existing = await this.prisma.invoice.findFirst({
       where: { id, tenantId },
-      select: { id: true },
+      select: { id: true, status: true },
     });
     if (!existing) throw new NotFoundException('Facture introuvable');
     const data: Prisma.InvoiceUpdateInput = { status };
     if (status === 'PAID') data.paidAt = new Date();
-    return this.prisma.invoice.update({ where: { id }, data });
+    const updated = await this.prisma.invoice.update({ where: { id }, data });
+
+    // Decrement de stock a l'emission (best-effort, garde par reglage). Ne doit
+    // jamais bloquer le changement de statut de la facture.
+    try {
+      if (await this.settings.getBool('stock.deductOnInvoice', tenantId)) {
+        if (status === 'ISSUED' && existing.status !== 'ISSUED') {
+          await this.stock.deductForInvoice(tenantId, id, await this.resolveStockLocation(tenantId));
+        } else if (status === 'CANCELLED') {
+          await this.stock.restoreForInvoice(tenantId, id);
+        }
+      }
+    } catch (err: any) {
+      this.logger.warn(`Decrement stock facture ${id} echoue : ${err.message}`);
+    }
+    return updated;
+  }
+
+  // Emplacement de decrement : reglage stock.invoiceLocationId, sinon 1er
+  // emplacement actif du tenant.
+  private async resolveStockLocation(tenantId: string | null): Promise<string | null> {
+    const configured = await this.settings.get('stock.invoiceLocationId', tenantId);
+    if (configured) {
+      const ok = await this.prisma.stockLocation.findFirst({ where: { id: configured, tenantId }, select: { id: true } });
+      if (ok) return ok.id;
+    }
+    const first = await this.prisma.stockLocation.findFirst({ where: { tenantId, active: true }, orderBy: { createdAt: 'asc' }, select: { id: true } });
+    return first?.id ?? null;
   }
 
   async remove(id: string, tenantId: string | null) {

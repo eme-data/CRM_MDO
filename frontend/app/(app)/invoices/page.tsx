@@ -2,11 +2,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { FileText, Download, Play, ExternalLink } from 'lucide-react';
+import { FileText, Download, Play, ExternalLink, Plus, X } from 'lucide-react';
 import { api, downloadAttachment } from '@/lib/api';
 import { formatDate, formatEuro } from '@/lib/utils';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useReloadOnFocus } from '@/lib/useReloadOnFocus';
+import { me as fetchMe } from '@/lib/auth';
+import { hasFeature } from '@/lib/modules';
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: 'Brouillon', ISSUED: 'Emise', PAID: 'Payee', OVERDUE: 'En retard', CANCELLED: 'Annulee',
@@ -38,6 +40,8 @@ export default function InvoicesPage() {
   const [items, setItems] = useState<any[]>([]);
   const [status, setStatus] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [canStock, setCanStock] = useState(false);
   const confirm = useConfirm();
 
   async function load() {
@@ -45,6 +49,7 @@ export default function InvoicesPage() {
     setItems(await api.get('/invoices' + p));
   }
   useEffect(() => { load(); }, [status]);
+  useEffect(() => { fetchMe().then((u) => setCanStock(hasFeature(u.modules, 'stock.inventory'))).catch(() => {}); }, []);
   useReloadOnFocus(load);
 
   async function generateMonthly() {
@@ -72,9 +77,12 @@ export default function InvoicesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Factures</h1>
-        <button onClick={generateMonthly} disabled={generating} className="btn btn-primary">
-          <Play size={14} className="mr-1" /> {generating ? 'Generation...' : 'Generer mensuel'}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowCreate(true)} className="btn btn-secondary"><Plus size={14} className="mr-1" /> Nouvelle facture</button>
+          <button onClick={generateMonthly} disabled={generating} className="btn btn-primary">
+            <Play size={14} className="mr-1" /> {generating ? 'Generation...' : 'Generer mensuel'}
+          </button>
+        </div>
       </div>
       <div className="card p-4">
         <select className="input max-w-xs" value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -152,6 +160,93 @@ export default function InvoicesPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {showCreate && <CreateInvoiceModal canStock={canStock} onClose={() => setShowCreate(false)} onSaved={() => { setShowCreate(false); load(); }} />}
+    </div>
+  );
+}
+
+function CreateInvoiceModal({ canStock, onClose, onSaved }: { canStock: boolean; onClose: () => void; onSaved: () => void }) {
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [stockItems, setStockItems] = useState<any[]>([]);
+  const [companyId, setCompanyId] = useState('');
+  const [issueDate, setIssueDate] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [vatRate, setVatRate] = useState('20');
+  const [notes, setNotes] = useState('');
+  const [lines, setLines] = useState<any[]>([{ description: '', quantity: '1', unitPriceHt: '', stockItemId: '' }]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.get('/companies').then((d: any) => setCompanies(d.items ?? d)).catch(() => {});
+    if (canStock) api.get('/stock/items').then((d: any) => setStockItems(d)).catch(() => {});
+  }, []);
+
+  function setLine(i: number, patch: any) { setLines((ls) => ls.map((l, k) => (k === i ? { ...l, ...patch } : l))); }
+  function onPickItem(i: number, stockItemId: string) {
+    const it = stockItems.find((x) => x.id === stockItemId);
+    setLine(i, { stockItemId, description: it && !lines[i].description ? it.name : lines[i].description });
+  }
+  const totalHt = lines.reduce((s, l) => s + (Number(l.quantity) || 0) * (Number(l.unitPriceHt) || 0), 0);
+
+  async function save() {
+    const goodLines = lines.filter((l) => l.description.trim() && Number(l.quantity) > 0).map((l) => ({
+      description: l.description.trim(), quantity: Number(l.quantity), unitPriceHt: Number(l.unitPriceHt) || 0,
+      stockItemId: l.stockItemId || undefined,
+    }));
+    if (!companyId || goodLines.length === 0) { toast.error('Client et au moins une ligne requis'); return; }
+    setSaving(true);
+    try {
+      await api.post('/invoices', {
+        companyId, issueDate: issueDate || undefined, dueDate: dueDate || undefined,
+        vatRate: Number(vatRate) || 20, notes: notes || undefined, lines: goodLines,
+      });
+      toast.success('Facture creee (brouillon)'); onSaved();
+    } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="card w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-semibold mb-4">Nouvelle facture</h3>
+        <div className="space-y-3">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <select className="input" value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
+              <option value="">Client *</option>
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <input className="input" type="number" value={vatRate} onChange={(e) => setVatRate(e.target.value)} placeholder="TVA %" title="Taux de TVA %" />
+            <input className="input" type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} title="Date d'emission" />
+            <input className="input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} title="Echeance" />
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="text-xs font-semibold text-slate-500">Lignes {canStock && <span className="font-normal">— lier un article décrémente le stock à l'émission</span>}</div>
+            {lines.map((l, i) => (
+              <div key={i} className="flex gap-2 items-center">
+                {canStock && (
+                  <select className="input w-40" value={l.stockItemId} onChange={(e) => onPickItem(i, e.target.value)} title="Article de stock (optionnel)">
+                    <option value="">— Stock —</option>
+                    {stockItems.map((it) => <option key={it.id} value={it.id}>{it.name} ({it.totalQty})</option>)}
+                  </select>
+                )}
+                <input className="input flex-1" placeholder="Description" value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} />
+                <input className="input w-16" type="number" placeholder="Qté" value={l.quantity} onChange={(e) => setLine(i, { quantity: e.target.value })} />
+                <input className="input w-24" type="number" placeholder="PU HT" value={l.unitPriceHt} onChange={(e) => setLine(i, { unitPriceHt: e.target.value })} />
+                <button onClick={() => setLines((ls) => ls.filter((_, k) => k !== i))} className="text-slate-300 hover:text-red-500"><X size={16} /></button>
+              </div>
+            ))}
+            <button onClick={() => setLines((ls) => [...ls, { description: '', quantity: '1', unitPriceHt: '', stockItemId: '' }])} className="text-sm text-mdo-600 hover:underline flex items-center gap-1"><Plus size={14} /> Ajouter une ligne</button>
+          </div>
+
+          <input className="input" placeholder="Notes (optionnel)" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          <div className="flex items-center justify-between border-t pt-3">
+            <span className="text-sm">Total HT : <strong>{formatEuro(totalHt)}</strong></span>
+            <div className="flex gap-2"><button onClick={onClose} className="btn btn-secondary">Annuler</button><button onClick={save} disabled={saving} className="btn btn-primary">{saving ? '...' : 'Créer (brouillon)'}</button></div>
+          </div>
+          <p className="text-xs text-slate-400">La facture est créée en brouillon. Le décrément de stock (si activé) a lieu au passage en « Émise ».</p>
+        </div>
       </div>
     </div>
   );

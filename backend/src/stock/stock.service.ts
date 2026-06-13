@@ -224,11 +224,72 @@ export class StockService {
   }
 
   private async setLevel(tx: Prisma.TransactionClient, me: JwtUser, itemId: string, locationId: string, qty: number) {
+    await this.setLevelT(tx, me.tenantId ?? null, itemId, locationId, qty);
+  }
+  private async setLevelT(tx: Prisma.TransactionClient, tenantId: string | null, itemId: string, locationId: string, qty: number) {
     await tx.stockLevel.upsert({
       where: { itemId_locationId: { itemId, locationId } },
-      create: { tenantId: me.tenantId, itemId, locationId, quantity: qty },
+      create: { tenantId: tenantId ?? undefined, itemId, locationId, quantity: qty },
       update: { quantity: qty },
     });
+  }
+
+  // ---------------- Hook facturation (decrement a l'emission) ----------------
+  // Appele par InvoicesService quand une facture passe a ISSUED (si le reglage
+  // stock.deductOnInvoice est actif). Best-effort : decremente ce qui est
+  // disponible a l'emplacement, ne bloque jamais. Idempotent (refType=Invoice).
+  async deductForInvoice(tenantId: string | null, invoiceId: string, locationId: string | null) {
+    if (!locationId) return { skipped: 'no-location' };
+    const already = await this.prisma.stockMovement.count({ where: { tenantId, refType: 'Invoice', refId: invoiceId, type: 'OUT' } });
+    if (already > 0) return { skipped: 'already' };
+
+    const lines = await this.prisma.invoiceLine.findMany({
+      where: { invoiceId, stockItemId: { not: null } },
+      include: { stockItem: { select: { id: true, avgCostHt: true } } },
+    });
+    let deducted = 0;
+    for (const l of lines) {
+      const itemId = l.stockItemId!;
+      const want = n(l.quantity);
+      await this.prisma.$transaction(async (tx) => {
+        const level = await tx.stockLevel.findUnique({ where: { itemId_locationId: { itemId, locationId } } });
+        const current = n(level?.quantity);
+        const qty = Math.min(want, current);
+        if (qty <= 0) return;
+        await this.setLevelT(tx, tenantId, itemId, locationId, current - qty);
+        await tx.stockMovement.create({
+          data: {
+            tenantId, itemId, locationId, type: 'OUT', quantity: qty,
+            unitCostHt: n(l.stockItem?.avgCostHt), reason: 'Vente (facture)',
+            refType: 'Invoice', refId: invoiceId,
+          },
+        });
+        deducted++;
+      });
+    }
+    return { deducted };
+  }
+
+  // Restitution si la facture est annulee (reverse les sorties faites a
+  // l'emission). Idempotent (ne restitue pas deux fois).
+  async restoreForInvoice(tenantId: string | null, invoiceId: string) {
+    const outs = await this.prisma.stockMovement.findMany({ where: { tenantId, refType: 'Invoice', refId: invoiceId, type: 'OUT' } });
+    if (outs.length === 0) return { skipped: 'nothing' };
+    const ins = await this.prisma.stockMovement.count({ where: { tenantId, refType: 'Invoice', refId: invoiceId, type: 'IN' } });
+    if (ins > 0) return { skipped: 'already-restored' };
+    for (const m of outs) {
+      await this.prisma.$transaction(async (tx) => {
+        const level = await tx.stockLevel.findUnique({ where: { itemId_locationId: { itemId: m.itemId, locationId: m.locationId } } });
+        await this.setLevelT(tx, tenantId, m.itemId, m.locationId, n(level?.quantity) + n(m.quantity));
+        await tx.stockMovement.create({
+          data: {
+            tenantId, itemId: m.itemId, locationId: m.locationId, type: 'IN', quantity: n(m.quantity),
+            unitCostHt: n(m.unitCostHt), reason: 'Annulation facture', refType: 'Invoice', refId: invoiceId,
+          },
+        });
+      });
+    }
+    return { restored: outs.length };
   }
 
   // ---------------- Numeros de serie ----------------

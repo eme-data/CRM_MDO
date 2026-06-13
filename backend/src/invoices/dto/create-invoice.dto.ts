@@ -19,6 +19,10 @@ export class CreateInvoiceLineDto {
   @Min(0)
   @Type(() => Number)
   unitPriceHt!: number;
+
+  // Lien optionnel a un article de stock (decrement a l'emission de la facture).
+  @IsOptional() @IsUUID()
+  stockItemId?: string;
 }
 
 export class CreateInvoiceDto {

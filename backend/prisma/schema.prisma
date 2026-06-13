@@ -1937,6 +1937,7 @@ model StockItem {
   serials      StockSerial[]
   poLines      PurchaseOrderLine[]
   consumptions StockConsumption[]
+  invoiceLines InvoiceLine[]
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 
@@ -2126,8 +2127,13 @@ model InvoiceLine {
   quantity    Decimal @db.Decimal(10, 2)
   unitPriceHt Decimal @db.Decimal(10, 2)
   totalHt     Decimal @db.Decimal(12, 2)
+  // Lien optionnel a un article de stock : a l'emission de la facture, le stock
+  // est decremente (si reglage stock.deductOnInvoice actif). cf StockService.
+  stockItemId String?
+  stockItem   StockItem? @relation(fields: [stockItemId], references: [id], onDelete: SetNull)
 
   @@index([invoiceId])
+  @@index([stockItemId])
 }
 
 // =================== TRESORERIE / BANQUE (Qonto) ===================
