@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger, ServiceUnavailableException } 
 import { AiCapability } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { SettingsService } from '../settings/settings.service';
-import { callAnthropic, estimateCostUsd, AnthropicContentBlock } from './anthropic.client';
+import { callAnthropic, estimateCostUsd, AnthropicContentBlock, AnthropicMessage, AnthropicTool, AnthropicResponse } from './anthropic.client';
 
 interface InvokeParams {
   capability: AiCapability;
@@ -132,6 +132,64 @@ export class AiService {
       .catch((e) => this.logger.warn('AiUsage log failed: ' + e.message));
 
     return result.text;
+  }
+
+  // ============================================================
+  // Appel bas-niveau avec historique de messages + outils (agent tool-use).
+  // Retourne la reponse complete (text + content brut + toolUses + stopReason)
+  // pour piloter une boucle agentique. Log l'usage comme invoke().
+  // ============================================================
+  async callModel(opts: {
+    tenantId: string | null;
+    capability: AiCapability;
+    systemPrompt: string;
+    messages: AnthropicMessage[];
+    tools?: AnthropicTool[];
+    maxTokens?: number;
+    modelOverride?: string;
+    userId?: string;
+    entityType?: string;
+    entityId?: string;
+  }): Promise<AnthropicResponse> {
+    const cfg = await this.loadConfig(opts.tenantId ?? null);
+    const model = opts.modelOverride ?? cfg.model;
+    const fullSystem = (cfg.companyContext ? cfg.companyContext + '\n\n' : '') + opts.systemPrompt;
+    const start = Date.now();
+    let result: AnthropicResponse;
+    try {
+      result = await callAnthropic({
+        apiKey: cfg.apiKey,
+        model,
+        systemPrompt: fullSystem,
+        cacheSystem: true,
+        messages: opts.messages,
+        tools: opts.tools,
+        maxTokens: opts.maxTokens ?? 1024,
+      });
+    } catch (err: any) {
+      await this.prisma.aiUsage
+        .create({
+          data: {
+            tenantId: opts.tenantId, capability: opts.capability, model,
+            errorMessage: err.message?.slice(0, 500), durationMs: Date.now() - start,
+            entityType: opts.entityType, entityId: opts.entityId, userId: opts.userId,
+          },
+        })
+        .catch(() => {});
+      throw err;
+    }
+    await this.prisma.aiUsage
+      .create({
+        data: {
+          tenantId: opts.tenantId, capability: opts.capability, model,
+          inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens,
+          cacheReadTokens: result.usage.cacheReadTokens, cacheCreationTokens: result.usage.cacheCreationTokens,
+          costUsd: estimateCostUsd(model, result.usage), durationMs: Date.now() - start,
+          entityType: opts.entityType, entityId: opts.entityId, userId: opts.userId,
+        },
+      })
+      .catch((e) => this.logger.warn('AiUsage log failed: ' + e.message));
+    return result;
   }
 
   // ============================================================

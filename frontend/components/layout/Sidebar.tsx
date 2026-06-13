@@ -47,6 +47,7 @@ import {
   HelpCircle,
   CalendarDays,
   IdCard,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logout } from '@/lib/auth';
@@ -64,6 +65,7 @@ const sections: NavSection[] = [
     title: 'Pilotage',
     items: [
       { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
+      { href: '/assistant', label: 'Assistant IA', icon: Sparkles },
       { href: '/customer-success', label: 'QBR / Customer Success', icon: Calendar },
       { href: '/reports', label: 'Reporting', icon: BarChart3 },
     ],

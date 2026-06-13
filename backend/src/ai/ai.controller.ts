@@ -10,6 +10,7 @@ import { ClientSummaryService } from './use-cases/client-summary.service';
 import { DocumentExtractService } from './use-cases/document-extract.service';
 import { QuoteAssistService } from './use-cases/quote-assist.service';
 import { ClientQbrService } from './use-cases/client-qbr.service';
+import { AssistantService } from './use-cases/assistant.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -36,6 +37,7 @@ export class AiController {
     private readonly documentExtract: DocumentExtractService,
     private readonly quoteAssist: QuoteAssistService,
     private readonly clientQbr: ClientQbrService,
+    private readonly assistant: AssistantService,
   ) {}
 
   @Get('status')
@@ -123,5 +125,12 @@ export class AiController {
   ) {
     const d = days ? Math.max(30, Math.min(365, parseInt(days, 10))) : 90;
     return this.clientQbr.generate(id, user.tenantId, d, user.id);
+  }
+
+  // ---------- Assistant conversationnel (agent tool-use, lecture seule) ----------
+  @Throttle(AI_THROTTLE)
+  @Post('assistant')
+  assistantAsk(@Body() body: { question: string }, @CurrentUser() user: JwtUser) {
+    return this.assistant.ask(body?.question ?? '', user.tenantId, user.id);
   }
 }

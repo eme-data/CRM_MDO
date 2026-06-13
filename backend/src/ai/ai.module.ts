@@ -8,6 +8,7 @@ import { ClientSummaryService } from './use-cases/client-summary.service';
 import { DocumentExtractService } from './use-cases/document-extract.service';
 import { QuoteAssistService } from './use-cases/quote-assist.service';
 import { ClientQbrService } from './use-cases/client-qbr.service';
+import { AssistantService } from './use-cases/assistant.service';
 import { SettingsModule } from '../settings/settings.module';
 import { DocumentsModule } from '../documents/documents.module';
 
@@ -22,6 +23,7 @@ import { DocumentsModule } from '../documents/documents.module';
     DocumentExtractService,
     QuoteAssistService,
     ClientQbrService,
+    AssistantService,
   ],
   controllers: [AiController],
   exports: [AiService],

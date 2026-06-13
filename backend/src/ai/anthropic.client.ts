@@ -28,7 +28,18 @@ export type AnthropicContentBlock =
   | {
       type: 'document';
       source: { type: 'base64'; media_type: 'application/pdf'; data: string };
-    };
+    }
+  // Blocs tool-use (agent conversationnel) : l'assistant demande un outil, on
+  // renvoie le resultat. content du tool_result = texte (JSON serialise).
+  | { type: 'tool_use'; id: string; name: string; input: any }
+  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean };
+
+// Definition d'un outil expose au modele (JSON Schema des entrees).
+export interface AnthropicTool {
+  name: string;
+  description: string;
+  input_schema: Record<string, any>;
+}
 
 export interface AnthropicMessage {
   role: 'user' | 'assistant';
@@ -45,11 +56,19 @@ export interface AnthropicCallParams {
   // Si true, on encapsule le system prompt avec cache_control ephemeral (TTL 5 min)
   // pour beneficier de la reduction de cout (10x moins cher en lecture).
   cacheSystem?: boolean;
+  // Outils exposes au modele (agent tool-use). Si fourni, la reponse peut
+  // contenir des blocs tool_use (stopReason = 'tool_use').
+  tools?: AnthropicTool[];
 }
 
 export interface AnthropicResponse {
   text: string;
   stopReason: string | null;
+  // Tableau de content brut de la reponse (a rejouer tel quel comme message
+  // assistant dans une boucle tool-use).
+  content: any[];
+  // Blocs tool_use extraits (vide si pas de tool-use).
+  toolUses: { id: string; name: string; input: any }[];
   usage: {
     inputTokens: number;
     outputTokens: number;
@@ -66,6 +85,7 @@ export async function callAnthropic(params: AnthropicCallParams): Promise<Anthro
     max_tokens: params.maxTokens ?? 1024,
     messages: params.messages,
   };
+  if (params.tools && params.tools.length > 0) body.tools = params.tools;
   if (typeof params.temperature === 'number') body.temperature = params.temperature;
   if (params.systemPrompt) {
     if (params.cacheSystem) {
@@ -109,14 +129,20 @@ export async function callAnthropic(params: AnthropicCallParams): Promise<Anthro
   }
   const json: any = await res.json();
   // json.content est un tableau de blocks, on concatene les text blocks
-  const text: string = (json.content ?? [])
+  const content: any[] = json.content ?? [];
+  const text: string = content
     .filter((b: any) => b.type === 'text')
     .map((b: any) => b.text)
     .join('\n');
+  const toolUses = content
+    .filter((b: any) => b.type === 'tool_use')
+    .map((b: any) => ({ id: b.id, name: b.name, input: b.input }));
   const usage = json.usage ?? {};
   return {
     text,
     stopReason: json.stop_reason ?? null,
+    content,
+    toolUses,
     usage: {
       inputTokens: usage.input_tokens ?? 0,
       outputTokens: usage.output_tokens ?? 0,
