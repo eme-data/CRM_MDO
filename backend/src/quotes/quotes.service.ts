@@ -81,10 +81,13 @@ export class QuotesService {
     });
   }
 
-  private computeTotals(lines: ComputedLine[], vatRate: number) {
+  private computeTotals(lines: ComputedLine[], vatRate: number, globalDiscountPct = 0) {
+    // subtotalHt = somme des lignes (apres remises ligne). La remise globale
+    // s'applique ensuite sur ce sous-total ; TVA et TTC sur le montant remise.
     const subtotalHt = +lines.reduce((s, l) => s + l.lineTotalHt, 0).toFixed(2);
-    const vatAmount = +(subtotalHt * (vatRate / 100)).toFixed(2);
-    const totalTtc = +(subtotalHt + vatAmount).toFixed(2);
+    const discountedHt = +(subtotalHt * (1 - (globalDiscountPct || 0) / 100)).toFixed(2);
+    const vatAmount = +(discountedHt * (vatRate / 100)).toFixed(2);
+    const totalTtc = +(discountedHt + vatAmount).toFixed(2);
     return { subtotalHt, vatAmount, totalTtc };
   }
 
@@ -138,7 +141,8 @@ export class QuotesService {
     const reference = await this.generateReference(tenantId);
     const computed = await this.computeLines(dto.lines);
     const vatRate = dto.vatRate ?? 20;
-    const totals = this.computeTotals(computed, vatRate);
+    const globalDiscountPct = dto.globalDiscountPct ?? 0;
+    const totals = this.computeTotals(computed, vatRate, globalDiscountPct);
 
     const quote = await this.prisma.$transaction(async (tx) => {
       const created = await tx.quote.create({
@@ -148,6 +152,7 @@ export class QuotesService {
           status: 'DRAFT',
           validUntil: new Date(dto.validUntil),
           vatRate,
+          globalDiscountPct,
           notes: dto.notes,
           terms: dto.terms,
           subtotalHt: totals.subtotalHt,
@@ -199,6 +204,12 @@ export class QuotesService {
       data.vatRate = dto.vatRate;
       recomputed = true;
     }
+    let globalDiscountPct = Number(existing.globalDiscountPct ?? 0);
+    if (dto.globalDiscountPct !== undefined) {
+      globalDiscountPct = dto.globalDiscountPct;
+      data.globalDiscountPct = dto.globalDiscountPct;
+      recomputed = true;
+    }
 
     let computedLines: ComputedLine[] | null = null;
     if (dto.lines) {
@@ -217,7 +228,7 @@ export class QuotesService {
           discountPct: Number(l.discountPct),
           lineTotalHt: Number(l.lineTotalHt),
         }));
-      const t = this.computeTotals(linesForTotal, vatRate);
+      const t = this.computeTotals(linesForTotal, vatRate, globalDiscountPct);
       data.subtotalHt = t.subtotalHt;
       data.vatAmount = t.vatAmount;
       data.totalTtc = t.totalTtc;

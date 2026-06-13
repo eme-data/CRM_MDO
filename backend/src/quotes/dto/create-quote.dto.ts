@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -41,6 +42,14 @@ export class CreateQuoteDto {
   @IsNumber()
   @Min(0)
   vatRate?: number;
+
+  // Remise globale en % (0..100), appliquee sur le sous-total HT.
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  globalDiscountPct?: number;
 
   @IsOptional()
   @IsString()

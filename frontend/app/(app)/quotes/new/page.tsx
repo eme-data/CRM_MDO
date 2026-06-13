@@ -36,6 +36,7 @@ export default function NewQuotePage() {
     opportunityId: sp.get('opportunityId') ?? '',
     validUntil: new Date(Date.now() + DEFAULT_VALIDITY_DAYS * 86400000).toISOString().slice(0, 10),
     vatRate: 20,
+    globalDiscountPct: 0,
     notes: '',
     terms: '',
   });
@@ -99,9 +100,11 @@ export default function NewQuotePage() {
       const raw = l.quantity * l.unitPriceHt;
       return s + raw * (1 - (l.discountPct ?? 0) / 100);
     }, 0);
-    const vat = subtotal * ((data.vatRate ?? 20) / 100);
-    return { subtotal, vat, total: subtotal + vat };
-  }, [lines, data.vatRate]);
+    const gd = Number(data.globalDiscountPct) || 0;
+    const discounted = subtotal * (1 - gd / 100);
+    const vat = discounted * ((data.vatRate ?? 20) / 100);
+    return { subtotal, globalDiscount: subtotal - discounted, discounted, vat, total: discounted + vat };
+  }, [lines, data.vatRate, data.globalDiscountPct]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -117,6 +120,7 @@ export default function NewQuotePage() {
         contactId: data.contactId || undefined,
         opportunityId: data.opportunityId || undefined,
         vatRate: Number(data.vatRate),
+        globalDiscountPct: Number(data.globalDiscountPct) || 0,
         lines: lines.map((l) => ({
           description: l.description,
           quantity: Number(l.quantity),
@@ -184,6 +188,9 @@ export default function NewQuotePage() {
           <div><label className="label">TVA (%)</label>
             <input type="number" step="0.01" min={0} className="input" value={data.vatRate} onChange={(e) => set('vatRate', parseFloat(e.target.value))} />
           </div>
+          <div><label className="label">Remise globale (%)</label>
+            <input type="number" step="0.01" min={0} max={100} className="input" value={data.globalDiscountPct} onChange={(e) => set('globalDiscountPct', parseFloat(e.target.value) || 0)} />
+          </div>
         </div>
 
         <div>
@@ -239,6 +246,12 @@ export default function NewQuotePage() {
         <div className="border-t pt-4 flex justify-end">
           <div className="text-right space-y-1 text-sm">
             <div>Sous-total HT : <span className="font-medium">{formatEuro(totals.subtotal)}</span></div>
+            {totals.globalDiscount > 0 && (
+              <>
+                <div className="text-red-600">Remise globale ({data.globalDiscountPct} %) : <span className="font-medium">- {formatEuro(totals.globalDiscount)}</span></div>
+                <div>Total HT après remise : <span className="font-medium">{formatEuro(totals.discounted)}</span></div>
+              </>
+            )}
             <div>TVA ({data.vatRate} %) : <span className="font-medium">{formatEuro(totals.vat)}</span></div>
             <div className="text-lg font-bold text-mdo-600">Total TTC : {formatEuro(totals.total)}</div>
           </div>

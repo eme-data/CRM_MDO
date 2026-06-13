@@ -44,6 +44,7 @@ interface QuotePdfParams {
     notes?: string | null;
     terms?: string | null;
     subtotalHt: number;
+    globalDiscountPct?: number;
     vatAmount: number;
     totalTtc: number;
     lines: Array<{
@@ -276,6 +277,16 @@ export class PdfService {
       doc.text('Sous-total HT', 290, yLine, { width: 160, align: 'right' });
       doc.text(params.quote.subtotalHt.toFixed(2) + ' EUR', 455, yLine, { width: 95, align: 'right' });
       yLine += 14;
+      const gd = params.quote.globalDiscountPct ?? 0;
+      if (gd > 0) {
+        const discountedHt = +(params.quote.subtotalHt * (1 - gd / 100)).toFixed(2);
+        doc.text('Remise globale (' + gd + ' %)', 290, yLine, { width: 160, align: 'right' });
+        doc.text('-' + (params.quote.subtotalHt - discountedHt).toFixed(2) + ' EUR', 455, yLine, { width: 95, align: 'right' });
+        yLine += 14;
+        doc.text('Total HT apres remise', 290, yLine, { width: 160, align: 'right' });
+        doc.text(discountedHt.toFixed(2) + ' EUR', 455, yLine, { width: 95, align: 'right' });
+        yLine += 14;
+      }
       doc.text('TVA (' + params.quote.vatRate + ' %)', 290, yLine, { width: 160, align: 'right' });
       doc.text(params.quote.vatAmount.toFixed(2) + ' EUR', 455, yLine, { width: 95, align: 'right' });
       yLine += 14;

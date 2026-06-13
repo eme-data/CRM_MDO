@@ -257,6 +257,12 @@ export default function QuoteDetailPage() {
           </table>
           <div className="border-t mt-4 pt-3 text-right space-y-1 text-sm">
             <div>Sous-total HT : <span className="font-medium">{formatEuro(q.subtotalHt)}</span></div>
+            {Number(q.globalDiscountPct) > 0 && (
+              <>
+                <div className="text-red-600">Remise globale ({Number(q.globalDiscountPct)} %) : <span className="font-medium">- {formatEuro(Number(q.subtotalHt) * Number(q.globalDiscountPct) / 100)}</span></div>
+                <div>Total HT après remise : <span className="font-medium">{formatEuro(Number(q.subtotalHt) * (1 - Number(q.globalDiscountPct) / 100))}</span></div>
+              </>
+            )}
             <div>TVA ({Number(q.vatRate)} %) : <span className="font-medium">{formatEuro(q.vatAmount)}</span></div>
             <div className="text-lg font-bold text-mdo-600">Total TTC : {formatEuro(q.totalTtc)}</div>
           </div>

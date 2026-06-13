@@ -2887,8 +2887,12 @@ model Quote {
   // Editable par devis ; valeur par defaut depuis Settings('quote.defaultTerms').
   terms      String?
 
+  // Remise globale en % appliquee sur le sous-total HT (apres remises ligne).
+  globalDiscountPct Decimal @default(0) @db.Decimal(5, 2)
   // Totaux denormalises (recalcules a chaque update lignes). Eviter les requetes
   // d'agregation a chaque liste de devis.
+  // subtotalHt = somme des lignes (apres remises ligne, AVANT remise globale).
+  // vatAmount/totalTtc tiennent compte de la remise globale.
   subtotalHt Decimal @default(0) @db.Decimal(12, 2)
   vatAmount  Decimal @default(0) @db.Decimal(12, 2)
   totalTtc   Decimal @default(0) @db.Decimal(12, 2)

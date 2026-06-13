@@ -51,6 +51,7 @@ export class QuotesController {
         notes: q.notes,
         terms: q.terms,
         subtotalHt: Number(q.subtotalHt),
+        globalDiscountPct: Number(q.globalDiscountPct ?? 0),
         vatAmount: Number(q.vatAmount),
         totalTtc: Number(q.totalTtc),
         lines: q.lines.map((l) => ({
