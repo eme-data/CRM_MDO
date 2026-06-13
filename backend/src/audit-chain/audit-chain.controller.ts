@@ -3,36 +3,33 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuditChainService } from './audit-chain.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
 import { SuperAdminGuard } from '../tenants/guards/super-admin.guard';
 
 // La chaine d'audit est GLOBALE (hash-chain append-only de toutes les activites
-// de l'instance, sequence continue, non scopable par tenant). stats reste lisible
-// par un ADMIN (2 compteurs, fuite negligeable) pour ne pas casser la page
-// admin/activity ; en revanche verify (parcourt toute la chaine, lourd) et seal
-// (action de scellement plateforme) sont des operations PLATEFORME -> super-admin.
+// de l'instance, sequence continue, non scopable par tenant). C'est un outil
+// d'integrite PLATEFORME -> stats/verify/seal sont reserves au super-admin.
+// Cote UI, la page admin/activity catch le 403 sur /chain/stats (chainStats reste
+// null) -> le bandeau "chaine d'audit" ne s'affiche simplement pas pour un admin
+// tenant. Aucune donnee tenant n'est exposee ici.
 @ApiTags('Audit chain')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SuperAdminGuard)
 @Controller('audit')
 export class AuditChainController {
   constructor(private readonly service: AuditChainService) {}
 
-  @Roles('ADMIN', 'MANAGER')
   @Get('chain/stats')
   stats() {
     return this.service.stats();
   }
 
-  // Verify (slow, parcourt toute la chaine globale) — super-admin uniquement.
-  @UseGuards(SuperAdminGuard)
+  // Verify (slow, parcourt toute la chaine globale).
   @Post('chain/verify')
   verify() {
     return this.service.verify();
   }
 
-  // Scellement immediat de la chaine globale — super-admin uniquement.
-  @UseGuards(SuperAdminGuard)
+  // Scellement immediat de la chaine globale.
   @Post('chain/seal')
   seal() {
     return this.service.sealPending();
