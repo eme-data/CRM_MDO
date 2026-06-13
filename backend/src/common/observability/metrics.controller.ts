@@ -2,6 +2,7 @@ import { Controller, Get, Header, Req, Res, UnauthorizedException } from '@nestj
 import { Request, Response } from 'express';
 import { register } from 'prom-client';
 import { timingSafeEqual } from 'crypto';
+import { SkipThrottle } from '@nestjs/throttler';
 import { Public } from '../decorators/public.decorator';
 import { AllowMfaPending } from '../decorators/allow-mfa-pending.decorator';
 
@@ -19,6 +20,7 @@ import { AllowMfaPending } from '../decorators/allow-mfa-pending.decorator';
 //   3. Sans token et sans filtre IP Caddy : la route reste publique — c'est
 //      acceptable en dev, NON acceptable en prod multi-instance.
 
+@SkipThrottle() // scrape Prometheus frequent : ne doit pas etre rate-limite
 @Controller('metrics')
 export class MetricsController {
   @Public()

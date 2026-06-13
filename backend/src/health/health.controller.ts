@@ -1,5 +1,6 @@
 import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SkipThrottle } from '@nestjs/throttler';
 import { statfs, readFile, stat } from 'fs/promises';
 import { Public } from '../common/decorators/public.decorator';
 import { PrismaService } from '../database/prisma.service';
@@ -22,6 +23,7 @@ const BACKUP_OFFSITE_KO_AGE_SEC = 7 * 24 * 3600;
 // Si tu veux qu'un check Redis ou disk space sorte un 503, monitore
 // status="down" ou status="degraded" dans le payload depuis Caddy/UptimeRobot.
 
+@SkipThrottle() // un healthcheck ne doit jamais etre rate-limite
 @Controller('health')
 export class HealthController {
   constructor(

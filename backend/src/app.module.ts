@@ -128,11 +128,19 @@ import { RolesGuard } from './common/guards/roles.guard';
     //  - "aiCall": 20 req / 5 min (endpoints AI couteux, anti DoS economique
     //              sur les tokens Claude — cf ai.controller AI_THROTTLE)
     // Les controleurs sensibles appliquent les paliers stricts via @Throttle.
+    // ATTENTION @nestjs/throttler v6 : TOUS les throttlers nommes definis ici
+    // s'appliquent a TOUTES les routes par defaut. Donc seuls "short" et
+    // "medium" doivent porter une limite reellement applicable globalement.
+    // "auth" et "aiCall" ont une limite par defaut tres haute (= sans effet sur
+    // le trafic general) ; les paliers STRICTS sont appliques PAR ROUTE via
+    // @Throttle({ auth: {...} }) / @Throttle({ aiCall: {...} }) sur les
+    // controleurs sensibles (auth/login, portail, AI...). Sans ca, le palier
+    // auth (10/5min) brident TOUTE l'app (bug : ~10 requetes/5min/utilisateur).
     ThrottlerModule.forRoot([
       { name: 'short', ttl: 60_000, limit: 60 },
       { name: 'medium', ttl: 600_000, limit: 600 },
-      { name: 'auth', ttl: 300_000, limit: 10 },
-      { name: 'aiCall', ttl: 300_000, limit: 20 },
+      { name: 'auth', ttl: 300_000, limit: 1_000_000 },
+      { name: 'aiCall', ttl: 300_000, limit: 1_000_000 },
     ]),
     BullModule.forRootAsync({
       useFactory: () => ({
