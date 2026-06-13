@@ -21,7 +21,7 @@ describe('InvoicesService — tenant isolation', () => {
         delete: jest.fn(),
       },
     };
-    service = new InvoicesService(prisma, {} as any);
+    service = new InvoicesService(prisma, {} as any, {} as any);
   });
 
   describe('aging', () => {
