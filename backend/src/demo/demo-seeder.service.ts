@@ -19,6 +19,7 @@ const MODULES = [
   'pilotage.dashboard', 'pilotage.health', 'pilotage.reporting',
   'commercial.crm', 'commercial.opportunities', 'commercial.quotes', 'commercial.contracts', 'commercial.invoices',
   'support.tickets', 'support.interventions', 'support.calls',
+  'stock.inventory', 'stock.purchasing',
   'sirh.dashboard', 'sirh.leaves', 'sirh.planning', 'sirh.timesheets', 'sirh.expenses', 'sirh.reviews', 'sirh.journeys', 'sirh.employees',
 ];
 
@@ -73,7 +74,8 @@ export class DemoSeederService {
         },
       });
       created = true;
-    } else if (!tenant.isDemo || tenant.enabledModules.length === 0) {
+    } else {
+      // Synchronise systematiquement l'offre demo (isDemo + modules courants).
       tenant = await this.prisma.tenant.update({
         where: { id: tenant.id },
         data: { isDemo: true, enabledModules: MODULES },
@@ -203,6 +205,39 @@ export class DemoSeederService {
     await this.prisma.intervention.create({ data: { ...TID, title: 'Diagnostic poste secretariat', type: 'ONSITE', status: 'PLANNED', scheduledAt: this.dt('2026-06-16T09:00:00Z'), companyId: c2.id, ticketId: t1.id, technicianId: thomas.id } });
     await this.prisma.intervention.create({ data: { ...TID, title: 'Reconfiguration imprimante reseau', type: 'REMOTE', status: 'DONE', scheduledAt: this.dt('2026-06-11T14:00:00Z'), startedAt: this.dt('2026-06-11T14:05:00Z'), endedAt: this.dt('2026-06-11T14:50:00Z'), durationMin: 45, companyId: c1.id, ticketId: t2.id, technicianId: emma.id, report: 'Pilote reinstalle, IP fixe attribuee.' } });
 
+    // ---- Stock ----
+    const depot = await this.prisma.stockLocation.create({ data: { ...TID, name: 'Depot Toulouse', code: 'DEP' } });
+    const camion = await this.prisma.stockLocation.create({ data: { ...TID, name: 'Camion Karim', code: 'VAN' } });
+    const ldlc = await this.prisma.supplier.create({ data: { ...TID, name: 'LDLC Pro', email: 'pro@ldlc.com' } });
+    const rexel = await this.prisma.supplier.create({ data: { ...TID, name: 'Rexel', email: 'contact@rexel.fr' } });
+    const mkItem = async (sku: string, name: string, category: string, cost: number, reorder: number, supplierId: string, qDepot: number, qCamion: number, trackSerial = false) => {
+      const it = await this.prisma.stockItem.create({ data: { ...TID, sku, name, category, unit: 'piece', avgCostHt: cost, reorderPoint: reorder, supplierId, trackSerial } });
+      if (qDepot) {
+        await this.prisma.stockLevel.create({ data: { ...TID, itemId: it.id, locationId: depot.id, quantity: qDepot } });
+        await this.prisma.stockMovement.create({ data: { ...TID, itemId: it.id, locationId: depot.id, type: 'IN', quantity: qDepot, unitCostHt: cost, reason: 'Stock initial', performedById: sophie.id, createdAt: this.dt('2026-05-15T09:00:00Z') } });
+      }
+      if (qCamion) await this.prisma.stockLevel.create({ data: { ...TID, itemId: it.id, locationId: camion.id, quantity: qCamion } });
+      return it;
+    };
+    await mkItem('CAB-RJ45-3', 'Cable RJ45 Cat6 (3m)', 'Cablage', 1.2, 20, ldlc.id, 50, 10);
+    await mkItem('SW-8G', 'Switch 8 ports Gigabit', 'Reseau', 45, 3, ldlc.id, 6, 1);
+    const ond = await mkItem('OND-650', 'Onduleur 650VA', 'Energie', 95, 2, rexel.id, 4, 0);
+    const ap = await mkItem('AP-U6', 'Borne WiFi UniFi U6', 'Reseau', 110, 2, ldlc.id, 5, 0, true);
+    const ton = await mkItem('TON-26A', 'Toner HP 26A', 'Consommable', 65, 4, rexel.id, 3, 0); // stock bas (3 <= seuil 4)
+    for (const sn of ['U6-2024-0001', 'U6-2024-0002', 'U6-2024-0003']) {
+      await this.prisma.stockSerial.create({ data: { ...TID, itemId: ap.id, serial: sn, status: 'IN_STOCK', locationId: depot.id } });
+    }
+    await this.prisma.purchaseOrder.create({
+      data: {
+        ...TID, reference: 'PO-2026-0001', supplierId: rexel.id, locationId: depot.id, status: 'ORDERED',
+        orderDate: this.d('2026-06-10'), expectedDate: this.d('2026-06-18'), createdById: karim.id,
+        lines: { create: [
+          { itemId: ton.id, quantityOrdered: 10, unitCostHt: 65 },
+          { itemId: ond.id, quantityOrdered: 3, unitCostHt: 92 },
+        ] },
+      },
+    });
+
     // Si le tenant vient d'etre cree, (re)genere la route Caddy.
     if (created) await this.caddy.triggerSilent('demo.reseed create');
     return { tenantId: tid };
@@ -223,7 +258,15 @@ export class DemoSeederService {
       () => this.prisma.expenseClaim.deleteMany({ where }),
       () => this.prisma.expenseCategory.deleteMany({ where }),
       () => this.prisma.employeeProfile.deleteMany({ where }),
-      () => this.prisma.intervention.deleteMany({ where }),
+      () => this.prisma.intervention.deleteMany({ where }), // cascade les StockConsumption
+      // Stock (enfants -> parents).
+      () => this.prisma.purchaseOrder.deleteMany({ where }),
+      () => this.prisma.stockMovement.deleteMany({ where }),
+      () => this.prisma.stockSerial.deleteMany({ where }),
+      () => this.prisma.stockLevel.deleteMany({ where }),
+      () => this.prisma.stockItem.deleteMany({ where }),
+      () => this.prisma.stockLocation.deleteMany({ where }),
+      () => this.prisma.supplier.deleteMany({ where }),
       () => this.prisma.ticket.deleteMany({ where }),
       () => this.prisma.opportunity.deleteMany({ where }),
       () => this.prisma.contact.deleteMany({ where }),
